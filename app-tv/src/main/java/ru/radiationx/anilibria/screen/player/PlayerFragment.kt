@@ -49,6 +49,7 @@ class PlayerFragment : BasePlayerFragment() {
             override fun onQualityClick() = viewModel.onQualityClick(getPosition())
             override fun onSpeedClick() = viewModel.onSpeedClick()
             override fun onEpisodesClick() = viewModel.onEpisodesClick(getPosition())
+            override fun onSettingsClick() = viewModel.onSettingsClick(getPosition())
         }
         progressBarManager.initialDelay = 0
         progressBarManager.show()
@@ -69,6 +70,15 @@ class PlayerFragment : BasePlayerFragment() {
                 playerGlue?.play()
             } else {
                 playerGlue?.pause()
+            }
+        }
+
+        subscribeTo(viewModel.settingsOverlayVisible) {
+            if (it) {
+                showControlsOverlay(true)
+                isControlsOverlayAutoHideEnabled = false
+            } else {
+                isControlsOverlayAutoHideEnabled = true
             }
         }
 

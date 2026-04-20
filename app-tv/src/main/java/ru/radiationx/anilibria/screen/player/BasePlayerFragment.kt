@@ -3,6 +3,7 @@ package ru.radiationx.anilibria.screen.player
 import android.annotation.SuppressLint
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -44,12 +45,18 @@ open class BasePlayerFragment : VideoSupportFragment() {
         requireActivity().window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         initializePlayer()
         initializeRows()
+        initializePlaybackShortcuts()
+        isControlsOverlayAutoHideEnabled = true
 
         skipsPart = PlayerSkipsPart(
             parent = view as FrameLayout,
             skipButtonText = getString(R.string.player_skip),
             coroutineScope = viewLifecycleOwner.lifecycleScope,
+            playerSkipsEnabled = get<PreferencesHolder>().playerSkips,
             playerSkipsTimer = get<PreferencesHolder>().playerSkipsTimer,
+            controlsOverlayVisibleProvider = {
+                isControlsOverlayVisible
+            },
             onSeek = {
                 player?.seekTo(it)
             },
@@ -66,16 +73,6 @@ open class BasePlayerFragment : VideoSupportFragment() {
             @UnstableApi
             override fun onUpdateProgress() {
                 skipsPart?.update(player?.currentPosition ?: 0)
-            }
-        }
-
-        fadeCompleteListener = object : OnFadeCompleteListener() {
-
-            override fun onFadeInComplete() {
-                super.onFadeInComplete()
-                // workaround for hiding controls when user click "enter"
-                isControlsOverlayAutoHideEnabled = false
-                isControlsOverlayAutoHideEnabled = true
             }
         }
     }
@@ -134,6 +131,8 @@ open class BasePlayerFragment : VideoSupportFragment() {
         val player = ExoPlayer.Builder(requireContext())
             .setMediaSourceFactory(mediaSourceFactory)
             .setHandleAudioBecomingNoisy(true)
+            .setSeekBackIncrementMs(SEEK_STEP_MS)
+            .setSeekForwardIncrementMs(SEEK_STEP_MS)
             .build()
 
         player.addListener(object : Player.Listener {
@@ -151,7 +150,6 @@ open class BasePlayerFragment : VideoSupportFragment() {
                 }
             }
         })
-
 
         val playerAdapter = LeanbackPlayerAdapter(requireContext(), player, 500)
 
@@ -173,4 +171,70 @@ open class BasePlayerFragment : VideoSupportFragment() {
         player?.prepare()
     }
 
+    private fun initializePlaybackShortcuts() {
+        setOnKeyInterceptListener { view, keyCode, event ->
+            handlePlaybackShortcut(view, keyCode, event)
+        }
+    }
+
+    private fun handlePlaybackShortcut(view: View, keyCode: Int, event: KeyEvent): Boolean {
+        if (isControlsOverlayVisible) {
+            playAfterTimelineSeek(view, keyCode, event)
+            return false
+        }
+
+        val supportedKey = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT -> true
+
+            else -> false
+        }
+        if (!supportedKey) {
+            return false
+        }
+
+        if (event.action != KeyEvent.ACTION_DOWN) {
+            return true
+        }
+
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER -> {
+                val player = player ?: return true
+                if (player.isPlaying) {
+                    playerGlue?.pause()
+                } else {
+                    playerGlue?.play()
+                }
+            }
+
+            KeyEvent.KEYCODE_DPAD_LEFT -> player?.seekBack()
+            KeyEvent.KEYCODE_DPAD_RIGHT -> player?.seekForward()
+        }
+        return true
+    }
+
+    private fun playAfterTimelineSeek(view: View, keyCode: Int, event: KeyEvent) {
+        if (event.action != KeyEvent.ACTION_DOWN) {
+            return
+        }
+        if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
+            return
+        }
+        if (view.rootView.findFocus()?.id != androidx.leanback.R.id.playback_progress) {
+            return
+        }
+        if (player?.isPlaying != true) {
+            return
+        }
+        view.post {
+            playerGlue?.play()
+        }
+    }
+
+    private companion object {
+        private const val SEEK_STEP_MS = 10_000L
+    }
 }

@@ -10,12 +10,16 @@ import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.fetchApiResponse
 import ru.radiationx.data.datasource.remote.fetchEmptyApiResponse
 import ru.radiationx.data.datasource.remote.fetchListApiResponse
+import ru.radiationx.data.datasource.remote.fetchResponse
 import ru.radiationx.data.datasource.remote.parsers.AuthParser
 import ru.radiationx.data.entity.domain.auth.SocialAuth
 import ru.radiationx.data.entity.domain.auth.SocialAuthException
 import ru.radiationx.data.entity.response.auth.OtpInfoResponse
 import ru.radiationx.data.entity.response.auth.SocialAuthResponse
+import ru.radiationx.data.entity.response.auth.V1OtpInfoResponse
+import ru.radiationx.data.entity.response.auth.V1TokenResponse
 import ru.radiationx.data.entity.response.other.ProfileResponse
+import ru.radiationx.data.entity.response.other.V1ProfileResponse
 import ru.radiationx.shared.ktx.android.nullString
 import java.util.regex.Pattern
 import javax.inject.Inject
@@ -38,15 +42,21 @@ class AuthApi @Inject constructor(
             .fetchApiResponse(moshi)
     }
 
-    suspend fun loadOtpInfo(deviceId: String): OtpInfoResponse {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "auth_get_otp",
-            "deviceId" to deviceId
+    suspend fun loadV1User(): V1ProfileResponse {
+        val args = mapOf<String, String>()
+        return client
+            .get("${apiConfig.baseUrl}/api/v1/accounts/users/me/profile", args)
+            .fetchResponse(moshi)
+    }
+
+    suspend fun loadOtpInfo(deviceId: String): V1OtpInfoResponse {
+        val args = mapOf(
+            "device_id" to deviceId
         )
         return try {
             client
-                .post(apiConfig.apiUrl, args)
-                .fetchApiResponse(moshi)
+                .post("${apiConfig.baseUrl}/api/v1/accounts/otp/get", args)
+                .fetchResponse(moshi)
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
         }
@@ -66,17 +76,15 @@ class AuthApi @Inject constructor(
         }
     }
 
-    suspend fun signInOtp(code: String, deviceId: String): ProfileResponse {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "auth_login_otp",
-            "deviceId" to deviceId,
+    suspend fun signInOtp(code: String, deviceId: String): V1TokenResponse {
+        val args = mapOf(
+            "device_id" to deviceId,
             "code" to code
         )
         return try {
             client
-                .post(apiConfig.apiUrl, args)
-                .fetchEmptyApiResponse(moshi)
-                .let { loadUser() }
+                .post("${apiConfig.baseUrl}/api/v1/accounts/otp/login", args)
+                .fetchResponse(moshi)
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
         }
@@ -92,6 +100,16 @@ class AuthApi @Inject constructor(
         return client.post(url, args)
             .let { authParser.authResult(it) }
             .let { loadUser() }
+    }
+
+    suspend fun signInV1(login: String, password: String): V1TokenResponse {
+        val args = mapOf(
+            "login" to login,
+            "password" to password
+        )
+        return client
+            .post("${apiConfig.baseUrl}/api/v1/accounts/users/auth/login", args)
+            .fetchResponse(moshi)
     }
 
     suspend fun loadSocialAuth(): List<SocialAuthResponse> {

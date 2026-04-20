@@ -19,7 +19,7 @@ android {
     compileSdk = libs.versions.app.compile.sdk.version.get().toInt()
 
     defaultConfig {
-        applicationId = "ru.radiationx.anilibria.app.tv"
+        applicationId = "ru.radiationx.anilibria.app.tv.mod"
         minSdk = libs.versions.tv.min.sdk.version.get().toInt()
         targetSdk = libs.versions.app.target.sdk.version.get().toInt()
         versionCode = libs.versions.tv.version.code.get().toInt()
@@ -88,9 +88,10 @@ androidComponents {
         }
         val inputPath = project.layout.buildDirectory.file(inputApkPath).get().asFile
 
-        val appName = "AniLiberty_TV"
+        val appName = "AniLiberty_TV_Mod"
         val versionName = variant.outputs[0].versionName.get()
-        val outputApkName = "${appName}_v${versionName}.apk"
+        val buildDateTime = SimpleDateFormat("yyyy-MM-dd_HH-mm").format(Date())
+        val outputApkName = "${appName}_v${versionName}_${buildDateTime}.apk"
 
         val buildName = variant.name.capitalize()
         tasks.register<Copy>("copy${buildName}Apk") {

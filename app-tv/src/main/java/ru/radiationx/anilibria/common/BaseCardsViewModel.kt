@@ -80,6 +80,8 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
         isError = true
     )
 
+    protected open fun getEmptyCard(): CardItem? = null
+
     private fun loadPage(requestPage: Int) {
         if (requestJob?.isActive == true) {
             return
@@ -111,7 +113,11 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
                 if (hasMoreCards(newCards, currentCards)) {
                     cardsData.value = currentCards + loadMoreCard
                 } else {
-                    cardsData.value = currentCards
+                    cardsData.value = if (currentCards.isEmpty()) {
+                        getEmptyCard()?.let { listOf(it) }.orEmpty()
+                    } else {
+                        currentCards
+                    }
                 }
             }.onFailure {
                 Timber.e(it)

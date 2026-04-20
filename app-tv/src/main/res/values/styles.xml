@@ -32,6 +32,12 @@
         <item name="detailsActionButtonStyle">
             @style/AppTheme.Widget.Leanback.DetailsActionButtonStyle
         </item>
+        <item name="playbackControlsAutoHideTimeout">
+            @integer/lb_playback_controls_show_time_ms
+        </item>
+        <item name="playbackControlsAutoHideTickleTimeout">
+            @integer/lb_playback_controls_tickle_timeout_ms
+        </item>
 
         <item name="rowHorizontalDescriptionStyle">@style/AppTheme.Widget.Description.Row</item>
         <item name="itemsVerticalDescriptionStyle">@style/AppTheme.Widget.Description.Grid</item>

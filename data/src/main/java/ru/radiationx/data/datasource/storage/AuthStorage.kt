@@ -23,12 +23,17 @@ class AuthStorage @Inject constructor(
     companion object {
         private const val KEY_DEVICE_UID = "device_uid"
         private const val KEY_AUTH_SKIPPED = "auth_skipped"
+        private const val KEY_SESSION_TOKEN = "session_token"
     }
 
     private val vkAuthRelay = MutableSharedFlow<Boolean>()
 
     private val authSkippedState = SuspendMutableStateFlow {
         loadAuthSkipped()
+    }
+
+    private val sessionTokenState = SuspendMutableStateFlow {
+        loadSessionToken()
     }
 
     override fun observeVkAuthChange(): Flow<Boolean> = vkAuthRelay.asSharedFlow()
@@ -69,6 +74,33 @@ class AuthStorage @Inject constructor(
     private suspend fun loadAuthSkipped(): Boolean {
         return withContext(Dispatchers.IO) {
             sharedPreferences.getBoolean(KEY_AUTH_SKIPPED, false)
+        }
+    }
+
+    override fun observeSessionToken(): Flow<String?> {
+        return sessionTokenState
+    }
+
+    override suspend fun getSessionToken(): String? {
+        return sessionTokenState.getValue()
+    }
+
+    override suspend fun setSessionToken(value: String?) {
+        withContext(Dispatchers.IO) {
+            sharedPreferences.edit {
+                if (value.isNullOrBlank()) {
+                    remove(KEY_SESSION_TOKEN)
+                } else {
+                    putString(KEY_SESSION_TOKEN, value)
+                }
+            }
+        }
+        sessionTokenState.setValue(loadSessionToken())
+    }
+
+    private suspend fun loadSessionToken(): String? {
+        return withContext(Dispatchers.IO) {
+            sharedPreferences.getString(KEY_SESSION_TOKEN, null)
         }
     }
 

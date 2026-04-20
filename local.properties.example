@@ -1,0 +1,6 @@
+sdk.dir=D:/Ani/.gradle/codex-tools/android-sdk
+storeFile=D:/Ani/.gradle/codex-tools/local-release.jks
+storePassword=android
+keyAlias=anilibria-local
+keyPassword=android
+appmetrica_post_api_key=

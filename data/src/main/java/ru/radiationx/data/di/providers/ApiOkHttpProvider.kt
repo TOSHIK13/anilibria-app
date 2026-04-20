@@ -2,11 +2,13 @@ package ru.radiationx.data.di.providers
 
 import android.content.Context
 import com.chuckerteam.chucker.api.ChuckerInterceptor
+import kotlinx.coroutines.runBlocking
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import ru.radiationx.data.SharedBuildConfig
 import ru.radiationx.data.analytics.features.SslCompatAnalytics
+import ru.radiationx.data.datasource.holders.AuthHolder
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.interceptors.UnauthorizedInterceptor
 import ru.radiationx.data.sslcompat.SslCompat
@@ -22,6 +24,7 @@ import javax.inject.Provider
 
 class ApiOkHttpProvider @Inject constructor(
     private val context: Context,
+    private val authHolder: AuthHolder,
     private val appCookieJar: AppCookieJar,
     private val apiConfig: ApiConfig,
     private val sharedBuildConfig: SharedBuildConfig,
@@ -69,8 +72,7 @@ class ApiOkHttpProvider @Inject constructor(
             }
 
             addInterceptor {
-                val additionalHeadersRequest = it.request()
-                    .newBuilder()
+                val requestBuilder = it.request().newBuilder()
                     .header("mobileApp", "true")
                     // deprecated header
                     //.header("Store-Published", "Google")
@@ -78,8 +80,12 @@ class ApiOkHttpProvider @Inject constructor(
                     .header("App-Ver-Name", sharedBuildConfig.versionName)
                     .header("App-Ver-Code", sharedBuildConfig.versionCode.toString())
                     .header("User-Agent", Client.USER_AGENT)
-                    .build()
-                it.proceed(additionalHeadersRequest)
+                runBlocking {
+                    authHolder.getSessionToken()
+                }?.takeIf { token -> token.isNotBlank() }?.let { token ->
+                    requestBuilder.header("Authorization", "Bearer $token")
+                }
+                it.proceed(requestBuilder.build())
             }
 
             addInterceptor(unauthorizedInterceptor)

@@ -52,17 +52,31 @@ class AuthRepository @Inject constructor(
 
     fun observeAuthState(): Flow<AuthState> = combine(
         cookieHolder.observeCookies(),
+        authHolder.observeSessionToken(),
         authHolder.observeAuthSkipped()
-    ) { cookies, skipped ->
-        computeAuthState(cookies, skipped)
+    ) { cookies, sessionToken, skipped ->
+        computeAuthState(cookies, sessionToken, skipped)
     }
         .distinctUntilChanged()
         .flowOn(Dispatchers.IO)
 
     suspend fun getAuthState(): AuthState {
         return withContext(Dispatchers.IO) {
-            computeAuthState(cookieHolder.getCookies(), authHolder.getAuthSkipped())
+            computeAuthState(
+                cookieHolder.getCookies(),
+                authHolder.getSessionToken(),
+                authHolder.getAuthSkipped()
+            )
         }
+    }
+
+    fun observeSessionToken(): Flow<String?> = authHolder
+        .observeSessionToken()
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.IO)
+
+    suspend fun hasSessionToken(): Boolean = withContext(Dispatchers.IO) {
+        !authHolder.getSessionToken().isNullOrBlank()
     }
 
     suspend fun setAuthSkipped(value: Boolean) {
@@ -72,9 +86,12 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun loadUser(): ProfileItem = withContext(Dispatchers.IO) {
-        authApi
-            .loadUser()
-            .toDomain(apiConfig)
+        val profile = if (!authHolder.getSessionToken().isNullOrBlank()) {
+            authApi.loadV1User().toDomain(apiConfig)
+        } else {
+            authApi.loadUser().toDomain(apiConfig)
+        }
+        profile
             .also { updateUser(it) }
     }
 
@@ -91,16 +108,25 @@ class AuthRepository @Inject constructor(
     suspend fun signInOtp(code: String): ProfileItem = withContext(Dispatchers.IO) {
         authApi
             .signInOtp(code, authHolder.getDeviceId())
+            .also { authHolder.setSessionToken(it.token) }
+            .let { authApi.loadV1User() }
             .toDomain(apiConfig)
             .also { updateUser(it) }
     }
 
     suspend fun signIn(login: String, password: String, code2fa: String): ProfileItem =
         withContext(Dispatchers.IO) {
-            authApi
+            val profile = authApi
                 .signIn(login, password, code2fa)
                 .toDomain(apiConfig)
-                .also { updateUser(it) }
+            coRunCatching {
+                authApi.signInV1(login, password)
+            }.onSuccess {
+                authHolder.setSessionToken(it.token)
+            }.onFailure {
+                Timber.e(it)
+            }
+            profile.also { updateUser(it) }
         }
 
     suspend fun signOut() {
@@ -111,6 +137,7 @@ class AuthRepository @Inject constructor(
                 Timber.e(it)
             }
             cookieHolder.removeAuthCookie()
+            authHolder.setSessionToken(null)
             userHolder.delete()
         }
     }
@@ -145,9 +172,14 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    private fun computeAuthState(cookies: Map<String, Cookie>, skipped: Boolean): AuthState {
+    private fun computeAuthState(
+        cookies: Map<String, Cookie>,
+        sessionToken: String?,
+        skipped: Boolean,
+    ): AuthState {
         val cookie = cookies[CookieHolder.PHPSESSID]
         return when {
+            !sessionToken.isNullOrBlank() -> AuthState.AUTH
             cookie != null -> AuthState.AUTH
             skipped -> AuthState.AUTH_SKIPPED
             else -> AuthState.NO_AUTH

@@ -61,6 +61,7 @@ class VideoPlayerGlue(
         fun onQualityClick()
         fun onSpeedClick()
         fun onEpisodesClick()
+        fun onSettingsClick()
     }
 
     interface PlaybackListener {
@@ -78,6 +79,7 @@ class VideoPlayerGlue(
     private val qualityAction by lazy { QualityAction(context) }
     private val speedAction by lazy { SpeedAction(context) }
     private val episodesAction by lazy { EpisodesAction(context) }
+    private val settingsAction by lazy { SettingsAction(context) }
 
     override fun onUpdateProgress() {
         super.onUpdateProgress()
@@ -91,8 +93,6 @@ class VideoPlayerGlue(
     override fun onCreatePrimaryActions(adapter: ArrayObjectAdapter) {
         super.onCreatePrimaryActions(adapter)
         adapter.add(previousAction)
-        //adapter.add(mRewindAction);
-        //adapter.add(mFastForwardAction);
         adapter.add(nextAction)
     }
 
@@ -102,6 +102,7 @@ class VideoPlayerGlue(
         adapter.add(qualityAction)
         adapter.add(speedAction)
         adapter.add(episodesAction)
+        adapter.add(settingsAction)
     }
 
     override fun onActionClicked(action: Action) {
@@ -113,7 +114,7 @@ class VideoPlayerGlue(
     }
 
     private fun shouldDispatchAction(action: Action): Boolean {
-        return action === rewindAction || action === forwardAction || action === qualityAction || action === speedAction || action === episodesAction
+        return action === rewindAction || action === forwardAction || action === qualityAction || action === speedAction || action === episodesAction || action === settingsAction
     }
 
     private fun dispatchAction(action: Action) {
@@ -123,6 +124,7 @@ class VideoPlayerGlue(
             action === qualityAction -> actionListener?.onQualityClick()
             action === speedAction -> actionListener?.onSpeedClick()
             action === episodesAction -> actionListener?.onEpisodesClick()
+            action === settingsAction -> actionListener?.onSettingsClick()
             action is MultiAction -> {
                 action.nextIndex()
                 // Notify adapter of action changes to handle secondary actions, such as, thumbs up/down

@@ -13,4 +13,8 @@ interface AuthHolder {
     fun observeAuthSkipped(): Flow<Boolean>
     suspend fun getAuthSkipped(): Boolean
     suspend fun setAuthSkipped(value: Boolean)
+
+    fun observeSessionToken(): Flow<String?>
+    suspend fun getSessionToken(): String?
+    suspend fun setSessionToken(value: String?)
 }

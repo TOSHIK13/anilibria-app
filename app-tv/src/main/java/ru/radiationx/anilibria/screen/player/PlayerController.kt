@@ -10,9 +10,12 @@ class PlayerController @Inject constructor() {
 
     val data = MutableStateFlow<List<Release>?>(null)
 
+    val settingsOverlayVisible = MutableStateFlow(false)
+
     val selectEpisodeRelay = EventFlow<EpisodeId>()
 
     fun reset() {
         data.value = null
+        settingsOverlayVisible.value = false
     }
 }

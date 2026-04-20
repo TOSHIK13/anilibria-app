@@ -18,6 +18,7 @@ import ru.radiationx.anilibria.screen.player.end_season.EndSeasonGuidedFragment
 import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesGuidedFragment
 import ru.radiationx.anilibria.screen.player.putIds
 import ru.radiationx.anilibria.screen.player.quality.PlayerQualityGuidedFragment
+import ru.radiationx.anilibria.screen.player.settings.PlayerSettingsGuidedFragment
 import ru.radiationx.anilibria.screen.player.speed.PlayerSpeedGuidedFragment
 import ru.radiationx.anilibria.screen.schedule.ScheduleFragment
 import ru.radiationx.anilibria.screen.search.SearchFragment
@@ -208,5 +209,14 @@ class PlayerEndSeasonGuidedScreen(
 class TestGuidedStepScreen : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
         return DialogExampleFragment()
+    }
+}
+
+class PlayerSettingsGuidedScreen(
+    private val releaseId: ReleaseId,
+    private val episodeId: EpisodeId?,
+) : GuidedAppScreen() {
+    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
+        return PlayerSettingsGuidedFragment().putIds(releaseId, episodeId)
     }
 }

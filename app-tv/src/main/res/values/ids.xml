@@ -4,4 +4,5 @@
     <item name="player_action_quality" type="id" />
     <item name="player_action_speed" type="id" />
     <item name="player_action_episodes" type="id" />
+    <item name="player_action_settings" type="id" />
 </resources>

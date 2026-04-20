@@ -3,6 +3,7 @@ package ru.radiationx.anilibria.screen.mainpages
 import androidx.fragment.app.Fragment
 import androidx.leanback.widget.Row
 import ru.radiationx.anilibria.common.CachedRowsFragmentFactory
+import ru.radiationx.anilibria.screen.collections.CollectionsFragment
 import ru.radiationx.anilibria.screen.main.MainFragment
 import ru.radiationx.anilibria.screen.profile.ProfileFragment
 import ru.radiationx.anilibria.screen.watching.WatchingFragment
@@ -18,10 +19,12 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
         const val ID_SEARCH = 5L
         const val ID_YOUTUBE = 6L
         const val ID_PROFILE = 7L
+        const val ID_COLLECTIONS = 8L
 
         val ids = listOf(
             ID_MAIN,
             ID_MY,
+            ID_COLLECTIONS,
             //ID_SERIES,
             //ID_MOVIES,
             //ID_SEARCH,
@@ -36,7 +39,8 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
             ID_MOVIES to "Фильмы",
             ID_SEARCH to "Поиск",
             ID_YOUTUBE to "YouTube",
-            ID_PROFILE to "Профиль"
+            ID_PROFILE to "Профиль",
+            ID_COLLECTIONS to "Коллекции"
         )
     }
 
@@ -44,6 +48,7 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
         val fragment = when (row.id) {
             ID_MAIN -> MainFragment()
             ID_MY -> WatchingFragment()
+            ID_COLLECTIONS -> CollectionsFragment()
             ID_YOUTUBE -> YoutubeFragment()
             ID_PROFILE -> ProfileFragment()
             else -> super.getFragmentByRow(row)

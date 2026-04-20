@@ -11,6 +11,7 @@ import ru.radiationx.anilibria.screen.PlayerEndEpisodeGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerEndSeasonGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerQualityGuidedScreen
+import ru.radiationx.anilibria.screen.PlayerSettingsGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerSpeedGuidedScreen
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
@@ -35,6 +36,7 @@ class PlayerViewModel @Inject constructor(
     val qualityState = MutableStateFlow<PlayerQuality?>(null)
     val speedState = MutableStateFlow<Float?>(null)
     val playAction = EventFlow<Boolean>()
+    val settingsOverlayVisible = playerController.settingsOverlayVisible
 
     private var currentEpisodes = mutableListOf<Episode>()
     private var currentReleases: List<Release>? = null
@@ -44,7 +46,8 @@ class PlayerViewModel @Inject constructor(
 
     init {
         playerController.reset()
-        qualityState.value = preferencesHolder.playerQuality.value
+        currentQuality = PlayerQuality.FULLHD
+        qualityState.value = PlayerQuality.FULLHD
         speedState.value = preferencesHolder.playSpeed.value
 
         playerController
@@ -56,6 +59,7 @@ class PlayerViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
+        preferencesHolder.playerQuality.value = PlayerQuality.FULLHD
         preferencesHolder
             .playerQuality
             .onEach {
@@ -140,6 +144,13 @@ class PlayerViewModel @Inject constructor(
         guidedRouter.open(PlayerSpeedGuidedScreen(release.id, episode.id))
     }
 
+    fun onSettingsClick(position: Long) {
+        val release = getCurrentRelease() ?: return
+        val episode = currentEpisode ?: return
+        saveEpisode(position)
+        guidedRouter.open(PlayerSettingsGuidedScreen(release.id, episode.id))
+    }
+
     fun onComplete(position: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
@@ -148,8 +159,10 @@ class PlayerViewModel @Inject constructor(
 
         saveEpisode(position)
         val nextEpisode = getNextEpisode()
-        if (nextEpisode != null) {
+        if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
             playEpisode(nextEpisode)
+        } else if (nextEpisode != null) {
+            guidedRouter.open(PlayerEndEpisodeGuidedScreen(release.id, episode.id))
         } else {
             guidedRouter.open(PlayerEndSeasonGuidedScreen(release.id, episode.id))
         }

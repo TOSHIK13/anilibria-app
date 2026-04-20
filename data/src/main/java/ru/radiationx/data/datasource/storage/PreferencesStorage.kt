@@ -109,7 +109,7 @@ class PreferencesStorage @Inject constructor(
         key = PLAYER_QUALITY_KEY,
         sharedPreferences = sharedPreferences,
         get = { key ->
-            getString(key, null)?.asPlayerQuality() ?: PlayerQuality.SD
+            getString(key, null)?.asPlayerQuality() ?: PlayerQuality.FULLHD
         },
         set = { key, value ->
             putString(key, value.asPrefString())

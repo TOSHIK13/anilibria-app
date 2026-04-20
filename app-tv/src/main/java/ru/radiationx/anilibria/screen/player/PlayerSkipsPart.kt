@@ -31,7 +31,9 @@ class PlayerSkipsPart(
     private val parent: FrameLayout,
     private val skipButtonText: String,
     private val coroutineScope: CoroutineScope,
+    private val playerSkipsEnabled: AppPreference<Boolean>,
     private val playerSkipsTimer: AppPreference<Boolean>,
+    private val controlsOverlayVisibleProvider: () -> Boolean,
     private val onSeek: (Long) -> Unit,
     private val onSkipShow: () -> Unit,
     private val onSkipHide: () -> Unit,
@@ -53,9 +55,13 @@ class PlayerSkipsPart(
     private val skippedList = mutableSetOf<PlayerSkips.Skip>()
     private var currentPosition = 0L
     private var currentSkipShow = false
+    private var enabled = true
     private var timerJob: Job? = null
 
     init {
+        observeSkipTimerState()
+        observeEnabledState()
+
         binding.btSkipsCancel.setOnClickListener {
             cancelSkip()
             onUserChoseWatchOpening()
@@ -74,6 +80,14 @@ class PlayerSkipsPart(
 
     fun update(position: Long) {
         currentPosition = position
+        if (!enabled) {
+            hideSkip()
+            return
+        }
+        if (controlsOverlayVisibleProvider()) {
+            hideSkip()
+            return
+        }
         autoCancel()
         val skip = getCurrentSkip()
         val hasSkip = skip != null
@@ -93,6 +107,17 @@ class PlayerSkipsPart(
             onSkipHide.invoke()
         }
         binding.root.isVisible = hasSkip
+    }
+
+    private fun hideSkip() {
+        stopTimer()
+        if (!currentSkipShow) {
+            binding.root.isVisible = false
+            return
+        }
+        currentSkipShow = false
+        binding.root.isVisible = false
+        onSkipHide.invoke()
     }
 
     private fun getCurrentSkip(): PlayerSkips.Skip? {
@@ -125,6 +150,17 @@ class PlayerSkipsPart(
         playerSkipsTimer.value
     }
 
+    private fun observeEnabledState() {
+        playerSkipsEnabled
+            .onEach {
+                enabled = it
+                if (!it) {
+                    hideSkip()
+                }
+            }
+            .launchIn(coroutineScope)
+    }
+
     private fun onUserChoseSkipOpening() {
         playerSkipsTimer.value = true
     }
@@ -155,7 +191,6 @@ class PlayerSkipsPart(
     private fun startTimerIfNeed() {
         coroutineScope.launch {
             if (isAutoSkipEnabled()) {
-                observeSkipTimerState()
                 startTimer()
             }
         }
