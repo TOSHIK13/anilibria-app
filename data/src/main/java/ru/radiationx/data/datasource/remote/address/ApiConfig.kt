@@ -12,6 +12,10 @@ class ApiConfig @Inject constructor(
     private val configChanger: ApiConfigChanger,
     private val apiConfigStorage: ApiConfigStorage,
 ) {
+    companion object {
+        private val DEFAULT_V1_ANIME_BASE = Api.DEFAULT_ADDRESS.animeBase.orEmpty()
+        private val DEFAULT_V1_ACCOUNTS_BASE = Api.DEFAULT_ADDRESS.accountsBase.orEmpty()
+    }
 
     private val addresses = mutableListOf<ApiAddress>()
     private var activeAddressTag: String = ""
@@ -107,8 +111,15 @@ class ApiConfig @Inject constructor(
     val baseUrl: String
         get() = active.base
 
+    val animeBaseUrl: String
+        get() = active.animeBase.normalizeBaseUrl(DEFAULT_V1_ANIME_BASE)
+
+    val accountsBaseUrl: String
+        get() = active.accountsBase
+            .normalizeBaseUrl(active.animeBase.normalizeBaseUrl(DEFAULT_V1_ACCOUNTS_BASE))
+
     val accountBaseUrl: String
-        get() = "https://anilibria.top"
+        get() = accountsBaseUrl
 
     val apiUrl: String
         get() = active.api
@@ -118,4 +129,12 @@ class ApiConfig @Inject constructor(
 
     val proxies: List<ApiProxy>
         get() = active.proxies
+
+    private fun String?.normalizeBaseUrl(fallback: String): String {
+        return this
+            ?.trim()
+            ?.trimEnd('/')
+            ?.takeIf { it.isNotEmpty() }
+            ?: fallback.trimEnd('/')
+    }
 }

@@ -6,10 +6,12 @@ import ru.radiationx.data.entity.domain.auth.SocialAuth
 import ru.radiationx.data.entity.domain.other.ProfileItem
 import ru.radiationx.data.entity.response.auth.OtpInfoResponse
 import ru.radiationx.data.entity.response.auth.SocialAuthResponse
+import ru.radiationx.data.entity.response.auth.V1SocialAuthLoginResponse
 import ru.radiationx.data.entity.response.auth.V1OtpInfoResponse
 import ru.radiationx.data.entity.response.other.ProfileResponse
 import ru.radiationx.data.entity.response.other.V1ProfileImageResponse
 import ru.radiationx.data.entity.response.other.V1ProfileResponse
+import java.util.Locale
 import java.util.Date
 
 fun OtpInfoResponse.toDomain(): OtpInfo = OtpInfo(
@@ -37,6 +39,15 @@ fun SocialAuthResponse.toDomain(): SocialAuth = SocialAuth(
     errorUrlPattern = errorUrlPattern
 )
 
+fun V1SocialAuthLoginResponse.toDomain(provider: String): SocialAuth = SocialAuth(
+    key = provider,
+    title = provider.toSocialTitle(),
+    socialUrl = url,
+    resultPattern = buildResultPattern(state),
+    errorUrlPattern = "",
+    authState = state,
+)
+
 fun ProfileResponse.toDomain(apiConfig: ApiConfig): ProfileItem = ProfileItem(
     id,
     nick.orEmpty(),
@@ -57,4 +68,19 @@ private fun V1ProfileImageResponse.toAvatarUrl(apiConfig: ApiConfig): String? {
     return path?.let {
         if (it.startsWith("http")) it else it.appendBaseUrl(apiConfig.baseImagesUrl)
     }
+}
+
+private fun String.toSocialTitle(): String = when (lowercase(Locale.ROOT)) {
+    "vk" -> "VK"
+    "google" -> "Google"
+    "discord" -> "Discord"
+    "patreon" -> "Patreon"
+    else -> replaceFirstChar {
+        if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
+    }
+}
+
+private fun buildResultPattern(state: String): String {
+    val escapedState = Regex.escape(state)
+    return "((?:.*[?&])state=$escapedState(?:[&#].*)?)"
 }

@@ -20,7 +20,7 @@ class ReleaseApi @Inject constructor(
 ) {
 
     private val animeUrl: String
-        get() = "${apiConfig.accountBaseUrl}/api/v1/anime"
+        get() = "${apiConfig.animeBaseUrl}/api/v1/anime"
 
     suspend fun getRandomRelease(): RandomReleaseResponse {
         val args = mapOf(

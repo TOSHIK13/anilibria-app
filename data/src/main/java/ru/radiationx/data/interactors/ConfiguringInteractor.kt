@@ -262,7 +262,7 @@ class ConfiguringInteractor @Inject constructor(
 
     private suspend fun mergeAvailCheck(addresses: List<ApiAddress>): ApiAddress {
         val adressesSources = addresses.map { address ->
-            flow { emit(configurationRepository.checkAvailable(address.api)) }
+            flow { emit(configurationRepository.checkAvailable(address)) }
                 .catch { emit(false) }
                 .map { Pair(address, it) }
         }

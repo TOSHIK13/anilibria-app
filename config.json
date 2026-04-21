@@ -9,6 +9,8 @@
       "baseImages": "https://static.wwnd.space/",
       "base": "https://wwnd.space",
       "api": "https://wwnd.space/public/api/index.php",
+      "animeBase": "https://anilibria.top",
+      "accountsBase": "https://anilibria.top",
       "ips": [],
       "proxies": []
     }

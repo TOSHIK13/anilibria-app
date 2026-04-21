@@ -106,21 +106,18 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun signInOtp(code: String): ProfileItem = withContext(Dispatchers.IO) {
-        authApi
-            .signInOtp(code, authHolder.getDeviceId())
-            .also { authHolder.setSessionToken(it.token) }
-            .let { authApi.loadV1User() }
+        val tokenResponse = authApi.signInOtp(code, authHolder.getDeviceId())
+        authHolder.setSessionToken(tokenResponse.token)
+        authApi.loadV1User()
             .toDomain(apiConfig)
             .also { updateUser(it) }
     }
 
     suspend fun signIn(login: String, password: String, code2fa: String): ProfileItem =
         withContext(Dispatchers.IO) {
-            val profile = authApi
-                .signInV1(login, password)
-                .also { authHolder.setSessionToken(it.token) }
-                .let { authApi.loadV1User() }
-                .toDomain(apiConfig)
+            val tokenResponse = authApi.signInV1(login, password)
+            authHolder.setSessionToken(tokenResponse.token)
+            val profile = authApi.loadV1User().toDomain(apiConfig)
             coRunCatching {
                 authApi.signIn(login, password, code2fa)
             }.onFailure {
@@ -160,11 +157,27 @@ class AuthRepository @Inject constructor(
 
     suspend fun signInSocial(resultUrl: String, item: SocialAuth): ProfileItem =
         withContext(Dispatchers.IO) {
-            authApi
+            val tokenResponse = authApi
                 .signInSocial(resultUrl, item)
-                .toDomain(apiConfig)
+            tokenResponse.token.takeIf { token -> token.isNotBlank() }?.also { token ->
+                authHolder.setSessionToken(token)
+            }
+
+            val profile = if (!tokenResponse.token.isNullOrBlank()) {
+                authApi.loadV1User().toDomain(apiConfig)
+            } else {
+                authApi.loadUser().toDomain(apiConfig)
+            }
+
+            profile
                 .also { updateUser(it) }
         }
+
+    suspend fun prepareSocialAuth(key: String): SocialAuth = withContext(Dispatchers.IO) {
+        authApi
+            .loadSocialAuthLogin(key)
+            .toDomain(key)
+    }
 
     private suspend fun updateUser(newUser: ProfileItem) {
         withContext(Dispatchers.IO) {

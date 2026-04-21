@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import ru.radiationx.data.datasource.remote.address.ApiAddress
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.address.ApiConfigData
 import ru.radiationx.data.datasource.remote.api.ConfigurationApi
@@ -23,9 +24,9 @@ class ConfigurationRepository @Inject constructor(
 
     private val pingRelay = MutableStateFlow<Map<String, PingResult>?>(null)
 
-    suspend fun checkAvailable(apiUrl: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun checkAvailable(address: ApiAddress): Boolean = withContext(Dispatchers.IO) {
         configurationApi
-            .checkAvailable(apiUrl)
+            .checkAvailable(address)
     }
 
     suspend fun getConfiguration(): ApiConfigData = withContext(Dispatchers.IO) {

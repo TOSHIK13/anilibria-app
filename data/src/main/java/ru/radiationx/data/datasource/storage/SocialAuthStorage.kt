@@ -47,7 +47,8 @@ class SocialAuthStorage @Inject constructor(
                             jsonItem.getString("title"),
                             jsonItem.getString("socialUrl"),
                             jsonItem.getString("resultPattern"),
-                            jsonItem.getString("errorUrlPattern")
+                            jsonItem.getString("errorUrlPattern"),
+                            jsonItem.optString("authState").takeIf { value -> value.isNotBlank() }
                         )
                     )
                 }
@@ -66,6 +67,7 @@ class SocialAuthStorage @Inject constructor(
                     put("socialUrl", item.socialUrl)
                     put("resultPattern", item.resultPattern)
                     put("errorUrlPattern", item.errorUrlPattern)
+                    put("authState", item.authState)
                 })
             }
             sharedPreferences.edit().putString("social_auth", resultJson.toString()).apply()

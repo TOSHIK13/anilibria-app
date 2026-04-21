@@ -18,7 +18,7 @@ class SearchApi @Inject constructor(
 ) {
 
     private val animeUrl: String
-        get() = "${apiConfig.accountBaseUrl}/api/v1/anime"
+        get() = "${apiConfig.animeBaseUrl}/api/v1/anime"
 
     suspend fun getGenres(): List<V1GenreReferenceResponse> {
         val args = mapOf<String, String>()
@@ -39,7 +39,7 @@ class SearchApi @Inject constructor(
             "query" to name,
         )
         return client
-            .get("${apiConfig.accountBaseUrl}/api/v1/app/search/releases", args)
+            .get("${apiConfig.animeBaseUrl}/api/v1/app/search/releases", args)
             .fetchListResponse(moshi)
     }
 

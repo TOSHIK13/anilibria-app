@@ -11,7 +11,7 @@ import kotlinx.coroutines.withTimeout
 import ru.radiationx.data.MainClient
 import ru.radiationx.data.datasource.remote.Api
 import ru.radiationx.data.datasource.remote.IClient
-import ru.radiationx.data.datasource.remote.address.ApiConfig
+import ru.radiationx.data.datasource.remote.address.ApiAddress
 import ru.radiationx.data.datasource.remote.fetchApiResponse
 import ru.radiationx.data.datasource.remote.fetchResponse
 import ru.radiationx.data.entity.response.config.ApiConfigResponse
@@ -19,16 +19,21 @@ import javax.inject.Inject
 
 class ConfigurationApi @Inject constructor(
     @MainClient private val mainClient: IClient,
-    private val apiConfig: ApiConfig,
     private val moshi: Moshi,
 ) {
 
-    suspend fun checkAvailable(apiUrl: String): Boolean {
-        return withTimeout(15_000) {
-            mainClient
-                .postFull(apiUrl, mapOf("query" to "empty"))
-                .let { true }
+    suspend fun checkAvailable(address: ApiAddress): Boolean {
+        val checks = mutableListOf<suspend () -> Boolean>()
+        if (address.api.isNotBlank()) {
+            checks += suspend { checkLegacyAvailable(address.api) }
         }
+        address.resolvePublicV1Base()?.also { v1Base ->
+            checks += suspend { checkV1Available(v1Base) }
+        }
+        if (checks.isEmpty()) {
+            return false
+        }
+        return checks.all { check -> check() }
     }
 
     suspend fun getConfiguration(): ApiConfigResponse {
@@ -78,5 +83,33 @@ class ConfigurationApi @Inject constructor(
     private suspend fun getReserve(url: String): ApiConfigResponse = mainClient
         .get(url, emptyMap())
         .fetchResponse(moshi)
+
+    private suspend fun checkLegacyAvailable(apiUrl: String): Boolean {
+        return withTimeout(15_000) {
+            mainClient
+                .postFull(apiUrl, mapOf("query" to "empty"))
+                .let { true }
+        }
+    }
+
+    private suspend fun checkV1Available(baseUrl: String): Boolean {
+        val normalizedBaseUrl = baseUrl.trimEnd('/')
+        return withTimeout(15_000) {
+            mainClient
+                .getRaw("$normalizedBaseUrl/api/v1/anime/catalog/references/years", emptyMap())
+                .use { true }
+        }
+    }
+
+    private fun ApiAddress.resolvePublicV1Base(): String? {
+        return animeBase
+            ?.trim()
+            ?.trimEnd('/')
+            ?.takeIf { it.isNotEmpty() }
+            ?: accountsBase
+                ?.trim()
+                ?.trimEnd('/')
+                ?.takeIf { it.isNotEmpty() }
+    }
 
 }

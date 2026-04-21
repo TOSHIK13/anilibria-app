@@ -13,6 +13,8 @@ data class ApiConfigAddressResponse(
     @Json(name = "baseImages") val baseImages: String,
     @Json(name = "base") val base: String,
     @Json(name = "api") val api: String,
+    @Json(name = "animeBase") val animeBase: String? = null,
+    @Json(name = "accountsBase") val accountsBase: String? = null,
     @Json(name = "ips") val ips: List<String>,
     @Json(name = "proxies") val proxies: List<ApiConfigProxyResponse>
 )

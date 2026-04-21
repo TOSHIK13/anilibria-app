@@ -5,5 +5,6 @@ data class SocialAuth(
     val title: String,
     val socialUrl: String,
     val resultPattern: String,
-    val errorUrlPattern: String
+    val errorUrlPattern: String,
+    val authState: String? = null,
 )

@@ -11,6 +11,8 @@ object Api {
     private const val BASE_URL_IMAGES = "https://www.anilibria.tv/"
     private const val BASE_URL = "https://www.anilibria.tv"
     private const val API_URL = "https://www.anilibria.tv/public/api/index.php"
+    private const val ANIME_BASE_URL = "https://anilibria.top"
+    private const val ACCOUNTS_BASE_URL = "https://anilibria.top"
     private val DEFAULT_IP_ADDRESSES = listOf<String>()
     private val DEFAULT_PROXIES = listOf<ApiProxy>()
 
@@ -23,6 +25,8 @@ object Api {
         BASE_URL_IMAGES,
         BASE_URL,
         API_URL,
+        ANIME_BASE_URL,
+        ACCOUNTS_BASE_URL,
         DEFAULT_IP_ADDRESSES,
         DEFAULT_PROXIES
     )

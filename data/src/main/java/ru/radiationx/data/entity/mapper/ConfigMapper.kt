@@ -20,6 +20,8 @@ fun ApiConfigAddressResponse.toDomain(): ApiAddress = ApiAddress(
     baseImages = baseImages,
     base = base,
     api = api,
+    animeBase = animeBase,
+    accountsBase = accountsBase,
     ips = ips,
     proxies = proxies.map { it.toDomain() }
 )

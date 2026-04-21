@@ -9,17 +9,18 @@ import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.fetchApiResponse
 import ru.radiationx.data.datasource.remote.fetchEmptyApiResponse
-import ru.radiationx.data.datasource.remote.fetchListApiResponse
 import ru.radiationx.data.datasource.remote.fetchResponse
 import ru.radiationx.data.datasource.remote.parsers.AuthParser
 import ru.radiationx.data.entity.domain.auth.SocialAuth
 import ru.radiationx.data.entity.domain.auth.SocialAuthException
 import ru.radiationx.data.entity.response.auth.OtpInfoResponse
 import ru.radiationx.data.entity.response.auth.SocialAuthResponse
+import ru.radiationx.data.entity.response.auth.V1SocialAuthLoginResponse
 import ru.radiationx.data.entity.response.auth.V1OtpInfoResponse
 import ru.radiationx.data.entity.response.auth.V1TokenResponse
 import ru.radiationx.data.entity.response.other.ProfileResponse
 import ru.radiationx.data.entity.response.other.V1ProfileResponse
+import ru.radiationx.data.system.HttpException
 import ru.radiationx.shared.ktx.android.nullString
 import java.util.regex.Pattern
 import javax.inject.Inject
@@ -45,7 +46,7 @@ class AuthApi @Inject constructor(
     suspend fun loadV1User(): V1ProfileResponse {
         val args = mapOf<String, String>()
         return client
-            .get("${apiConfig.accountBaseUrl}/api/v1/accounts/users/me/profile", args)
+            .get("${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/profile", args)
             .fetchResponse(moshi)
     }
 
@@ -55,7 +56,7 @@ class AuthApi @Inject constructor(
         )
         return try {
             client
-                .post("${apiConfig.accountBaseUrl}/api/v1/accounts/otp/get", args)
+                .post("${apiConfig.accountsBaseUrl}/api/v1/accounts/otp/get", args)
                 .fetchResponse(moshi)
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
@@ -63,14 +64,13 @@ class AuthApi @Inject constructor(
     }
 
     suspend fun acceptOtp(code: String) {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "auth_accept_otp",
+        val args = mapOf(
             "code" to code
         )
         try {
             client
-                .post(apiConfig.apiUrl, args)
-                .fetchEmptyApiResponse(moshi)
+                .postRaw("${apiConfig.accountsBaseUrl}/api/v1/accounts/otp/accept", args)
+                .use { }
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
         }
@@ -83,7 +83,7 @@ class AuthApi @Inject constructor(
         )
         return try {
             client
-                .post("${apiConfig.accountBaseUrl}/api/v1/accounts/otp/login", args)
+                .post("${apiConfig.accountsBaseUrl}/api/v1/accounts/otp/login", args)
                 .fetchResponse(moshi)
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
@@ -108,32 +108,69 @@ class AuthApi @Inject constructor(
             "password" to password
         )
         return client
-            .post("${apiConfig.accountBaseUrl}/api/v1/accounts/users/auth/login", args)
+            .post("${apiConfig.accountsBaseUrl}/api/v1/accounts/users/auth/login", args)
             .fetchResponse(moshi)
     }
 
     suspend fun loadSocialAuth(): List<SocialAuthResponse> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "social_auth"
+        return listOf(
+            SocialAuthResponse("vk", "VK", "", "", ""),
+            SocialAuthResponse("google", "Google", "", "", ""),
+            SocialAuthResponse("discord", "Discord", "", "", ""),
+            SocialAuthResponse("patreon", "Patreon", "", "", ""),
         )
-        return client
-            .post(apiConfig.apiUrl, args)
-            .fetchListApiResponse(moshi)
     }
 
-    suspend fun signInSocial(resultUrl: String, item: SocialAuth): ProfileResponse {
+    suspend fun loadSocialAuthLogin(provider: String): V1SocialAuthLoginResponse {
+        return client
+            .get("${apiConfig.accountsBaseUrl}/api/v1/accounts/users/auth/social/$provider/login", emptyMap())
+            .fetchResponse(moshi)
+    }
+
+    suspend fun signInSocial(resultUrl: String, item: SocialAuth): V1TokenResponse {
+        extractSocialAuthState(resultUrl, item)?.also { state ->
+            return try {
+                client
+                    .get(
+                        "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/auth/social/authenticate",
+                        mapOf("state" to state)
+                    )
+                    .fetchResponse(moshi)
+            } catch (error: HttpException) {
+                if (error.code == 404) {
+                    throw SocialAuthException()
+                }
+                throw error
+            }
+        }
+        return signInSocialLegacy(resultUrl, item)
+    }
+
+    suspend fun signOut() {
+        try {
+            client.post("${apiConfig.accountsBaseUrl}/api/v1/accounts/users/auth/logout", emptyMap())
+            return
+        } catch (_: Throwable) {
+        }
+        val args = mapOf<String, String>()
+        client.post("${apiConfig.baseUrl}/public/logout.php", args)
+    }
+
+    private suspend fun signInSocialLegacy(resultUrl: String, item: SocialAuth): V1TokenResponse {
         val args: MutableMap<String, String> = mutableMapOf()
 
         val fixedUrl = Uri.parse(apiConfig.baseUrl).host?.let { redirectDomain ->
             resultUrl.replace("www.anilibria.tv", redirectDomain)
         } ?: resultUrl
 
-        return client
+        client
             .getFull(fixedUrl, args)
             .also { response ->
-                val matcher = Pattern.compile(item.errorUrlPattern).matcher(response.redirect)
-                if (matcher.find()) {
-                    throw SocialAuthException()
+                if (item.errorUrlPattern.isNotBlank()) {
+                    val matcher = Pattern.compile(item.errorUrlPattern).matcher(response.redirect)
+                    if (matcher.find()) {
+                        throw SocialAuthException()
+                    }
                 }
             }
             .also {
@@ -146,12 +183,14 @@ class AuthApi @Inject constructor(
                     throw ApiError(400, message, null)
                 }
             }
-            .let { loadUser() }
+        return V1TokenResponse("")
     }
 
-    suspend fun signOut() {
-        val args = mapOf<String, String>()
-        client.post("${apiConfig.baseUrl}/public/logout.php", args)
+    private fun extractSocialAuthState(resultUrl: String, item: SocialAuth): String? {
+        item.authState?.takeIf { authState ->
+            resultUrl.contains(authState)
+        }?.also { return it }
+        return Uri.parse(resultUrl).getQueryParameter("state")
     }
 
 }

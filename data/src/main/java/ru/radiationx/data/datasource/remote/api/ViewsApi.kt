@@ -18,10 +18,10 @@ class ViewsApi @Inject constructor(
 ) {
 
     private val animeUrl: String
-        get() = "${apiConfig.accountBaseUrl}/api/v1/anime"
+        get() = "${apiConfig.animeBaseUrl}/api/v1/anime"
 
     private val accountUrl: String
-        get() = "${apiConfig.accountBaseUrl}/api/v1/accounts/users/me/views/timecodes"
+        get() = "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/views/timecodes"
 
     suspend fun getReleaseTimecodes(releaseId: Int): List<ViewTimecodeResponse> {
         return client

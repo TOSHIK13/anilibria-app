@@ -18,7 +18,7 @@ class FavoriteApi @Inject constructor(
 ) {
 
     private val favoritesUrl: String
-        get() = "${apiConfig.accountBaseUrl}/api/v1/accounts/users/me/favorites"
+        get() = "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/favorites"
 
     suspend fun getFavorites(page: Int): CollectionReleasesResponse {
         val args = mapOf(

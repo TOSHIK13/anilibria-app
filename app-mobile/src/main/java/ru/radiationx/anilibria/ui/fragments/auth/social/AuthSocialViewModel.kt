@@ -49,7 +49,7 @@ class AuthSocialViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             coRunCatching {
-                authRepository.getSocialAuth(argExtra.key)
+                authRepository.prepareSocialAuth(argExtra.key)
             }.onSuccess { data ->
                 detector.loadUrl(data.socialUrl)
                 _state.update { it.copy(data = data) }

@@ -17,7 +17,7 @@ class ScheduleApi @Inject constructor(
     suspend fun getSchedule(): List<V1ScheduleItemResponse> {
         val args = mapOf<String, String>()
         return client
-            .get("${apiConfig.accountBaseUrl}/api/v1/anime/schedule/week", args)
+            .get("${apiConfig.animeBaseUrl}/api/v1/anime/schedule/week", args)
             .fetchListResponse(moshi)
     }
 

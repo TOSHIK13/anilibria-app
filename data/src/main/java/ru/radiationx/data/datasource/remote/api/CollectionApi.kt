@@ -19,7 +19,7 @@ class CollectionApi @Inject constructor(
 ) {
 
     private val collectionsUrl: String
-        get() = "${apiConfig.accountBaseUrl}/api/v1/accounts/users/me/collections"
+        get() = "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/collections"
 
     suspend fun getCollectionReleases(
         type: CollectionType,

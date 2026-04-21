@@ -9,6 +9,8 @@ data class ApiAddress(
     val baseImages: String,
     val base: String,
     val api: String,
+    val animeBase: String? = null,
+    val accountsBase: String? = null,
     val ips: List<String>,
     val proxies: List<ApiProxy>
 )
