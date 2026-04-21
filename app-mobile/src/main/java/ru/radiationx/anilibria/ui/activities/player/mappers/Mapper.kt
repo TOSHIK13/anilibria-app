@@ -32,6 +32,7 @@ fun PlayerRelease.toDataState(episodeId: EpisodeId) = PlayerDataState(
 
 fun Episode.toState(quality: PlayerQuality) = EpisodeState(
     id = id,
+    serverId = serverId,
     title = title.orEmpty(),
     url = qualityInfo.getSafeUrlFor(quality),
     skips = skips

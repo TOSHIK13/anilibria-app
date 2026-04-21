@@ -210,8 +210,9 @@ class VideoPlayerActivity : BaseActivity(R.layout.activity_videoplayer) {
             .distinctUntilChanged()
             .onEach { position ->
                 val episode = binding.playerView.playlistState.value.currentItem?.getEpisode()
+                val duration = binding.playerView.timelineState.value.duration.takeIf { it > 0 }
                 if (episode != null) {
-                    viewModel.saveEpisodeSeek(episode.id, position)
+                    viewModel.saveEpisodeSeek(episode, position, duration)
                 }
             }
             .launchIn(lifecycleScope)
@@ -265,7 +266,7 @@ class VideoPlayerActivity : BaseActivity(R.layout.activity_videoplayer) {
         val timeline = binding.playerView.timelineState.value.takeIf { it.duration > 0 }
         val episode = binding.playerView.playlistState.value.currentItem?.getEpisode()
         if (timeline != null && episode != null) {
-            viewModel.saveEpisodeSeek(episode.id, timeline.position)
+            viewModel.saveEpisodeSeek(episode, timeline.position, timeline.duration)
         }
 
         player.getPlayer().removeAnalyticsListener(analyticsListener)

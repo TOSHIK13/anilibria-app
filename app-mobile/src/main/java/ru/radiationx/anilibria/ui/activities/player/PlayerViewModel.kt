@@ -28,7 +28,7 @@ import ru.radiationx.anilibria.ui.activities.player.models.LoadingState
 import ru.radiationx.anilibria.ui.activities.player.models.PlayerAction
 import ru.radiationx.anilibria.ui.activities.player.models.PlayerData
 import ru.radiationx.anilibria.ui.activities.player.models.PlayerDataState
-import ru.radiationx.data.datasource.holders.EpisodesCheckerHolder
+import ru.radiationx.anilibria.ui.activities.player.models.EpisodeState
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.types.EpisodeId
@@ -42,7 +42,6 @@ class PlayerViewModel @Inject constructor(
     private val sharedPlayerData: SharedPlayerData,
     private val releaseInteractor: ReleaseInteractor,
     private val historyRepository: HistoryRepository,
-    private val episodesCheckerHolder: EpisodesCheckerHolder,
     private val preferencesHolder: PreferencesHolder,
 ) : ViewModel() {
 
@@ -113,16 +112,16 @@ class PlayerViewModel @Inject constructor(
     }
 
     @OptIn(DelicateCoroutinesApi::class)
-    fun saveEpisodeSeek(episodeId: EpisodeId, seek: Long) {
+    fun saveEpisodeSeek(episode: EpisodeState, seek: Long, duration: Long? = null) {
         GlobalScope.launch {
-            releaseInteractor.setAccessSeek(episodeId, seek)
+            releaseInteractor.setAccessSeek(episode.id, episode.serverId, seek, duration)
         }
     }
 
     private fun playEpisode(episodeId: EpisodeId) {
         launchWithData { data ->
             val quality = preferencesHolder.playerQuality.value
-            val access = episodesCheckerHolder.getEpisode(episodeId)
+            val access = releaseInteractor.getAccess(episodeId)
             val episodeStates = data.episodes.map { it.toState(quality) }
             val action = PlayerAction.PlayEpisode(episodeStates, episodeId, access?.seek ?: 0)
             _actions.emit(action)
@@ -136,7 +135,7 @@ class PlayerViewModel @Inject constructor(
     fun onEpisodeTransition(episodeId: EpisodeId, duration: Long) {
         _episodeId.value = episodeId
         viewModelScope.launch {
-            val access = episodesCheckerHolder.getEpisode(episodeId)
+            val access = releaseInteractor.getAccess(episodeId)
             val accessSeek = access?.seek
             if ((accessSeek ?: 0) >= duration - seekThreshold) {
                 _actions.emit(PlayerAction.Play(0))

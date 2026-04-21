@@ -71,8 +71,9 @@ open class BasePlayerFragment : VideoSupportFragment() {
 
         playerGlue?.playbackListener = object : VideoPlayerGlue.PlaybackListener {
             @UnstableApi
-            override fun onUpdateProgress() {
-                skipsPart?.update(player?.currentPosition ?: 0)
+            override fun onUpdateProgress(position: Long, duration: Long, isPlaying: Boolean) {
+                skipsPart?.update(position)
+                onPlaybackProgress(position, duration, isPlaying)
             }
         }
     }
@@ -99,6 +100,8 @@ open class BasePlayerFragment : VideoSupportFragment() {
 
     protected open fun onCompletePlaying() {}
     protected open fun onPreparePlaying() {}
+    protected open fun onSeek(position: Long, duration: Long) {}
+    protected open fun onPlaybackProgress(position: Long, duration: Long, isPlaying: Boolean) {}
 
     @UnstableApi
     private fun initializeRows() {
@@ -147,6 +150,19 @@ open class BasePlayerFragment : VideoSupportFragment() {
 
                     Player.STATE_IDLE -> {
                     }
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                super.onPositionDiscontinuity(oldPosition, newPosition, reason)
+                if (reason == Player.DISCONTINUITY_REASON_SEEK ||
+                    reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT
+                ) {
+                    onSeek(player.currentPosition, player.duration)
                 }
             }
         })

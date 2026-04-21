@@ -5,17 +5,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
-import ru.radiationx.data.datasource.holders.EpisodesCheckerHolder
-import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.domain.release.EpisodeAccess
 import ru.radiationx.data.entity.domain.release.RandomRelease
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseCode
 import ru.radiationx.data.entity.domain.types.ReleaseId
+import ru.radiationx.data.repository.EpisodeProgressRepository
 import ru.radiationx.data.repository.ReleaseRepository
 import javax.inject.Inject
 
@@ -24,8 +22,7 @@ import javax.inject.Inject
  */
 class ReleaseInteractor @Inject constructor(
     private val releaseRepository: ReleaseRepository,
-    private val episodesCheckerStorage: EpisodesCheckerHolder,
-    private val preferencesHolder: PreferencesHolder,
+    private val episodeProgressRepository: EpisodeProgressRepository,
 ) {
 
     private val releaseItems = MutableStateFlow<List<Release>>(emptyList())
@@ -116,63 +113,57 @@ class ReleaseInteractor @Inject constructor(
 
     /* Common */
     fun observeAccesses(releaseId: ReleaseId): Flow<List<EpisodeAccess>> {
-        return episodesCheckerStorage.observeEpisodes().map { accesses ->
-            accesses.filter { it.id.releaseId == releaseId }
+        return observeFull(releaseId = releaseId).flatMapLatest { release ->
+            episodeProgressRepository.observeAccesses(release)
         }
     }
 
     suspend fun getAccesses(releaseId: ReleaseId): List<EpisodeAccess> {
-        return episodesCheckerStorage.getEpisodes(releaseId)
+        val release = getFull(releaseId = releaseId) ?: return emptyList()
+        return episodeProgressRepository.getAccesses(release)
     }
 
     suspend fun getAccess(id: EpisodeId): EpisodeAccess? {
-        return episodesCheckerStorage.getEpisode(id)
+        val release = getFull(releaseId = id.releaseId) ?: return null
+        val episode = release.episodes.find { it.id == id } ?: return null
+        return episodeProgressRepository.getAccess(episode)
     }
 
     suspend fun resetAccessHistory(releaseId: ReleaseId) {
-        episodesCheckerStorage.remove(releaseId)
+        val release = getFull(releaseId = releaseId) ?: return
+        episodeProgressRepository.resetAccessHistory(release)
     }
 
     suspend fun markAllViewed(id: ReleaseId) {
-        updateEpisodes(id) {
-            it.copy(isViewed = true)
-        }
+        val release = getFull(releaseId = id) ?: return
+        episodeProgressRepository.markAllViewed(release)
     }
 
     suspend fun markUnViewed(id: EpisodeId) {
-        updateEpisode(id) {
-            EpisodeAccess.createDefault(id)
-        }
+        val release = getFull(releaseId = id.releaseId) ?: return
+        val episode = release.episodes.find { it.id == id } ?: return
+        episodeProgressRepository.markUnviewed(episode)
     }
 
     suspend fun setAccessSeek(id: EpisodeId, seek: Long, duration: Long? = null) {
-        updateEpisode(id) {
-            val isViewed = duration
-                ?.takeIf { it > 0 }
-                ?.let { durationValue -> seek >= durationValue * VIEWED_PROGRESS_THRESHOLD }
-                ?: true
-            it.copy(
-                seek = seek,
-                lastAccess = System.currentTimeMillis(),
-                isViewed = it.isViewed || isViewed
-            )
-        }
+        val release = getFull(releaseId = id.releaseId) ?: return
+        val episode = release.episodes.find { it.id == id } ?: return
+        episodeProgressRepository.setAccessSeek(episode, seek, duration)
     }
 
-    private suspend fun updateEpisode(id: EpisodeId, block: (EpisodeAccess) -> EpisodeAccess) {
-        val access = episodesCheckerStorage.getEpisode(id) ?: EpisodeAccess.createDefault(id)
-        val newAccess = block.invoke(access)
-        episodesCheckerStorage.putEpisode(newAccess)
-    }
-
-    private suspend fun updateEpisodes(
-        id: ReleaseId,
-        block: (EpisodeAccess) -> EpisodeAccess,
+    suspend fun setAccessSeek(
+        id: EpisodeId,
+        serverId: String,
+        seek: Long,
+        duration: Long? = null,
     ) {
-        val release = getFull(releaseId = id) ?: return
-        release.episodes.forEach { episode ->
-            updateEpisode(episode.id, block)
-        }
+        episodeProgressRepository.setAccessSeek(id, serverId, seek, duration)
+    }
+
+    suspend fun importAccess(access: EpisodeAccess) {
+        val release = getFull(releaseId = access.id.releaseId) ?: return
+        val episode = release.episodes.find { it.id == access.id } ?: return
+        episodeProgressRepository.importAccess(episode, access)
     }
 
     private suspend fun updateIfNotExists(
@@ -202,9 +193,4 @@ class ReleaseInteractor @Inject constructor(
         val id: ReleaseId?,
         val code: ReleaseCode?,
     )
-
-    private companion object {
-        private const val VIEWED_PROGRESS_THRESHOLD = 0.9
-    }
-
 }

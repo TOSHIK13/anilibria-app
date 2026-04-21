@@ -8,6 +8,7 @@ import java.util.Date
 @Parcelize
 data class SourceEpisode(
     val id: EpisodeId,
+    val serverId: String,
     val title: String?,
     val updatedAt: Date?,
     val qualityInfo: QualityInfo,

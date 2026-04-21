@@ -5,8 +5,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import ru.radiationx.anilibria.common.BaseRowsViewModel
-import ru.radiationx.data.datasource.holders.EpisodesCheckerHolder
 import ru.radiationx.data.entity.common.AuthState
+import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.HistoryRepository
 import javax.inject.Inject
@@ -14,7 +14,7 @@ import javax.inject.Inject
 class WatchingViewModel @Inject constructor(
     authRepository: AuthRepository,
     historyRepository: HistoryRepository,
-    episodesCheckerHolder: EpisodesCheckerHolder,
+    releaseInteractor: ReleaseInteractor,
 ) : BaseRowsViewModel() {
 
     companion object {
@@ -32,7 +32,14 @@ class WatchingViewModel @Inject constructor(
 
     init {
         combine(
-            episodesCheckerHolder.observeEpisodes().map { it.isNotEmpty() },
+            historyRepository.observeReleases().map { history ->
+                for (release in history.items) {
+                    if (releaseInteractor.getAccesses(release.id).isNotEmpty()) {
+                        return@map true
+                    }
+                }
+                false
+            },
             historyRepository.observeReleases().map { it.items.isNotEmpty() },
             authRepository.observeAuthState().map { it == AuthState.AUTH }
         ) { hasContinue, hasHistory, hasAuth ->

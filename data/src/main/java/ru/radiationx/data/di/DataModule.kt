@@ -52,7 +52,6 @@ import ru.radiationx.data.datasource.holders.AuthHolder
 import ru.radiationx.data.datasource.holders.CookieHolder
 import ru.radiationx.data.datasource.holders.DonationHolder
 import ru.radiationx.data.datasource.holders.DownloadsHolder
-import ru.radiationx.data.datasource.holders.EpisodesCheckerHolder
 import ru.radiationx.data.datasource.holders.GenresHolder
 import ru.radiationx.data.datasource.holders.HistoryHolder
 import ru.radiationx.data.datasource.holders.MenuHolder
@@ -79,6 +78,7 @@ import ru.radiationx.data.datasource.remote.api.ReleaseApi
 import ru.radiationx.data.datasource.remote.api.ScheduleApi
 import ru.radiationx.data.datasource.remote.api.SearchApi
 import ru.radiationx.data.datasource.remote.api.TeamsApi
+import ru.radiationx.data.datasource.remote.api.ViewsApi
 import ru.radiationx.data.datasource.remote.api.YoutubeApi
 import ru.radiationx.data.datasource.remote.interceptors.UnauthorizedInterceptor
 import ru.radiationx.data.datasource.remote.parsers.AuthParser
@@ -88,7 +88,6 @@ import ru.radiationx.data.datasource.storage.AuthStorage
 import ru.radiationx.data.datasource.storage.CookiesStorage
 import ru.radiationx.data.datasource.storage.DonationStorage
 import ru.radiationx.data.datasource.storage.DownloadsStorage
-import ru.radiationx.data.datasource.storage.EpisodesCheckerStorage
 import ru.radiationx.data.datasource.storage.GenresStorage
 import ru.radiationx.data.datasource.storage.HistoryStorage
 import ru.radiationx.data.datasource.storage.MenuStorage
@@ -123,6 +122,7 @@ import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ConfigurationRepository
 import ru.radiationx.data.repository.DonationRepository
+import ru.radiationx.data.repository.EpisodeProgressRepository
 import ru.radiationx.data.repository.FavoriteRepository
 import ru.radiationx.data.repository.FeedRepository
 import ru.radiationx.data.repository.HistoryRepository
@@ -175,7 +175,6 @@ class DataModule(context: Context) : QuillModule() {
         single<PreferencesStorage>()
 
         singleImpl<PreferencesHolder, PreferencesStorage>()
-        singleImpl<EpisodesCheckerHolder, EpisodesCheckerStorage>()
         singleImpl<HistoryHolder, HistoryStorage>()
         singleImpl<ReleaseUpdateHolder, ReleaseUpdateStorage>()
         singleImpl<GenresHolder, GenresStorage>()
@@ -232,6 +231,7 @@ class DataModule(context: Context) : QuillModule() {
         single<MenuApi>()
         single<DonationApi>()
         single<TeamsApi>()
+        single<ViewsApi>()
 
         single<AuthRepository>()
         single<ReleaseRepository>()
@@ -249,6 +249,7 @@ class DataModule(context: Context) : QuillModule() {
         single<DonationRepository>()
         single<TeamsRepository>()
         single<RemoteFileRepository>()
+        single<EpisodeProgressRepository>()
 
         single<ReleaseUpdateMiddleware>()
 

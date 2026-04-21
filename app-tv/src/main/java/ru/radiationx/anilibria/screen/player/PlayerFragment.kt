@@ -96,12 +96,25 @@ class PlayerFragment : BasePlayerFragment() {
         viewModel.onPauseClick(getPosition(), getDuration())
     }
 
+    override fun onStop() {
+        super.onStop()
+        viewModel.onStopClick(getPosition(), getDuration())
+    }
+
     override fun onCompletePlaying() {
         viewModel.onComplete(getPosition(), getDuration())
     }
 
     override fun onPreparePlaying() {
         viewModel.onPrepare(getDuration())
+    }
+
+    override fun onSeek(position: Long, duration: Long) {
+        viewModel.onSeek(position, duration)
+    }
+
+    override fun onPlaybackProgress(position: Long, duration: Long, isPlaying: Boolean) {
+        viewModel.onPlaybackProgress(position, duration, isPlaying)
     }
 
     private fun getPosition(): Long = player?.currentPosition ?: 0

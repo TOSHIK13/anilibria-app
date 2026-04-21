@@ -113,6 +113,7 @@ fun CollectionReleaseResponse.toSuggestionDomain(
 
 private fun CollectionEpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Episode = Episode(
     id = EpisodeId((ordinal ?: 0f).toString().trimEnd('0').trimEnd('.'), releaseId),
+    serverId = id,
     title = createCombinedTitle(),
     qualityInfo = QualityInfo(
         urlSd = hls480,
@@ -129,6 +130,7 @@ private fun CollectionEpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Epis
 private fun CollectionEpisodeResponse.toSourceDomain(releaseId: ReleaseId): SourceEpisode =
     SourceEpisode(
         id = EpisodeId((ordinal ?: 0f).toString().trimEnd('0').trimEnd('.'), releaseId),
+        serverId = id,
         title = createCombinedTitle(),
         updatedAt = updatedAt?.isoToDate(),
         qualityInfo = QualityInfo(
@@ -142,6 +144,7 @@ private fun CollectionEpisodeResponse.toRutubeDomain(releaseId: ReleaseId): Rutu
     val rutubeId = rutubeId ?: return null
     return RutubeEpisode(
         id = EpisodeId((ordinal ?: 0f).toString().trimEnd('0').trimEnd('.'), releaseId),
+        serverId = id,
         title = createCombinedTitle(),
         updatedAt = updatedAt?.isoToDate(),
         rutubeId = rutubeId,
