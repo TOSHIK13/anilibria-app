@@ -65,7 +65,7 @@ class VideoPlayerGlue(
     }
 
     interface PlaybackListener {
-        fun onUpdateProgress()
+        fun onUpdateProgress(position: Long, duration: Long, isPlaying: Boolean)
     }
 
     var actionListener: OnActionClickedListener? = null
@@ -83,7 +83,7 @@ class VideoPlayerGlue(
 
     override fun onUpdateProgress() {
         super.onUpdateProgress()
-        playbackListener?.onUpdateProgress()
+        playbackListener?.onUpdateProgress(currentPosition, duration, isPlaying)
     }
 
     init {

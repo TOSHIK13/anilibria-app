@@ -1,6 +1,8 @@
 package ru.radiationx.anilibria.screen.player
 
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -43,6 +45,14 @@ class PlayerViewModel @Inject constructor(
     private var currentEpisode: Episode? = null
     private var currentQuality: PlayerQuality? = null
     private var currentComplete: Boolean? = null
+    private var pendingSeekSyncJob: Job? = null
+    private var lastKnownPosition = 0L
+    private var lastKnownDuration = 0L
+    private var lastSyncedPosition = Long.MIN_VALUE
+    private var lastSyncedDuration = Long.MIN_VALUE
+    private var lastSyncedAt = 0L
+    private var heartbeatAnchorPosition = 0L
+    private var seekHeartbeatSuppressedUntil = 0L
 
     init {
         playerController.reset()
@@ -97,6 +107,7 @@ class PlayerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        pendingSeekSyncJob?.cancel()
         playerController.reset()
     }
 
@@ -106,19 +117,27 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun onPauseClick(position: Long, duration: Long) {
-        saveEpisode(position, duration)
+        updatePlaybackSnapshot(position, duration)
+        flushProgress(force = true)
+    }
+
+    fun onStopClick(position: Long, duration: Long) {
+        updatePlaybackSnapshot(position, duration)
+        flushProgress(force = true)
     }
 
     fun onNextClick(position: Long, duration: Long) {
         getNextEpisode()?.also {
-            saveEpisode(position, duration)
+            updatePlaybackSnapshot(position, duration)
+            flushProgress(force = true)
             playEpisode(it)
         }
     }
 
     fun onPrevClick(position: Long, duration: Long) {
         getPrevEpisode()?.also {
-            saveEpisode(position, duration)
+            updatePlaybackSnapshot(position, duration)
+            flushProgress(force = true)
             playEpisode(it)
         }
     }
@@ -126,7 +145,8 @@ class PlayerViewModel @Inject constructor(
     fun onEpisodesClick(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
-        saveEpisode(position, duration)
+        updatePlaybackSnapshot(position, duration)
+        flushProgress(force = true)
         guidedRouter.open(PlayerEpisodesGuidedScreen(release.id, episode.id))
     }
 
@@ -134,7 +154,8 @@ class PlayerViewModel @Inject constructor(
     fun onQualityClick(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
-        saveEpisode(position, duration)
+        updatePlaybackSnapshot(position, duration)
+        flushProgress(force = true)
         guidedRouter.open(PlayerQualityGuidedScreen(release.id, episode.id))
     }
 
@@ -147,7 +168,8 @@ class PlayerViewModel @Inject constructor(
     fun onSettingsClick(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
-        saveEpisode(position, duration)
+        updatePlaybackSnapshot(position, duration)
+        flushProgress(force = true)
         guidedRouter.open(PlayerSettingsGuidedScreen(release.id, episode.id))
     }
 
@@ -157,7 +179,8 @@ class PlayerViewModel @Inject constructor(
         if (currentComplete == true) return
         currentComplete = true
 
-        saveEpisode(position, duration)
+        updatePlaybackSnapshot(position, duration)
+        flushProgress(force = true)
         val nextEpisode = getNextEpisode()
         if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
             playEpisode(nextEpisode)
@@ -169,6 +192,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun onPrepare(duration: Long) {
+        lastKnownDuration = duration
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
         viewModelScope.launch {
@@ -199,19 +223,77 @@ class PlayerViewModel @Inject constructor(
     private fun getCurrentEpisodeIndex(): Int =
         currentEpisodes.indexOfFirst { it.id == currentEpisode?.id }
 
-    private fun saveEpisode(position: Long, duration: Long) {
-        val episode = currentEpisode ?: return
+    fun onPlaybackProgress(position: Long, duration: Long, isPlaying: Boolean) {
         if (position < 0) {
             return
         }
+        updatePlaybackSnapshot(position, duration)
+        if (!isPlaying || currentComplete == true) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now < seekHeartbeatSuppressedUntil) {
+            return
+        }
+        if (kotlin.math.abs(position - heartbeatAnchorPosition) >= HEARTBEAT_STEP_MS) {
+            flushProgress()
+        }
+    }
+
+    fun onSeek(position: Long, duration: Long) {
+        if (position < 0) {
+            return
+        }
+        updatePlaybackSnapshot(position, duration)
+        seekHeartbeatSuppressedUntil = System.currentTimeMillis() + SEEK_DEBOUNCE_MS
+        pendingSeekSyncJob?.cancel()
+        pendingSeekSyncJob = viewModelScope.launch {
+            delay(SEEK_DEBOUNCE_MS)
+            flushProgress()
+        }
+    }
+
+    private fun flushProgress(force: Boolean = false) {
+        val episode = currentEpisode ?: return
+        val position = lastKnownPosition
+        if (position < 0) {
+            return
+        }
+        val duration = lastKnownDuration
+        val now = System.currentTimeMillis()
+        if (!force &&
+            position == lastSyncedPosition &&
+            duration == lastSyncedDuration &&
+            now - lastSyncedAt < DUPLICATE_GUARD_MS
+        ) {
+            return
+        }
+        pendingSeekSyncJob?.cancel()
+        lastSyncedPosition = position
+        lastSyncedDuration = duration
+        lastSyncedAt = now
+        heartbeatAnchorPosition = position
         viewModelScope.launch {
             releaseInteractor.setAccessSeek(episode.id, episode.serverId, position, duration)
         }
     }
 
+    private fun updatePlaybackSnapshot(position: Long, duration: Long) {
+        lastKnownPosition = position
+        lastKnownDuration = duration
+    }
+
     private fun playEpisode(episode: Episode, force: Boolean = false) {
+        pendingSeekSyncJob?.cancel()
         currentEpisode = episode
         currentComplete = null
+        lastKnownPosition = 0
+        lastKnownDuration = 0
+        lastSyncedPosition = Long.MIN_VALUE
+        lastSyncedDuration = Long.MIN_VALUE
+        lastSyncedAt = 0
+        heartbeatAnchorPosition = 0
+        seekHeartbeatSuppressedUntil = 0
         updateQuality()
         updateEpisode(force)
         viewModelScope.launch {
@@ -231,6 +313,8 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val newUrl = episode.qualityInfo.getSafeUrlFor(quality)
             val access = releaseInteractor.getAccess(episode.id)
+            heartbeatAnchorPosition = access?.seek ?: 0
+            lastKnownPosition = access?.seek ?: 0
             val newVideo = Video(
                 url = newUrl,
                 seek = access?.seek ?: 0,
@@ -242,5 +326,11 @@ class PlayerViewModel @Inject constructor(
                 videoData.value = newVideo
             }
         }
+    }
+
+    private companion object {
+        private const val HEARTBEAT_STEP_MS = 10_000L
+        private const val SEEK_DEBOUNCE_MS = 1_500L
+        private const val DUPLICATE_GUARD_MS = 2_000L
     }
 }
