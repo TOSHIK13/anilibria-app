@@ -3,8 +3,11 @@ package ru.radiationx.anilibria.screen.player
 import android.annotation.SuppressLint
 import android.net.Uri
 import android.os.Bundle
+import android.view.GestureDetector
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.leanback.app.VideoSupportFragment
@@ -38,6 +41,9 @@ open class BasePlayerFragment : VideoSupportFragment() {
     protected var skipsPart: PlayerSkipsPart? = null
         private set
 
+    private var touchGestureDetector: GestureDetector? = null
+    private var touchSeekAccumulatorPx = 0f
+
     @SuppressLint("RestrictedApi")
     @UnstableApi
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -46,6 +52,7 @@ open class BasePlayerFragment : VideoSupportFragment() {
         initializePlayer()
         initializeRows()
         initializePlaybackShortcuts()
+        initializeTouchpadControls(view)
         isControlsOverlayAutoHideEnabled = true
 
         skipsPart = PlayerSkipsPart(
@@ -93,6 +100,8 @@ open class BasePlayerFragment : VideoSupportFragment() {
         super.onDestroyView()
         skipsPart = null
         playerGlue?.playbackListener = null
+        touchGestureDetector = null
+        touchSeekAccumulatorPx = 0f
         requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         releasePlayer()
     }
@@ -177,6 +186,58 @@ open class BasePlayerFragment : VideoSupportFragment() {
         }
     }
 
+    private fun initializeTouchpadControls(view: View) {
+        val seekTriggerDistancePx = ViewConfiguration.get(view.context).scaledTouchSlop * 8
+        touchGestureDetector = GestureDetector(
+            view.context,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(event: MotionEvent): Boolean {
+                    touchSeekAccumulatorPx = 0f
+                    return true
+                }
+
+                override fun onSingleTapUp(event: MotionEvent): Boolean {
+                    toggleControlsOverlay()
+                    return true
+                }
+
+                override fun onScroll(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    distanceX: Float,
+                    distanceY: Float,
+                ): Boolean {
+                    if (kotlin.math.abs(distanceX) <= kotlin.math.abs(distanceY)) {
+                        return false
+                    }
+                    touchSeekAccumulatorPx += distanceX
+                    while (touchSeekAccumulatorPx >= seekTriggerDistancePx) {
+                        player?.seekBack()
+                        touchSeekAccumulatorPx -= seekTriggerDistancePx
+                    }
+                    while (touchSeekAccumulatorPx <= -seekTriggerDistancePx) {
+                        player?.seekForward()
+                        touchSeekAccumulatorPx += seekTriggerDistancePx
+                    }
+                    return true
+                }
+            }
+        )
+        view.isClickable = true
+        view.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchSeekAccumulatorPx = 0f
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    touchSeekAccumulatorPx = 0f
+                }
+            }
+            touchGestureDetector?.onTouchEvent(event) == true
+        }
+    }
+
     private fun handlePlaybackShortcut(view: View, keyCode: Int, event: KeyEvent): Boolean {
         if (isControlsOverlayVisible) {
             playAfterTimelineSeek(view, keyCode, event)
@@ -231,6 +292,14 @@ open class BasePlayerFragment : VideoSupportFragment() {
         }
         view.post {
             playerGlue?.play()
+        }
+    }
+
+    private fun toggleControlsOverlay() {
+        if (isControlsOverlayVisible) {
+            hideControlsOverlay(true)
+        } else {
+            showControlsOverlay(true)
         }
     }
 
