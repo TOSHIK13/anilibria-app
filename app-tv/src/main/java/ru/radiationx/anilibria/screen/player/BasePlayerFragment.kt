@@ -43,6 +43,7 @@ open class BasePlayerFragment : VideoSupportFragment() {
 
     private var touchGestureDetector: GestureDetector? = null
     private var touchSeekAccumulatorPx = 0f
+    private var genericMotionAccumulator = 0f
 
     @SuppressLint("RestrictedApi")
     @UnstableApi
@@ -102,6 +103,7 @@ open class BasePlayerFragment : VideoSupportFragment() {
         playerGlue?.playbackListener = null
         touchGestureDetector = null
         touchSeekAccumulatorPx = 0f
+        genericMotionAccumulator = 0f
         requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         releasePlayer()
     }
@@ -223,19 +225,50 @@ open class BasePlayerFragment : VideoSupportFragment() {
                 }
             }
         )
-        view.isClickable = true
-        view.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
+    }
+
+    fun handleTouchpadEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                touchSeekAccumulatorPx = 0f
+                return touchGestureDetector?.onTouchEvent(event) == true
+            }
+
+            MotionEvent.ACTION_MOVE,
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                val handled = touchGestureDetector?.onTouchEvent(event) == true
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
                     touchSeekAccumulatorPx = 0f
                 }
+                return handled
+            }
 
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    touchSeekAccumulatorPx = 0f
+            MotionEvent.ACTION_BUTTON_PRESS -> {
+                if (event.buttonState and MotionEvent.BUTTON_PRIMARY != 0) {
+                    toggleControlsOverlay()
+                    return true
                 }
             }
-            touchGestureDetector?.onTouchEvent(event) == true
+
+            MotionEvent.ACTION_SCROLL -> {
+                val horizontalScroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL)
+                if (horizontalScroll == 0f) {
+                    return false
+                }
+                genericMotionAccumulator += horizontalScroll
+                while (genericMotionAccumulator >= 1f) {
+                    player?.seekBack()
+                    genericMotionAccumulator -= 1f
+                }
+                while (genericMotionAccumulator <= -1f) {
+                    player?.seekForward()
+                    genericMotionAccumulator += 1f
+                }
+                return true
+            }
         }
+        return false
     }
 
     private fun handlePlaybackShortcut(view: View, keyCode: Int, event: KeyEvent): Boolean {
