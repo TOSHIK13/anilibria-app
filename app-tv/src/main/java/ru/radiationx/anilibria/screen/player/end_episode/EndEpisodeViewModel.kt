@@ -36,7 +36,7 @@ class EndEpisodeViewModel @Inject constructor(
     fun onReplayClick() {
         val episode = currentEpisode ?: return
         viewModelScope.launch {
-            releaseInteractor.setAccessSeek(episode.id, 0)
+            releaseInteractor.setAccessSeek(episode.id, episode.serverId, 0)
             playerController.selectEpisodeRelay.emit(episode.id)
             guidedRouter.close()
         }

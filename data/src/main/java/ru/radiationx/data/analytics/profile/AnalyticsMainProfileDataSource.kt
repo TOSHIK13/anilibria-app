@@ -9,11 +9,11 @@ import ru.radiationx.data.SharedBuildConfig
 import ru.radiationx.data.analytics.features.mapper.toAnalyticsAuthState
 import ru.radiationx.data.analytics.features.mapper.toAnalyticsQuality
 import ru.radiationx.data.datasource.holders.DownloadsHolder
-import ru.radiationx.data.datasource.holders.EpisodesCheckerHolder
 import ru.radiationx.data.datasource.holders.HistoryHolder
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.datasource.holders.ReleaseUpdateHolder
 import ru.radiationx.data.datasource.remote.address.ApiConfig
+import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.migration.MigrationDataSource
 import ru.radiationx.data.repository.AuthRepository
 import javax.inject.Inject
@@ -23,7 +23,7 @@ class AnalyticsMainProfileDataSource @Inject constructor(
     private val analyticsThemeProvider: AnalyticsThemeProvider,
     private val apiConfig: ApiConfig,
     private val historyHolder: HistoryHolder,
-    private val episodesCheckerHolder: EpisodesCheckerHolder,
+    private val releaseInteractor: ReleaseInteractor,
     private val downloadsHolder: DownloadsHolder,
     private val migrationDataSource: MigrationDataSource,
     private val releaseUpdateHolder: ReleaseUpdateHolder,
@@ -61,7 +61,7 @@ class AnalyticsMainProfileDataSource @Inject constructor(
                 historyHolder.getIds().size.mapToAttr(it)
             },
             asyncAttr(ProfileConstants.episodes_count) {
-                episodesCheckerHolder.getEpisodes().size.mapToAttr(it)
+                historyHolder.getIds().sumOf { releaseInteractor.getAccesses(it).size }.mapToAttr(it)
             },
             asyncAttr(ProfileConstants.releases_count) {
                 releaseUpdateHolder.getReleases().size.mapToAttr(it)

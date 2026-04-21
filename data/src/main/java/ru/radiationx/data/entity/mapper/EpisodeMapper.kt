@@ -28,9 +28,10 @@ fun EpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Episode? {
     if (sources?.isAnilibria != true) {
         return null
     }
-    val episodeId = id.toId(releaseId)
+    val episodeId = ordinal.toId(releaseId)
     return Episode(
         id = episodeId,
+        serverId = serverId,
         title = createCombinedTitle(),
         qualityInfo = QualityInfo(
             urlSd = urlSd,
@@ -62,7 +63,8 @@ fun EpisodeResponse.toSourceDomain(releaseId: ReleaseId): SourceEpisode? {
         return null
     }
     return SourceEpisode(
-        id = id.toId(releaseId),
+        id = ordinal.toId(releaseId),
+        serverId = serverId,
         title = createCombinedTitle(),
         updatedAt = updatedAt?.secToDate(),
         qualityInfo = QualityInfo(
@@ -78,7 +80,8 @@ fun EpisodeResponse.toRutubeDomain(releaseId: ReleaseId): RutubeEpisode? {
         return null
     }
     return RutubeEpisode(
-        id = id.toId(releaseId),
+        id = ordinal.toId(releaseId),
+        serverId = serverId,
         title = createCombinedTitle(),
         updatedAt = updatedAt?.secToDate(),
         rutubeId = rutubeId,

@@ -205,7 +205,7 @@ class PlayerViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            releaseInteractor.setAccessSeek(episode.id, position, duration)
+            releaseInteractor.setAccessSeek(episode.id, episode.serverId, position, duration)
         }
     }
 

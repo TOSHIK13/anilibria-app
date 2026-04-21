@@ -8,10 +8,10 @@ import kotlinx.coroutines.withContext
 import okio.buffer
 import okio.sink
 import okio.source
-import ru.radiationx.data.datasource.holders.EpisodesCheckerHolder
 import ru.radiationx.data.datasource.holders.HistoryHolder
 import ru.radiationx.data.datasource.holders.ReleaseUpdateHolder
 import ru.radiationx.data.downloader.LocalFile
+import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.historyfile.mapper.toDomain
 import ru.radiationx.data.historyfile.mapper.toExport
 import ru.radiationx.data.historyfile.models.HistoryExport
@@ -26,7 +26,7 @@ class HistoryFileRepository @Inject constructor(
     private val context: Context,
     private val historyHolder: HistoryHolder,
     private val releaseHolder: ReleaseUpdateHolder,
-    private val episodesHolder: EpisodesCheckerHolder,
+    private val releaseInteractor: ReleaseInteractor,
     private val moshi: Moshi,
 ) {
 
@@ -36,10 +36,13 @@ class HistoryFileRepository @Inject constructor(
 
     suspend fun exportFile(): LocalFile {
         return withContext(Dispatchers.IO) {
+            val episodeAccesses = historyHolder.getIds().flatMap { releaseId ->
+                releaseInteractor.getAccesses(releaseId)
+            }
             val data = HistoryExport(
                 history = historyHolder.getIds().map { it.toExport() },
                 updates = releaseHolder.getReleases().map { it.toExport() },
-                episodes = episodesHolder.getEpisodes().map { it.toExport() }
+                episodes = episodeAccesses.map { it.toExport() }
             )
             val date = SimpleDateFormat("ddMMyyyyHHmm").format(Date())
 
@@ -66,7 +69,9 @@ class HistoryFileRepository @Inject constructor(
             }
             historyHolder.putAllIds(data.history.map { it.toDomain() })
             releaseHolder.putAllRelease(data.updates.map { it.toDomain() })
-            episodesHolder.putAllEpisode(data.episodes.map { it.toDomain() })
+            data.episodes.map { it.toDomain() }.forEach { access ->
+                releaseInteractor.importAccess(access)
+            }
         }
     }
 

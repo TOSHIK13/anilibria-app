@@ -8,6 +8,7 @@ import java.util.*
 @Parcelize
 data class RutubeEpisode(
     val id: EpisodeId,
+    val serverId: String,
     val title: String?,
     val updatedAt: Date?,
     val rutubeId: String,
