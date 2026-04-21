@@ -117,12 +117,12 @@ class AuthRepository @Inject constructor(
     suspend fun signIn(login: String, password: String, code2fa: String): ProfileItem =
         withContext(Dispatchers.IO) {
             val profile = authApi
-                .signIn(login, password, code2fa)
+                .signInV1(login, password)
+                .also { authHolder.setSessionToken(it.token) }
+                .let { authApi.loadV1User() }
                 .toDomain(apiConfig)
             coRunCatching {
-                authApi.signInV1(login, password)
-            }.onSuccess {
-                authHolder.setSessionToken(it.token)
+                authApi.signIn(login, password, code2fa)
             }.onFailure {
                 Timber.e(it)
             }

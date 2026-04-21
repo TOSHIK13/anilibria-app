@@ -58,6 +58,7 @@ class DetailFragment : RowsSupportFragment() {
                     playClickListener = headerViewModel::onPlayClick,
                     favoriteClickListener = headerViewModel::onFavoriteClick,
                     descriptionClickListener = headerViewModel::onDescriptionClick,
+                    collectionClickListener = headerViewModel::onCollectionClick,
                     otherClickListener = headerViewModel::onOtherClick
                 )
             )

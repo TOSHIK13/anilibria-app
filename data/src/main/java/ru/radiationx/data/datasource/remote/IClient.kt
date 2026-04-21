@@ -8,6 +8,8 @@ interface IClient {
     suspend fun post(url: String, args: Map<String, String>): String
     suspend fun put(url: String, args: Map<String, String>): String
     suspend fun delete(url: String, args: Map<String, String>): String
+    suspend fun postJson(url: String, jsonBody: String): String
+    suspend fun deleteJson(url: String, jsonBody: String): String
 
     suspend fun getFull(url: String, args: Map<String, String>): NetworkResponse
     suspend fun postFull(url: String, args: Map<String, String>): NetworkResponse

@@ -33,7 +33,14 @@ class ScheduleRepository @Inject constructor(
     suspend fun loadSchedule(): List<ScheduleDay> = withContext(Dispatchers.IO) {
         scheduleApi
             .getSchedule()
-            .map { it.toDomain(apiUtils, apiConfig) }
+            .map { it.release.toDomain(apiUtils, apiConfig) }
+            .groupBy { it.days.firstOrNull()?.let(ScheduleDay.Companion::toCalendarDay) }
+            .map { (day, releases) ->
+                ScheduleDay(
+                    day = day ?: Calendar.MONDAY,
+                    items = releases.map(::ScheduleItem)
+                )
+            }
             .let { scheduleDays ->
                 scheduleDays.map { scheduleDay ->
                     val currentTime = System.currentTimeMillis().asMsk()

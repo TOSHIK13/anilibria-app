@@ -227,6 +227,14 @@
             android:layout_marginEnd="16dp"
             android:text="Добавить в избранное" />
 
+        <Button
+            android:id="@+id/rowReleaseActionCollection"
+            style="?attr/detailsActionButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="Коллекция" />
+
         <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/rowReleaseActionOther"
             style="?attr/detailsActionButtonStyle"

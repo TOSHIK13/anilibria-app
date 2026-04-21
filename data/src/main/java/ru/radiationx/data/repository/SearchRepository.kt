@@ -17,7 +17,6 @@ import ru.radiationx.data.entity.domain.release.YearItem
 import ru.radiationx.data.entity.domain.search.SearchForm
 import ru.radiationx.data.entity.domain.search.Suggestions
 import ru.radiationx.data.entity.mapper.toDomain
-import ru.radiationx.data.entity.mapper.toGenreItem
 import ru.radiationx.data.entity.mapper.toSuggestionDomain
 import ru.radiationx.data.entity.mapper.toYearItem
 import ru.radiationx.data.interactors.ReleaseUpdateMiddleware
@@ -60,7 +59,7 @@ class SearchRepository @Inject constructor(
         } else {
             searchApi
                 .fastSearch(query)
-                .map { it.toDomain(apiUtils, apiConfig) }
+                .map { it.toSuggestionDomain(apiUtils, apiConfig) }
         }
         Suggestions(query, items)
     }
@@ -70,10 +69,10 @@ class SearchRepository @Inject constructor(
         val seasonsQuery = form.seasons.joinToString(",") { it.value }
         val genresQuery = form.genres.joinToString(",") { it.value }
         val sortStr = when (form.sort) {
-            SearchForm.Sort.RATING -> "2"
-            SearchForm.Sort.DATE -> "1"
+            SearchForm.Sort.RATING -> "RATING_DESC"
+            SearchForm.Sort.DATE -> "FRESH_AT_DESC"
         }
-        val onlyCompletedStr = if (form.onlyCompleted) "2" else "1"
+        val onlyCompletedStr = form.onlyCompleted.toString()
 
         return searchReleases(
             genresQuery,
@@ -95,14 +94,14 @@ class SearchRepository @Inject constructor(
     ): Paginated<Release> = withContext(Dispatchers.IO) {
         searchApi
             .searchReleases(genre, year, season, sort, onlyCompleted, page)
-            .toDomain { it.toDomain(apiUtils, apiConfig) }
+            .toDomain(apiUtils, apiConfig)
             .also { updateMiddleware.handle(it.data) }
     }
 
     suspend fun getGenres(): List<GenreItem> = withContext(Dispatchers.IO) {
         searchApi
             .getGenres()
-            .map { it.toGenreItem() }
+            .map { GenreItem(it.name.capitalizeDefault(), it.id.toString()) }
             .also {
                 genresHolder.saveGenres(it)
             }
@@ -111,7 +110,7 @@ class SearchRepository @Inject constructor(
     suspend fun getYears(): List<YearItem> = withContext(Dispatchers.IO) {
         searchApi
             .getYears()
-            .map { it.toYearItem() }
+            .map { it.toString().toYearItem() }
             .also {
                 yearsHolder.saveYears(it)
             }
@@ -119,8 +118,12 @@ class SearchRepository @Inject constructor(
 
     suspend fun getSeasons(): List<SeasonItem> {
         return withContext(Dispatchers.IO) {
-            listOf("зима", "весна", "лето", "осень").map { SeasonItem(it.capitalizeDefault(), it) }
+            listOf(
+                SeasonItem("Зима", "winter"),
+                SeasonItem("Весна", "spring"),
+                SeasonItem("Лето", "summer"),
+                SeasonItem("Осень", "autumn"),
+            )
         }
     }
-
 }

@@ -61,7 +61,14 @@ class ReleaseRepository @Inject constructor(
     suspend fun getReleases(page: Int): Paginated<Release> = withContext(Dispatchers.IO) {
         releaseApi
             .getReleases(page)
-            .toDomain { it.toDomain(apiUtils, apiConfig) }
+            .toDomain(apiUtils, apiConfig)
             .also { updateMiddleware.handle(it.data) }
+    }
+
+    suspend fun getRecommendedReleases(releaseId: ReleaseId? = null): List<Release> = withContext(Dispatchers.IO) {
+        releaseApi
+            .getRecommendedReleases(releaseId?.id)
+            .map { it.toDomain(apiUtils, apiConfig) }
+            .also { updateMiddleware.handle(it) }
     }
 }

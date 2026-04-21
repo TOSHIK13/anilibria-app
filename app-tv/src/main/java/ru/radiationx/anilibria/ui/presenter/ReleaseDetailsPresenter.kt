@@ -23,6 +23,7 @@ class ReleaseDetailsPresenter(
     private val playClickListener: () -> Unit,
     private val favoriteClickListener: () -> Unit,
     private val descriptionClickListener: () -> Unit,
+    private val collectionClickListener: () -> Unit,
     private val otherClickListener: () -> Unit,
 ) : RowPresenter() {
 
@@ -43,6 +44,7 @@ class ReleaseDetailsPresenter(
             playClickListener,
             favoriteClickListener,
             descriptionClickListener,
+            collectionClickListener,
             otherClickListener
         )
     }
@@ -62,6 +64,7 @@ class LibriaReleaseViewHolder(
     private val playClickListener: () -> Unit,
     private val favoriteClickListener: () -> Unit,
     private val descriptionClickListener: () -> Unit,
+    private val collectionClickListener: () -> Unit,
     private val otherClickListener: () -> Unit,
 ) : RowPresenter.ViewHolder(itemView) {
 
@@ -75,6 +78,7 @@ class LibriaReleaseViewHolder(
     init {
         binding.rowReleaseActionContinue.setOnClickListener { continueClickListener.invoke() }
         binding.rowReleaseActionPlay.setOnClickListener { playClickListener.invoke() }
+        binding.rowReleaseActionCollection.setOnClickListener { collectionClickListener.invoke() }
         binding.rowReleaseActionOther.setOnClickListener { otherClickListener.invoke() }
         binding.rowReleaseActionFavorite.setOnClickListener { favoriteClickListener.invoke() }
         binding.rowReleaseDescriptionCard.setOnClickListener { descriptionClickListener.invoke() }

@@ -76,10 +76,12 @@ class PlayerEpisodesViewModel @Inject constructor(
             val groupId = id++
             val actions = release.episodes.asReversed().map { episode ->
                 val access = accesses[episode.id]
-                val description = if (access != null && access.isViewed && access.seek > 0) {
-                    "Остановлена на ${Date(access.seek).asTimeSecString()}"
-                } else {
-                    null
+                val description = when {
+                    access?.isViewed == true -> "Просмотрено"
+                    access != null && access.seek > 0 -> {
+                        "Остановлена на ${Date(access.seek).asTimeSecString()}"
+                    }
+                    else -> null
                 }
                 Action(
                     id = id++,

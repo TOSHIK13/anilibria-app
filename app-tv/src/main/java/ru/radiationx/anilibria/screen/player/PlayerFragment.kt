@@ -44,12 +44,12 @@ class PlayerFragment : BasePlayerFragment() {
 
         playerGlue?.actionListener = object : VideoPlayerGlue.OnActionClickedListener {
 
-            override fun onPrevious() = viewModel.onPrevClick(getPosition())
-            override fun onNext() = viewModel.onNextClick(getPosition())
-            override fun onQualityClick() = viewModel.onQualityClick(getPosition())
+            override fun onPrevious() = viewModel.onPrevClick(getPosition(), getDuration())
+            override fun onNext() = viewModel.onNextClick(getPosition(), getDuration())
+            override fun onQualityClick() = viewModel.onQualityClick(getPosition(), getDuration())
             override fun onSpeedClick() = viewModel.onSpeedClick()
-            override fun onEpisodesClick() = viewModel.onEpisodesClick(getPosition())
-            override fun onSettingsClick() = viewModel.onSettingsClick(getPosition())
+            override fun onEpisodesClick() = viewModel.onEpisodesClick(getPosition(), getDuration())
+            override fun onSettingsClick() = viewModel.onSettingsClick(getPosition(), getDuration())
         }
         progressBarManager.initialDelay = 0
         progressBarManager.show()
@@ -93,11 +93,11 @@ class PlayerFragment : BasePlayerFragment() {
 
     override fun onPause() {
         super.onPause()
-        viewModel.onPauseClick(getPosition())
+        viewModel.onPauseClick(getPosition(), getDuration())
     }
 
     override fun onCompletePlaying() {
-        viewModel.onComplete(getPosition())
+        viewModel.onComplete(getPosition(), getDuration())
     }
 
     override fun onPreparePlaying() {

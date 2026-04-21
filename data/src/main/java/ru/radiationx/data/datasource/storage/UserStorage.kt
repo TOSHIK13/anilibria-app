@@ -61,7 +61,7 @@ class UserStorage @Inject constructor(
                     ProfileItem(
                         id = userJson.getInt("id"),
                         nick = userJson.getString("nick"),
-                        avatarUrl = userJson.getString("avatar"),
+                        avatarUrl = userJson.takeIf { !it.isNull("avatar") }?.optString("avatar"),
                     )
                 }
         }

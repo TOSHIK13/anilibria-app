@@ -4,16 +4,14 @@ import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardsDataConverter
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LibriaCardRouter
-import ru.radiationx.data.entity.domain.release.GenreItem
-import ru.radiationx.data.entity.domain.search.SearchForm
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.HistoryRepository
-import ru.radiationx.data.repository.SearchRepository
+import ru.radiationx.data.repository.ReleaseRepository
 import javax.inject.Inject
 
 class WatchingRecommendsViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
-    private val searchRepository: SearchRepository,
+    private val releaseRepository: ReleaseRepository,
     private val releaseInteractor: ReleaseInteractor,
     private val converter: CardsDataConverter,
     private val cardRouter: LibriaCardRouter
@@ -29,32 +27,13 @@ class WatchingRecommendsViewModel @Inject constructor(
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> = historyRepository
         .getReleases()
         .items
-        .let { releases ->
-            val genresMap = mutableMapOf<String, Int>()
-            releases.forEach { release ->
-                release.genres.forEach {
-                    val currentCount = genresMap[it] ?: 0
-                    genresMap[it] = currentCount + 1
-                }
-            }
-            genresMap.toList()
-                .sortedByDescending { it.second }
-                .take(3)
-                .map { GenreItem(it.first, it.first) }
-                .toSet()
-        }
-        .let { genres ->
-            val form = SearchForm(
-                genres = genres,
-                sort = SearchForm.Sort.RATING
-            )
-            searchRepository.searchReleases(form, requestPage)
-        }
+        .firstOrNull()
+        .let { releaseRepository.getRecommendedReleases(it?.id) }
         .also {
-            releaseInteractor.updateItemsCache(it.data)
+            releaseInteractor.updateItemsCache(it)
         }
-        .let { result ->
-            result.data.map { converter.toCard(it) }
+        .let { releases ->
+            releases.map { converter.toCard(it) }
         }
 
     override fun onLibriaCardClick(card: LibriaCard) {

@@ -1,13 +1,14 @@
 package ru.radiationx.data.datasource.remote.api
 
 import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
 import ru.radiationx.data.ApiClient
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
-import ru.radiationx.data.datasource.remote.fetchApiResponse
-import ru.radiationx.data.datasource.remote.fetchPaginatedApiResponse
-import ru.radiationx.data.entity.response.PaginatedResponse
-import ru.radiationx.data.entity.response.release.ReleaseResponse
+import ru.radiationx.data.datasource.remote.fetchResponse
+import ru.radiationx.data.entity.response.collection.CollectionReleasesResponse
+import ru.radiationx.data.entity.response.favorite.FavoriteUpdateRequest
+import ru.radiationx.data.entity.response.release.FavoriteInfoResponse
 import javax.inject.Inject
 
 class FavoriteApi @Inject constructor(
@@ -16,35 +17,34 @@ class FavoriteApi @Inject constructor(
     private val moshi: Moshi
 ) {
 
-    suspend fun getFavorites(page: Int): PaginatedResponse<ReleaseResponse> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "favorites",
+    private val favoritesUrl: String
+        get() = "${apiConfig.accountBaseUrl}/api/v1/accounts/users/me/favorites"
+
+    suspend fun getFavorites(page: Int): CollectionReleasesResponse {
+        val args = mapOf(
             "page" to page.toString(),
-            "filter" to "id,torrents,playlist,externalPlaylist,favorite,moon,blockedInfo",
-            "rm" to "true"
+            "limit" to "10",
         )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchPaginatedApiResponse(moshi)
+        return client
+            .get("$favoritesUrl/releases", args)
+            .fetchResponse(moshi)
     }
 
-    suspend fun addFavorite(releaseId: Int): ReleaseResponse {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "favorites",
-            "action" to "add",
-            "id" to releaseId.toString()
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchApiResponse(moshi)
+    suspend fun addFavorite(releaseId: Int): FavoriteInfoResponse {
+        val body = toJson(listOf(FavoriteUpdateRequest(releaseId)))
+        client.postJson(favoritesUrl, body)
+        return FavoriteInfoResponse(0, true)
     }
 
-    suspend fun deleteFavorite(releaseId: Int): ReleaseResponse {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "favorites",
-            "action" to "delete",
-            "id" to releaseId.toString()
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchApiResponse(moshi)
+    suspend fun deleteFavorite(releaseId: Int): FavoriteInfoResponse {
+        val body = toJson(listOf(FavoriteUpdateRequest(releaseId)))
+        client.deleteJson(favoritesUrl, body)
+        return FavoriteInfoResponse(0, false)
+    }
+
+    private inline fun <reified T> toJson(value: List<T>): String {
+        val type = Types.newParameterizedType(List::class.java, T::class.java)
+        return moshi.adapter<List<T>>(type).toJson(value)
     }
 
 }

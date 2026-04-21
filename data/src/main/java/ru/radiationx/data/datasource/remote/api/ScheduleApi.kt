@@ -4,8 +4,8 @@ import com.squareup.moshi.Moshi
 import ru.radiationx.data.ApiClient
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
-import ru.radiationx.data.datasource.remote.fetchListApiResponse
-import ru.radiationx.data.entity.response.schedule.ScheduleDayResponse
+import ru.radiationx.data.datasource.remote.fetchListResponse
+import ru.radiationx.data.entity.response.collection.V1ScheduleItemResponse
 import javax.inject.Inject
 
 class ScheduleApi @Inject constructor(
@@ -14,14 +14,11 @@ class ScheduleApi @Inject constructor(
     private val moshi: Moshi,
 ) {
 
-    suspend fun getSchedule(): List<ScheduleDayResponse> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "schedule",
-            "filter" to "id,torrents,playlist,externalPlaylist,favorite,moon,blockedInfo",
-            "rm" to "true"
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchListApiResponse(moshi)
+    suspend fun getSchedule(): List<V1ScheduleItemResponse> {
+        val args = mapOf<String, String>()
+        return client
+            .get("${apiConfig.accountBaseUrl}/api/v1/anime/schedule/week", args)
+            .fetchListResponse(moshi)
     }
 
 }

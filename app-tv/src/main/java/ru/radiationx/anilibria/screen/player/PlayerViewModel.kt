@@ -105,36 +105,36 @@ class PlayerViewModel @Inject constructor(
         return currentReleases?.find { it.id == episodeId.releaseId }
     }
 
-    fun onPauseClick(position: Long) {
-        saveEpisode(position)
+    fun onPauseClick(position: Long, duration: Long) {
+        saveEpisode(position, duration)
     }
 
-    fun onNextClick(position: Long) {
+    fun onNextClick(position: Long, duration: Long) {
         getNextEpisode()?.also {
-            saveEpisode(position)
+            saveEpisode(position, duration)
             playEpisode(it)
         }
     }
 
-    fun onPrevClick(position: Long) {
+    fun onPrevClick(position: Long, duration: Long) {
         getPrevEpisode()?.also {
-            saveEpisode(position)
+            saveEpisode(position, duration)
             playEpisode(it)
         }
     }
 
-    fun onEpisodesClick(position: Long) {
+    fun onEpisodesClick(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
-        saveEpisode(position)
+        saveEpisode(position, duration)
         guidedRouter.open(PlayerEpisodesGuidedScreen(release.id, episode.id))
     }
 
 
-    fun onQualityClick(position: Long) {
+    fun onQualityClick(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
-        saveEpisode(position)
+        saveEpisode(position, duration)
         guidedRouter.open(PlayerQualityGuidedScreen(release.id, episode.id))
     }
 
@@ -144,20 +144,20 @@ class PlayerViewModel @Inject constructor(
         guidedRouter.open(PlayerSpeedGuidedScreen(release.id, episode.id))
     }
 
-    fun onSettingsClick(position: Long) {
+    fun onSettingsClick(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
-        saveEpisode(position)
+        saveEpisode(position, duration)
         guidedRouter.open(PlayerSettingsGuidedScreen(release.id, episode.id))
     }
 
-    fun onComplete(position: Long) {
+    fun onComplete(position: Long, duration: Long) {
         val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
         if (currentComplete == true) return
         currentComplete = true
 
-        saveEpisode(position)
+        saveEpisode(position, duration)
         val nextEpisode = getNextEpisode()
         if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
             playEpisode(nextEpisode)
@@ -173,7 +173,7 @@ class PlayerViewModel @Inject constructor(
         val episode = currentEpisode ?: return
         viewModelScope.launch {
             val access = releaseInteractor.getAccess(episode.id)
-            val complete = access != null && access.seek >= duration
+            val complete = access?.isViewed == true
             if (currentComplete == complete) return@launch
             currentComplete = complete
             if (complete) {
@@ -199,13 +199,13 @@ class PlayerViewModel @Inject constructor(
     private fun getCurrentEpisodeIndex(): Int =
         currentEpisodes.indexOfFirst { it.id == currentEpisode?.id }
 
-    private fun saveEpisode(position: Long) {
+    private fun saveEpisode(position: Long, duration: Long) {
         val episode = currentEpisode ?: return
         if (position < 0) {
             return
         }
         viewModelScope.launch {
-            releaseInteractor.setAccessSeek(episode.id, position)
+            releaseInteractor.setAccessSeek(episode.id, position, duration)
         }
     }
 

@@ -17,14 +17,19 @@ class UnauthorizedInterceptor @Inject constructor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        val isV1AccountForbidden = response.code == 403 &&
-            request.header("Authorization") != null &&
-            request.url.encodedPath.startsWith("/api/v1/accounts/")
-        if (response.code == 401 || isV1AccountForbidden) {
+        val isV1AccountRequest = request.url.encodedPath.startsWith("/api/v1/accounts/") &&
+            request.header("Authorization") != null
+        val isV1Unauthorized = isV1AccountRequest && (response.code == 401 || response.code == 403)
+        val isLegacyUnauthorized = !isV1AccountRequest && response.code == 401
+        if (isV1Unauthorized) {
             runBlocking {
                 tokenHolder.delete()
                 cookieHolder.removeAuthCookie()
                 authHolder.setSessionToken(null)
+            }
+        } else if (isLegacyUnauthorized) {
+            runBlocking {
+                cookieHolder.removeAuthCookie()
             }
         }
         return response

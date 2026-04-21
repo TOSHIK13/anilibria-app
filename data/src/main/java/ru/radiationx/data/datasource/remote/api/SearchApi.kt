@@ -1,15 +1,14 @@
 package ru.radiationx.data.datasource.remote.api
 
 import com.squareup.moshi.Moshi
-import org.json.JSONObject
 import ru.radiationx.data.ApiClient
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
-import ru.radiationx.data.datasource.remote.fetchListApiResponse
-import ru.radiationx.data.datasource.remote.fetchPaginatedApiResponse
-import ru.radiationx.data.entity.response.PaginatedResponse
-import ru.radiationx.data.entity.response.release.ReleaseResponse
-import ru.radiationx.data.entity.response.search.SuggestionResponse
+import ru.radiationx.data.datasource.remote.fetchListResponse
+import ru.radiationx.data.datasource.remote.fetchResponse
+import ru.radiationx.data.entity.response.collection.CollectionReleaseResponse
+import ru.radiationx.data.entity.response.collection.CollectionReleasesResponse
+import ru.radiationx.data.entity.response.collection.V1GenreReferenceResponse
 import javax.inject.Inject
 
 class SearchApi @Inject constructor(
@@ -18,30 +17,30 @@ class SearchApi @Inject constructor(
     private val moshi: Moshi,
 ) {
 
-    suspend fun getGenres(): List<String> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "genres"
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchListApiResponse(moshi)
+    private val animeUrl: String
+        get() = "${apiConfig.accountBaseUrl}/api/v1/anime"
+
+    suspend fun getGenres(): List<V1GenreReferenceResponse> {
+        val args = mapOf<String, String>()
+        return client
+            .get("$animeUrl/catalog/references/genres", args)
+            .fetchListResponse(moshi)
     }
 
-    suspend fun getYears(): List<String> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "years"
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchListApiResponse(moshi)
+    suspend fun getYears(): List<Int> {
+        val args = mapOf<String, String>()
+        return client
+            .get("$animeUrl/catalog/references/years", args)
+            .fetchListResponse(moshi)
     }
 
-    suspend fun fastSearch(name: String): List<SuggestionResponse> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "search",
-            "search" to name,
-            "filter" to "id,code,names,poster"
+    suspend fun fastSearch(name: String): List<CollectionReleaseResponse> {
+        val args = mapOf(
+            "query" to name,
         )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchListApiResponse(moshi)
+        return client
+            .get("${apiConfig.accountBaseUrl}/api/v1/app/search/releases", args)
+            .fetchListResponse(moshi)
     }
 
     suspend fun searchReleases(
@@ -51,23 +50,21 @@ class SearchApi @Inject constructor(
         sort: String,
         complete: String,
         page: Int,
-    ): PaginatedResponse<ReleaseResponse> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "catalog",
-            "search" to JSONObject().apply {
-                put("genre", genre)
-                put("year", year)
-                put("season", season)
-            }.toString(),
-            "finish" to complete,
-            "xpage" to "catalog",
-            "sort" to sort,
-            "page" to page.toString(),
-            "filter" to "id,torrents,playlist,externalPlaylist,favorite,moon,blockedInfo",
-            "rm" to "true"
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchPaginatedApiResponse(moshi)
+    ): CollectionReleasesResponse {
+        val args = buildMap {
+            put("page", page.toString())
+            put("limit", "10")
+            put("f[sorting]", sort)
+            genre.takeIf { it.isNotBlank() }?.also { put("f[genres]", it) }
+            year.takeIf { it.isNotBlank() }?.also { put("f[years]", it) }
+            season.takeIf { it.isNotBlank() }?.also { put("f[seasons]", it) }
+            if (complete == "true") {
+                put("f[publish_statuses]", "IS_NOT_ONGOING")
+            }
+        }
+        return client
+            .get("$animeUrl/catalog/releases", args)
+            .fetchResponse(moshi)
     }
 
 }

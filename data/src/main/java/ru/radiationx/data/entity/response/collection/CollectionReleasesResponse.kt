@@ -33,11 +33,17 @@ data class CollectionReleaseResponse(
     @Json(name = "type") val type: CollectionValueResponse?,
     @Json(name = "year") val year: Int?,
     @Json(name = "season") val season: CollectionValueResponse?,
+    @Json(name = "publish_day") val publishDay: CollectionPublishDayResponse?,
     @Json(name = "description") val description: String?,
     @Json(name = "notification") val notification: String?,
     @Json(name = "episodes_total") val episodesTotal: Int?,
     @Json(name = "is_ongoing") val isOngoing: Boolean?,
     @Json(name = "updated_at") val updatedAt: String?,
+    @Json(name = "external_player") val externalPlayer: String?,
+    @Json(name = "is_blocked_by_geo") val isBlockedByGeo: Boolean?,
+    @Json(name = "is_blocked_by_copyrights") val isBlockedByCopyrights: Boolean?,
+    @Json(name = "episodes") val episodes: List<CollectionEpisodeResponse>?,
+    @Json(name = "latest_episode") val latestEpisode: CollectionEpisodeResponse?,
 )
 
 @JsonClass(generateAdapter = true)
@@ -49,6 +55,7 @@ data class CollectionReleaseNameResponse(
 
 @JsonClass(generateAdapter = true)
 data class CollectionImageResponse(
+    @Json(name = "src") val src: String?,
     @Json(name = "preview") val preview: String?,
     @Json(name = "thumbnail") val thumbnail: String?,
     @Json(name = "optimized") val optimized: CollectionImageResponse?,
@@ -61,6 +68,45 @@ data class CollectionGenreResponse(
 
 @JsonClass(generateAdapter = true)
 data class CollectionValueResponse(
+    @Json(name = "label") val label: String?,
     @Json(name = "value") val value: String?,
     @Json(name = "description") val description: String?,
+)
+
+@JsonClass(generateAdapter = true)
+data class CollectionPublishDayResponse(
+    @Json(name = "value") val value: Int?,
+    @Json(name = "description") val description: String?,
+)
+
+@JsonClass(generateAdapter = true)
+data class CollectionEpisodeResponse(
+    @Json(name = "id") val id: String,
+    @Json(name = "name") val name: String?,
+    @Json(name = "name_english") val nameEnglish: String?,
+    @Json(name = "ordinal") val ordinal: Float?,
+    @Json(name = "opening") val opening: CollectionSkipResponse?,
+    @Json(name = "ending") val ending: CollectionSkipResponse?,
+    @Json(name = "hls_480") val hls480: String?,
+    @Json(name = "hls_720") val hls720: String?,
+    @Json(name = "hls_1080") val hls1080: String?,
+    @Json(name = "rutube_id") val rutubeId: String?,
+    @Json(name = "updated_at") val updatedAt: String?,
+)
+
+@JsonClass(generateAdapter = true)
+data class CollectionSkipResponse(
+    @Json(name = "start") val start: Int?,
+    @Json(name = "stop") val stop: Int?,
+)
+
+@JsonClass(generateAdapter = true)
+data class V1GenreReferenceResponse(
+    @Json(name = "id") val id: Int,
+    @Json(name = "name") val name: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class V1ScheduleItemResponse(
+    @Json(name = "release") val release: CollectionReleaseResponse,
 )

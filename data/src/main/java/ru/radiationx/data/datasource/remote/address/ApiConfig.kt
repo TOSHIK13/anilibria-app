@@ -107,6 +107,9 @@ class ApiConfig @Inject constructor(
     val baseUrl: String
         get() = active.base
 
+    val accountBaseUrl: String
+        get() = "https://anilibria.top"
+
     val apiUrl: String
         get() = active.api
 

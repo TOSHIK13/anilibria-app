@@ -16,8 +16,7 @@ class AuthOtpGuidedFragment : FakeGuidedStepFragment() {
 
     companion object {
         private const val COMPLETE_ACTION_ID = 1L
-        private const val EXPIRED_ACTION_ID = 2L
-        private const val REPEAT_ACTION_ID = 3L
+        private const val REFRESH_ACTION_ID = 2L
     }
 
     private val completeAction by lazy {
@@ -28,19 +27,11 @@ class AuthOtpGuidedFragment : FakeGuidedStepFragment() {
             .build()
     }
 
-    private val expiredAction by lazy {
+    private val refreshAction by lazy {
         GuidedProgressAction.Builder(requireContext())
-            .id(EXPIRED_ACTION_ID)
-            .title("Показать новый код")
-            .description("Время действия текущего кода истекло")
-            .build()
-    }
-
-    private val repeatAction by lazy {
-        GuidedProgressAction.Builder(requireContext())
-            .id(REPEAT_ACTION_ID)
-            .title("Повторить")
-            .description("Произошла ошибка")
+            .id(REFRESH_ACTION_ID)
+            .title("Обновить код")
+            .description("Запросить новый код")
             .build()
     }
 
@@ -54,19 +45,23 @@ class AuthOtpGuidedFragment : FakeGuidedStepFragment() {
         subscribeTo(viewModel.otpInfoData.filterNotNull()) {
             guidanceStylist.apply {
                 titleView?.text = "Код: ${it.code}"
-                descriptionView?.text = it.description
+                descriptionView?.text = buildDescription(it.description, viewModel.state.value)
             }
         }
 
         subscribeTo(viewModel.state) {
-            val primaryAction = when (it.buttonState) {
-                AuthOtpViewModel.ButtonState.COMPLETE -> completeAction
-                AuthOtpViewModel.ButtonState.EXPIRED -> expiredAction
-                AuthOtpViewModel.ButtonState.REPEAT -> repeatAction
+            viewModel.otpInfoData.value?.also { otpInfo ->
+                guidanceStylist.descriptionView?.text = buildDescription(otpInfo.description, it)
+            }
+
+            val primaryActions = when (it.buttonState) {
+                AuthOtpViewModel.ButtonState.COMPLETE -> listOf(completeAction, refreshAction)
+                AuthOtpViewModel.ButtonState.EXPIRED,
+                AuthOtpViewModel.ButtonState.REPEAT -> listOf(refreshAction)
             }
 
             actions = if (it.error.isEmpty()) {
-                listOf(primaryAction)
+                primaryActions
             } else {
                 val errorAction = GuidedAction.Builder(requireContext())
                     .title("Ошибка")
@@ -75,9 +70,10 @@ class AuthOtpGuidedFragment : FakeGuidedStepFragment() {
                     .infoOnly(true)
                     .focusable(false)
                     .build()
-                listOf(primaryAction, errorAction)
+                primaryActions + errorAction
             }
-            primaryAction.updateProgress(it.progress)
+            completeAction.updateProgress(it.progress)
+            refreshAction.updateProgress(it.progress)
         }
     }
 
@@ -94,15 +90,31 @@ class AuthOtpGuidedFragment : FakeGuidedStepFragment() {
     override fun onGuidedActionClicked(action: GuidedAction) {
         when (action.id) {
             COMPLETE_ACTION_ID -> viewModel.onCompleteClick()
-            EXPIRED_ACTION_ID -> viewModel.onExpiredClick()
-            REPEAT_ACTION_ID -> viewModel.onRepeatClick()
+            REFRESH_ACTION_ID -> viewModel.onRefreshClick()
         }
     }
-
 
     override fun onCreateActions(actions: MutableList<GuidedAction>, savedInstanceState: Bundle?) {
         super.onCreateActions(actions, savedInstanceState)
         actions.add(completeAction)
+    }
+
+    private fun buildDescription(
+        description: String,
+        state: AuthOtpViewModel.State,
+    ): String {
+        val timer = if (state.remainingSeconds > 0) {
+            "Код действует: ${state.remainingSeconds.formatTimer()}"
+        } else {
+            "Время действия кода истекло"
+        }
+        return "$description\n$timer"
+    }
+
+    private fun Long.formatTimer(): String {
+        val minutes = this / 60
+        val seconds = this % 60
+        return "%d:%02d".format(minutes, seconds)
     }
 
     private fun GuidedProgressAction.updateProgress(progress: Boolean) {

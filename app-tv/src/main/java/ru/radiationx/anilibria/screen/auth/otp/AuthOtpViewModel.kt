@@ -14,6 +14,7 @@ import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
 import javax.inject.Inject
+import kotlin.math.ceil
 
 class AuthOtpViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -36,6 +37,11 @@ class AuthOtpViewModel @Inject constructor(
     }
 
     fun onExpiredClick() {
+        updateState(progress = true, error = "")
+        loadOtpInfo()
+    }
+
+    fun onRefreshClick() {
         updateState(progress = true, error = "")
         loadOtpInfo()
     }
@@ -66,8 +72,8 @@ class AuthOtpViewModel @Inject constructor(
                 authRepository.getOtpInfo()
             }.onSuccess {
                 otpInfoData.value = it
+                updateState(ButtonState.COMPLETE, false, remainingSeconds = it.remainingSeconds())
                 startTimer(it)
-                updateState(ButtonState.COMPLETE, false)
             }.onFailure {
                 handleError(it)
             }
@@ -92,28 +98,42 @@ class AuthOtpViewModel @Inject constructor(
             return
         }
         timerJob = viewModelScope.launch {
-            delay(otpInfo.remainingTime)
-            setExpired()
+            while (true) {
+                val remainingSeconds = otpInfo.remainingSeconds()
+                if (remainingSeconds <= 0) {
+                    setExpired()
+                    return@launch
+                }
+                updateState(remainingSeconds = remainingSeconds)
+                delay(1000L)
+            }
         }
     }
 
     private fun setExpired() {
         signInJob?.cancel()
-        updateState(ButtonState.EXPIRED, false, "")
+        updateState(ButtonState.EXPIRED, false, "", 0L)
     }
 
     private fun updateState(
         buttonState: ButtonState = state.value.buttonState,
         progress: Boolean = state.value.progress,
         error: String = state.value.error,
+        remainingSeconds: Long = state.value.remainingSeconds,
     ) {
-        state.value = State(buttonState, progress, error)
+        state.value = State(buttonState, progress, error, remainingSeconds)
+    }
+
+    private fun OtpInfo.remainingSeconds(): Long {
+        val remaining = expiresAt.time - System.currentTimeMillis()
+        return ceil(remaining / 1000.0).toLong().coerceAtLeast(0L)
     }
 
     data class State(
         val buttonState: ButtonState = ButtonState.COMPLETE,
         val progress: Boolean = false,
         val error: String = "",
+        val remainingSeconds: Long = 0L,
     )
 
     enum class ButtonState {

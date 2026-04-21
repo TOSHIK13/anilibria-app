@@ -45,7 +45,7 @@ class AuthApi @Inject constructor(
     suspend fun loadV1User(): V1ProfileResponse {
         val args = mapOf<String, String>()
         return client
-            .get("${apiConfig.baseUrl}/api/v1/accounts/users/me/profile", args)
+            .get("${apiConfig.accountBaseUrl}/api/v1/accounts/users/me/profile", args)
             .fetchResponse(moshi)
     }
 
@@ -55,7 +55,7 @@ class AuthApi @Inject constructor(
         )
         return try {
             client
-                .post("${apiConfig.baseUrl}/api/v1/accounts/otp/get", args)
+                .post("${apiConfig.accountBaseUrl}/api/v1/accounts/otp/get", args)
                 .fetchResponse(moshi)
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
@@ -83,7 +83,7 @@ class AuthApi @Inject constructor(
         )
         return try {
             client
-                .post("${apiConfig.baseUrl}/api/v1/accounts/otp/login", args)
+                .post("${apiConfig.accountBaseUrl}/api/v1/accounts/otp/login", args)
                 .fetchResponse(moshi)
         } catch (ex: Throwable) {
             throw authParser.checkOtpError(ex)
@@ -108,7 +108,7 @@ class AuthApi @Inject constructor(
             "password" to password
         )
         return client
-            .post("${apiConfig.baseUrl}/api/v1/accounts/users/auth/login", args)
+            .post("${apiConfig.accountBaseUrl}/api/v1/accounts/users/auth/login", args)
             .fetchResponse(moshi)
     }
 

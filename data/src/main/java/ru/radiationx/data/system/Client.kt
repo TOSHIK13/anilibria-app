@@ -8,8 +8,10 @@ import okhttp3.Callback
 import okhttp3.FormBody
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import ru.radiationx.data.SharedBuildConfig
 import ru.radiationx.data.datasource.remote.IClient
@@ -32,6 +34,7 @@ open class Client @Inject constructor(
         const val METHOD_DELETE = "DELETE"
 
         const val HEADER_HOST_IP = "Remote-Address"
+        const val CONTENT_TYPE_JSON = "application/json; charset=utf-8"
         const val USER_AGENT =
             "mobileApp Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.170 Safari/537.36 OPR/53.0.2907.68"
     }
@@ -47,6 +50,12 @@ open class Client @Inject constructor(
 
     override suspend fun delete(url: String, args: Map<String, String>): String =
         requireNotNull(deleteFull(url, args).body)
+
+    override suspend fun postJson(url: String, jsonBody: String): String =
+        requireNotNull(requestJson(METHOD_POST, url, jsonBody).body)
+
+    override suspend fun deleteJson(url: String, jsonBody: String): String =
+        requireNotNull(requestJson(METHOD_DELETE, url, jsonBody).body)
 
     override suspend fun getFull(url: String, args: Map<String, String>): NetworkResponse =
         request(METHOD_GET, url, args)
@@ -65,6 +74,43 @@ open class Client @Inject constructor(
 
     override suspend fun postRaw(url: String, args: Map<String, String>): Response =
         requestRaw(METHOD_POST, url, args)
+
+    private suspend fun requestJson(
+        method: String,
+        url: String,
+        jsonBody: String,
+    ): NetworkResponse {
+        val callResponse = requestJsonRaw(method, url, jsonBody)
+        return NetworkResponse(
+            url,
+            callResponse.code,
+            callResponse.message,
+            callResponse.request.url.toString(),
+            callResponse.body.string(),
+            callResponse.headers(HEADER_HOST_IP).firstOrNull()
+        )
+    }
+
+    private suspend fun requestJsonRaw(
+        method: String,
+        url: String,
+        jsonBody: String,
+    ): Response {
+        return withContext(Dispatchers.IO) {
+            val body = jsonBody.toRequestBody(CONTENT_TYPE_JSON.toMediaType())
+            val request = Request.Builder()
+                .url(url)
+                .method(method, body)
+                .build()
+
+            val call = clientWrapper.get().newCall(request)
+            val callResponse = call.awaitResponse()
+            if (!callResponse.isSuccessful) {
+                throw HttpException(callResponse.code, callResponse.message, callResponse)
+            }
+            callResponse
+        }
+    }
 
     private suspend fun request(
         method: String,

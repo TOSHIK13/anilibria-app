@@ -9,6 +9,7 @@ import ru.radiationx.anilibria.screen.auth.credentials.AuthCredentialsGuidedFrag
 import ru.radiationx.anilibria.screen.auth.main.AuthGuidedFragment
 import ru.radiationx.anilibria.screen.auth.otp.AuthOtpGuidedFragment
 import ru.radiationx.anilibria.screen.config.ConfigFragment
+import ru.radiationx.anilibria.screen.details.collection.DetailCollectionGuidedFragment
 import ru.radiationx.anilibria.screen.details.DetailFragment
 import ru.radiationx.anilibria.screen.details.other.DetailOtherGuidedFragment
 import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
@@ -59,6 +60,12 @@ class DetailsScreen(private val releaseId: ReleaseId) : FragmentScreen {
 class DetailOtherGuidedScreen(private val releaseId: ReleaseId) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
         return DetailOtherGuidedFragment.newInstance(releaseId)
+    }
+}
+
+class DetailCollectionGuidedScreen(private val releaseId: ReleaseId) : GuidedAppScreen() {
+    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
+        return DetailCollectionGuidedFragment.newInstance(releaseId)
     }
 }
 

@@ -478,10 +478,10 @@ class ReleaseInfoViewModel @Inject constructor(
                 } else {
                     favoriteRepository.addFavorite(releaseId)
                 }
-            }.onSuccess { releaseItem ->
+            }.onSuccess { favoriteInfo ->
                 currentData?.also { data ->
                     val newData = data.copy(
-                        favoriteInfo = releaseItem.favoriteInfo
+                        favoriteInfo = favoriteInfo
                     )
                     releaseInteractor.updateFullCache(newData)
                 }

@@ -13,16 +13,19 @@ import ru.radiationx.anilibria.common.DetailsState
 import ru.radiationx.anilibria.common.LibriaDetails
 import ru.radiationx.anilibria.common.fragment.GuidedRouter
 import ru.radiationx.anilibria.screen.AuthGuidedScreen
+import ru.radiationx.anilibria.screen.DetailCollectionGuidedScreen
 import ru.radiationx.anilibria.screen.DetailOtherGuidedScreen
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerScreen
 import ru.radiationx.anilibria.screen.player.PlayerController
 import ru.radiationx.data.entity.common.AuthState
+import ru.radiationx.data.entity.domain.collection.CollectionType
 import ru.radiationx.data.entity.domain.release.EpisodeAccess
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.AuthRepository
+import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.FavoriteRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -32,6 +35,7 @@ class DetailHeaderViewModel @Inject constructor(
     argExtra: DetailExtra,
     private val releaseInteractor: ReleaseInteractor,
     private val favoriteRepository: FavoriteRepository,
+    private val collectionRepository: CollectionRepository,
     private val authRepository: AuthRepository,
     private val converter: DetailDataConverter,
     private val router: Router,
@@ -92,10 +96,12 @@ class DetailHeaderViewModel @Inject constructor(
     fun onPlayClick() {
         val release = currentRelease ?: return
         if (release.episodes.isEmpty()) return
-        if (release.episodes.size == 1) {
-            router.navigateTo(PlayerScreen(releaseId, null))
-        } else {
-            viewModelScope.launch {
+
+        viewModelScope.launch {
+            addToWatchingIfNoCollection()
+            if (release.episodes.size == 1) {
+                router.navigateTo(PlayerScreen(releaseId, null))
+            } else {
                 val episodeId =
                     releaseInteractor.getAccesses(releaseId).maxByOrNull { it.lastAccessRaw }?.id
                 guidedRouter.open(PlayerEpisodesGuidedScreen(releaseId, episodeId))
@@ -118,10 +124,10 @@ class DetailHeaderViewModel @Inject constructor(
                 } else {
                     favoriteRepository.addFavorite(releaseId)
                 }
-            }.onSuccess { releaseItem ->
+            }.onSuccess { favoriteInfo ->
                 currentRelease?.also { data ->
                     val newData = data.copy(
-                        favoriteInfo = releaseItem.favoriteInfo
+                        favoriteInfo = favoriteInfo
                     )
                     releaseInteractor.updateFullCache(newData)
                 }
@@ -139,8 +145,32 @@ class DetailHeaderViewModel @Inject constructor(
 
     }
 
+    fun onCollectionClick() {
+        viewModelScope.launch {
+            if (authRepository.getAuthState() != AuthState.AUTH) {
+                guidedRouter.open(AuthGuidedScreen())
+                return@launch
+            }
+            guidedRouter.open(DetailCollectionGuidedScreen(releaseId))
+        }
+    }
+
     fun onOtherClick() {
         guidedRouter.open(DetailOtherGuidedScreen(releaseId))
+    }
+
+    private suspend fun addToWatchingIfNoCollection() {
+        if (authRepository.getAuthState() != AuthState.AUTH) {
+            return
+        }
+        coRunCatching {
+            val currentCollection = collectionRepository.getReleaseCollection(releaseId)
+            if (currentCollection == null) {
+                collectionRepository.setReleaseCollection(releaseId, CollectionType.WATCHING)
+            }
+        }.onFailure {
+            Timber.e(it)
+        }
     }
 
     private fun updateRelease(release: Release, accesses: List<EpisodeAccess>) {

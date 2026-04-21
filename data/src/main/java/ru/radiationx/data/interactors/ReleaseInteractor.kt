@@ -145,12 +145,16 @@ class ReleaseInteractor @Inject constructor(
         }
     }
 
-    suspend fun setAccessSeek(id: EpisodeId, seek: Long) {
+    suspend fun setAccessSeek(id: EpisodeId, seek: Long, duration: Long? = null) {
         updateEpisode(id) {
+            val isViewed = duration
+                ?.takeIf { it > 0 }
+                ?.let { durationValue -> seek >= durationValue * VIEWED_PROGRESS_THRESHOLD }
+                ?: true
             it.copy(
                 seek = seek,
                 lastAccess = System.currentTimeMillis(),
-                isViewed = true
+                isViewed = it.isViewed || isViewed
             )
         }
     }
@@ -198,5 +202,9 @@ class ReleaseInteractor @Inject constructor(
         val id: ReleaseId?,
         val code: ReleaseCode?,
     )
+
+    private companion object {
+        private const val VIEWED_PROGRESS_THRESHOLD = 0.9
+    }
 
 }
