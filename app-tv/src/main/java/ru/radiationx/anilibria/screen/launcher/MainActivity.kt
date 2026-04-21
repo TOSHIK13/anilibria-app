@@ -2,6 +2,8 @@ package ru.radiationx.anilibria.screen.launcher
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.MotionEvent
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.fragment.GuidedStepNavigator
@@ -11,6 +13,7 @@ import ru.radiationx.anilibria.di.NavigationModule
 import ru.radiationx.anilibria.di.PlayerModule
 import ru.radiationx.anilibria.di.SearchModule
 import ru.radiationx.anilibria.di.UpdateModule
+import ru.radiationx.anilibria.screen.player.BasePlayerFragment
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.quill.inject
 import ru.radiationx.quill.installModules
@@ -68,6 +71,22 @@ class MainActivity : FragmentActivity() {
         super.onPause()
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        val playerFragment = findCurrentPlayerFragment()
+        if (playerFragment?.handleTouchpadEvent(ev) == true) {
+            return true
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        val playerFragment = findCurrentPlayerFragment()
+        if (playerFragment?.handleTouchpadEvent(ev) == true) {
+            return true
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
     private fun handleIntent(intent: Intent?) {
         intent ?: return
         if (intent.action == SuggestionsContentProvider.INTENT_ACTION) {
@@ -75,5 +94,24 @@ class MainActivity : FragmentActivity() {
             val id = uri.lastPathSegment?.toInt() ?: return
             viewModel.openRelease(ReleaseId(id))
         }
+    }
+
+    private fun findCurrentPlayerFragment(): BasePlayerFragment? {
+        return findPlayerFragmentRecursive(supportFragmentManager.findFragmentById(R.id.fragmentContainer))
+    }
+
+    private fun findPlayerFragmentRecursive(fragment: Fragment?): BasePlayerFragment? {
+        when {
+            fragment == null -> return null
+            fragment is BasePlayerFragment && fragment.isVisible -> return fragment
+        }
+        val fragments = fragment.childFragmentManager.fragments.asReversed()
+        for (child in fragments) {
+            val playerFragment = findPlayerFragmentRecursive(child)
+            if (playerFragment != null) {
+                return playerFragment
+            }
+        }
+        return null
     }
 }
