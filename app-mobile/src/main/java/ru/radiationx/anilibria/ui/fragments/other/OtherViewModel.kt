@@ -61,6 +61,7 @@ class OtherViewModel @Inject constructor(
         const val MENU_DONATE = 2
         const val MENU_SETTINGS = 3
         const val MENU_OTP_CODE = 4
+        const val MENU_PLAYER_SETTINGS = 5
     }
 
     private val _state = MutableStateFlow(ProfileScreenState())
@@ -81,7 +82,8 @@ class OtherViewModel @Inject constructor(
     private val allMainMenu = listOf(
         OtherMenuItem(MENU_HISTORY, "История", R.drawable.ic_history),
         OtherMenuItem(MENU_TEAM, "Команда проекта", R.drawable.ic_account_multiple),
-        OtherMenuItem(MENU_DONATE, "Поддержать", R.drawable.ic_gift)
+        OtherMenuItem(MENU_DONATE, "Поддержать", R.drawable.ic_gift),
+        OtherMenuItem(MENU_PLAYER_SETTINGS, "Настройки плеера", R.drawable.ic_settings)
     )
     private val allSystemMenu = listOf(
         OtherMenuItem(MENU_SETTINGS, "Настройки", R.drawable.ic_settings)
@@ -116,7 +118,7 @@ class OtherViewModel @Inject constructor(
             }
             otherAnalytics.loginClick()
             authMainAnalytics.open(AnalyticsConstants.screen_other)
-            router.navigateTo(Screens.Auth())
+            router.navigateTo(Screens.Settings())
         }
     }
 
@@ -157,6 +159,11 @@ class OtherViewModel @Inject constructor(
             MENU_SETTINGS -> {
                 otherAnalytics.settingsClick()
                 router.navigateTo(Screens.Settings())
+            }
+
+            MENU_PLAYER_SETTINGS -> {
+                settingsAnalytics.playerClick()
+                router.navigateTo(Screens.PlayerSettings())
             }
 
             MENU_OTP_CODE -> {

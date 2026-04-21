@@ -82,6 +82,13 @@
             android:theme="@style/PreferencesDayNightAppTheme" />
 
         <activity
+            android:name=".ui.activities.PlayerSettingsActivity"
+            android:enableOnBackInvokedCallback="false"
+            android:exported="false"
+            android:label="Настройки плеера"
+            android:theme="@style/PreferencesDayNightAppTheme" />
+
+        <activity
             android:name=".ui.activities.auth.AuthActivity"
             android:enableOnBackInvokedCallback="false"
             android:exported="false"

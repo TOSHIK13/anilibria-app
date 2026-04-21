@@ -2,7 +2,6 @@ package ru.radiationx.anilibria.screen.profile
 
 import android.os.Bundle
 import android.view.View
-import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.leanback.app.BrowseSupportFragment
@@ -37,25 +36,55 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
 
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
 
-        viewModel.profileData.onEach {
-            if (!it?.avatarUrl.isNullOrEmpty()) {
-                binding.profileAvatar.showImageUrl(it.avatarUrl)
-            }
-            binding.profileNick.text = it?.nick
+        viewModel.state.onEach { state ->
+            val profile = state.profile
+            val hasAuth = profile != null
 
-            val hasAuth = it != null
-            binding.profileAvatar.isVisible = hasAuth
-            binding.profileNick.isVisible = hasAuth
-            binding.profileSignIn.isGone = hasAuth
-            binding.profileSignOut.isVisible = hasAuth
+            if (!profile?.avatarUrl.isNullOrEmpty()) {
+                binding.settingsAvatar.showImageUrl(profile.avatarUrl)
+            }
+
+            binding.settingsAvatar.isVisible = hasAuth
+            binding.settingsNick.isVisible = hasAuth
+            binding.settingsNick.text = profile?.nick
+            binding.settingsAuthAction.text = if (hasAuth) "Выйти" else "Авторизоваться"
+
+            binding.settingsSkips.text = toggleTitle("Кнопки пропуска", state.skipsEnabled)
+            binding.settingsAutoSkip.text = toggleTitle("Автопропуск", state.autoSkipEnabled)
+            binding.settingsAutoplay.text = toggleTitle("Автовоспроизведение", state.autoplayEnabled)
+            binding.settingsBackBuffer.text =
+                "Буфер назад: ${formatSeconds(state.backBufferSeconds)}"
+            binding.settingsForwardBuffer.text =
+                "Буфер вперёд: ${formatSeconds(state.forwardBufferSeconds)}"
         }.launchIn(viewLifecycleOwner.lifecycleScope)
 
-        binding.profileSignIn.setOnClickListener { viewModel.onSignInClick() }
-        binding.profileSignOut.setOnClickListener { viewModel.onSignOutClick() }
-
+        binding.settingsAuthAction.setOnClickListener { viewModel.onAuthClick() }
+        binding.settingsSkips.setOnClickListener { viewModel.onSkipsClick() }
+        binding.settingsAutoSkip.setOnClickListener { viewModel.onAutoSkipClick() }
+        binding.settingsAutoplay.setOnClickListener { viewModel.onAutoplayClick() }
+        binding.settingsBackBuffer.setOnClickListener { viewModel.onBackBufferClick() }
+        binding.settingsForwardBuffer.setOnClickListener { viewModel.onForwardBufferClick() }
 
         mainFragmentAdapter.fragmentHost.notifyViewCreated(selfMainFragmentAdapter)
         mainFragmentAdapter.fragmentHost.notifyDataReady(selfMainFragmentAdapter)
         backgroundManager.clearGradient()
+    }
+
+    private fun toggleTitle(title: String, enabled: Boolean): String {
+        return "$title: ${if (enabled) "Вкл" else "Выкл"}"
+    }
+
+    private fun formatSeconds(value: Int): String {
+        return if (value >= 60) {
+            val minutes = value / 60
+            val seconds = value % 60
+            if (seconds == 0) {
+                "$minutes мин."
+            } else {
+                "$minutes мин. $seconds сек."
+            }
+        } else {
+            "$value сек."
+        }
     }
 }

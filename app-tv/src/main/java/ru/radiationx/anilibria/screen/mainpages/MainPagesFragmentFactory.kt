@@ -25,11 +25,7 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
             ID_MAIN,
             ID_MY,
             ID_COLLECTIONS,
-            //ID_SERIES,
-            //ID_MOVIES,
-            //ID_SEARCH,
-            //ID_YOUTUBE,
-            ID_PROFILE
+            ID_PROFILE,
         )
 
         val variant1 = mapOf(
@@ -39,13 +35,13 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
             ID_MOVIES to "Фильмы",
             ID_SEARCH to "Поиск",
             ID_YOUTUBE to "YouTube",
-            ID_PROFILE to "Профиль",
-            ID_COLLECTIONS to "Коллекции"
+            ID_PROFILE to "Настройки",
+            ID_COLLECTIONS to "Коллекции",
         )
     }
 
     override fun getFragmentByRow(row: Row): Fragment {
-        val fragment = when (row.id) {
+        return when (row.id) {
             ID_MAIN -> MainFragment()
             ID_MY -> WatchingFragment()
             ID_COLLECTIONS -> CollectionsFragment()
@@ -53,6 +49,5 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
             ID_PROFILE -> ProfileFragment()
             else -> super.getFragmentByRow(row)
         }
-        return fragment
     }
 }

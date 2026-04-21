@@ -26,6 +26,7 @@ import androidx.media3.ui.leanback.LeanbackPlayerAdapter
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
 import ru.radiationx.data.datasource.holders.PreferencesHolder
+import ru.radiationx.data.player.PlayerBufferConfig
 import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.quill.get
 
@@ -137,13 +138,19 @@ open class BasePlayerFragment : VideoSupportFragment() {
         }
 
         val dataSourceProvider = get<PlayerDataSourceProvider>()
+        val preferencesHolder = get<PreferencesHolder>()
         val dataSourceType = dataSourceProvider.get()
         val dataSourceFactory = DefaultDataSource.Factory(requireContext(), dataSourceType.factory)
         val mediaSourceFactory = DefaultMediaSourceFactory(requireContext()).apply {
             setDataSourceFactory(dataSourceFactory)
         }
+        val loadControl = PlayerBufferConfig.createLoadControl(
+            preferencesHolder.playerForwardBufferSeconds.value,
+            preferencesHolder.playerBackBufferSeconds.value,
+        )
         val player = ExoPlayer.Builder(requireContext())
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(SEEK_STEP_MS)
             .setSeekForwardIncrementMs(SEEK_STEP_MS)

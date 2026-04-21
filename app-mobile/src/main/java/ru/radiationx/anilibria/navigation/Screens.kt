@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentFactory
+import ru.radiationx.anilibria.ui.activities.PlayerSettingsActivity
 import ru.radiationx.anilibria.ui.activities.SettingsActivity
 import ru.radiationx.anilibria.ui.activities.WebPlayerActivity
 import ru.radiationx.anilibria.ui.activities.auth.AuthActivity
@@ -61,6 +62,10 @@ object Screens {
 
     class Settings : BaseActivityScreen() {
         override fun createIntent(context: Context) = SettingsActivity.newIntent(context)
+    }
+
+    class PlayerSettings : BaseActivityScreen() {
+        override fun createIntent(context: Context) = PlayerSettingsActivity.newIntent(context)
     }
 
     class Auth(

@@ -6,12 +6,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import ru.radiationx.anilibria.screen.LifecycleViewModel
-import ru.radiationx.anilibria.screen.player.PlayerExtra
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import javax.inject.Inject
 
 class PlayerSettingsViewModel @Inject constructor(
-    @Suppress("UNUSED_PARAMETER") argExtra: PlayerExtra,
     private val preferencesHolder: PreferencesHolder,
 ) : LifecycleViewModel() {
 
@@ -22,11 +20,15 @@ class PlayerSettingsViewModel @Inject constructor(
             preferencesHolder.playerSkips,
             preferencesHolder.playerSkipsTimer,
             preferencesHolder.playerAutoplay,
-        ) { skips, skipTimer, autoplay ->
+            preferencesHolder.playerBackBufferSeconds,
+            preferencesHolder.playerForwardBufferSeconds,
+        ) { skips, skipTimer, autoplay, backBufferSeconds, forwardBufferSeconds ->
             PlayerSettingsState(
                 skipsEnabled = skips,
                 autoSkipEnabled = skipTimer,
                 autoplayEnabled = autoplay,
+                backBufferSeconds = backBufferSeconds,
+                forwardBufferSeconds = forwardBufferSeconds,
             )
         }.onEach {
             state.value = it
@@ -45,9 +47,19 @@ class PlayerSettingsViewModel @Inject constructor(
         preferencesHolder.playerAutoplay.value = value
     }
 
+    fun setBackBufferSeconds(value: Int) {
+        preferencesHolder.playerBackBufferSeconds.value = value
+    }
+
+    fun setForwardBufferSeconds(value: Int) {
+        preferencesHolder.playerForwardBufferSeconds.value = value
+    }
+
     data class PlayerSettingsState(
         val skipsEnabled: Boolean = true,
         val autoSkipEnabled: Boolean = true,
         val autoplayEnabled: Boolean = true,
+        val backBufferSeconds: Int = 0,
+        val forwardBufferSeconds: Int = 50,
     )
 }

@@ -6,7 +6,9 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
+import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerTransport
+import ru.radiationx.data.player.PlayerBufferConfig
 import ru.radiationx.data.player.PlayerCacheDataSourceProvider
 import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.media.mobile.PlayerProxy
@@ -15,7 +17,8 @@ import javax.inject.Inject
 
 class PlayerHolder @Inject constructor(
     private val dataSourceProvider: PlayerDataSourceProvider,
-    private val cacheDataSourceProvider: PlayerCacheDataSourceProvider
+    private val cacheDataSourceProvider: PlayerCacheDataSourceProvider,
+    private val preferencesHolder: PreferencesHolder,
 ) {
 
     private val playerProxy = PlayerProxy()
@@ -35,8 +38,13 @@ class PlayerHolder @Inject constructor(
         val mediaSourceFactory = DefaultMediaSourceFactory(context).apply {
             setDataSourceFactory(cacheFactory)
         }
+        val loadControl = PlayerBufferConfig.createLoadControl(
+            preferencesHolder.playerForwardBufferSeconds.value,
+            preferencesHolder.playerBackBufferSeconds.value,
+        )
         val player = ExoPlayer.Builder(context.applicationContext)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .setHandleAudioBecomingNoisy(true)
             .build()
 

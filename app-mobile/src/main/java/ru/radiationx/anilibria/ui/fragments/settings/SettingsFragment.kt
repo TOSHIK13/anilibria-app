@@ -1,14 +1,13 @@
 package ru.radiationx.anilibria.ui.fragments.settings
 
-import android.graphics.drawable.Drawable
 import android.os.Bundle
 import android.view.View
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.SwitchPreferenceCompat
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.apptheme.AppThemeController
 import ru.radiationx.anilibria.apptheme.AppThemeMode
@@ -16,21 +15,15 @@ import ru.radiationx.anilibria.navigation.Screens
 import ru.radiationx.data.SharedBuildConfig
 import ru.radiationx.data.analytics.AnalyticsConstants
 import ru.radiationx.data.analytics.features.SettingsAnalytics
-import ru.radiationx.data.analytics.features.mapper.toAnalyticsQuality
-import ru.radiationx.data.datasource.holders.PreferencesHolder
-import ru.radiationx.data.entity.common.PlayerQuality
-import ru.radiationx.data.entity.common.PlayerTransport
+import ru.radiationx.data.entity.common.AuthState
+import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.quill.inject
 import taiwa.TaiwaAction
 import taiwa.bottomsheet.bottomSheetTaiwa
 
-/**
- * Created by radiationx on 25.12.16.
- */
-
 class SettingsFragment : BaseSettingFragment() {
 
-    private val appPreferences by inject<PreferencesHolder>()
+    private val authRepository by inject<AuthRepository>()
 
     private val settingsAnalytics by inject<SettingsAnalytics>()
 
@@ -40,11 +33,6 @@ class SettingsFragment : BaseSettingFragment() {
 
     private val themeTaiwa by bottomSheetTaiwa()
 
-    private val qualityTaiwa by bottomSheetTaiwa()
-
-    private val transportTaiwa by bottomSheetTaiwa()
-
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         addPreferencesFromResource(R.xml.preferences)
@@ -52,43 +40,38 @@ class SettingsFragment : BaseSettingFragment() {
         findPreference<SwitchPreferenceCompat>("notifications.all")?.apply {
             setOnPreferenceChangeListener { _, newValue ->
                 (newValue as? Boolean)?.also(settingsAnalytics::notificationMainChange)
-                return@setOnPreferenceChangeListener true
+                true
             }
         }
 
         findPreference<SwitchPreferenceCompat>("notifications.service")?.apply {
             setOnPreferenceChangeListener { _, newValue ->
                 (newValue as? Boolean)?.also(settingsAnalytics::notificationSystemChange)
-                return@setOnPreferenceChangeListener true
+                true
             }
         }
 
         findPreference<SwitchPreferenceCompat>("episodes_is_reverse")?.apply {
             setOnPreferenceChangeListener { _, newValue ->
                 (newValue as? Boolean)?.also(settingsAnalytics::episodesOrderChange)
-                return@setOnPreferenceChangeListener true
+                true
             }
         }
 
         findPreference<Preference>("app_theme")?.apply {
             setOnPreferenceClickListener {
                 showThemeTaiwa()
-                return@setOnPreferenceClickListener false
-            }
-        }
-
-        findPreference<Preference>("player_quality")?.apply {
-            setOnPreferenceClickListener {
-                settingsAnalytics.qualityClick()
-                showQualityTaiwa()
                 false
             }
         }
 
-        findPreference<Preference>("player_transport")?.apply {
-            isVisible = sharedBuildConfig.debug
+        findPreference<Preference>("app_account")?.apply {
             setOnPreferenceClickListener {
-                showTransportTaiwa()
+                lifecycleScope.launch {
+                    if (authRepository.getAuthState() != AuthState.AUTH) {
+                        startActivity(Screens.Auth().createIntent(requireContext()))
+                    }
+                }
                 false
             }
         }
@@ -106,7 +89,6 @@ class SettingsFragment : BaseSettingFragment() {
                 false
             }
         }
-
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -118,18 +100,16 @@ class SettingsFragment : BaseSettingFragment() {
             }
         }.launchIn(viewLifecycleOwner.lifecycleScope)
 
-        appPreferences.playerQuality.onEach { quality ->
-            findPreference<Preference>("player_quality")?.apply {
-                icon = getQualityIcon(quality)
-                summary = getQualityTitle(quality)
+        authRepository.observeAuthState().onEach { authState ->
+            val user = authRepository.getUser()
+            findPreference<Preference>("app_account")?.apply {
+                summary = when (authState) {
+                    AuthState.AUTH -> user?.nick ?: "Аккаунт подключен"
+                    else -> "Авторизоваться"
+                }
             }
         }.launchIn(viewLifecycleOwner.lifecycleScope)
 
-        appPreferences.playerTransport.onEach { transport ->
-            findPreference<Preference>("player_transport")?.apply {
-                summary = getTransportTitle(transport)
-            }
-        }.launchIn(viewLifecycleOwner.lifecycleScope)
     }
 
     private fun showThemeTaiwa() {
@@ -152,77 +132,6 @@ class SettingsFragment : BaseSettingFragment() {
         themeTaiwa.show()
     }
 
-    private fun showQualityTaiwa() {
-        val currentValue = appPreferences.playerQuality.value
-        qualityTaiwa.setContent {
-            header {
-                toolbar {
-                    title(getString(R.string.pref_quality))
-                }
-            }
-            body {
-                PlayerQuality.entries.forEach { quality ->
-                    radioItem {
-                        icon(getQualityIconRes(quality))
-                        title(getQualityTitle(quality))
-                        select(quality == currentValue)
-                        action(TaiwaAction.Close)
-                        onClick {
-                            settingsAnalytics.qualityChange(quality.toAnalyticsQuality())
-                            appPreferences.playerQuality.value = quality
-                        }
-                    }
-                }
-            }
-        }
-        qualityTaiwa.show()
-    }
-
-    private fun showTransportTaiwa() {
-        val currentValue = appPreferences.playerTransport.value
-        transportTaiwa.setContent {
-            header {
-                toolbar {
-                    title(getString(R.string.pref_transport))
-                }
-            }
-            body {
-
-                PlayerTransport.entries.forEach { transport ->
-                    radioItem {
-                        title(getTransportTitle(transport))
-                        select(transport == currentValue)
-                        action(TaiwaAction.Close)
-                        onClick {
-                            appPreferences.playerTransport.value = transport
-                        }
-                    }
-                }
-            }
-        }
-        transportTaiwa.show()
-    }
-
-    private fun getQualityIcon(quality: PlayerQuality): Drawable? {
-        return ContextCompat.getDrawable(requireContext(), getQualityIconRes(quality))
-    }
-
-    private fun getQualityIconRes(quality: PlayerQuality): Int {
-        return when (quality) {
-            PlayerQuality.SD -> R.drawable.ic_quality_sd_base
-            PlayerQuality.HD -> R.drawable.ic_quality_hd_base
-            PlayerQuality.FULLHD -> R.drawable.ic_quality_full_hd_base
-        }
-    }
-
-    private fun getQualityTitle(quality: PlayerQuality): String {
-        return when (quality) {
-            PlayerQuality.SD -> "480p"
-            PlayerQuality.HD -> "720p"
-            PlayerQuality.FULLHD -> "1080p"
-        }
-    }
-
     private fun AppThemeMode.getTitle(): String {
         return when (this) {
             AppThemeMode.LIGHT -> R.string.pref_value_theme_mode_light
@@ -230,13 +139,4 @@ class SettingsFragment : BaseSettingFragment() {
             AppThemeMode.SYSTEM -> R.string.pref_value_theme_mode_system
         }.let { getString(it) }
     }
-
-    private fun getTransportTitle(transport: PlayerTransport): String {
-        return when (transport) {
-            PlayerTransport.SYSTEM -> "Системный"
-            PlayerTransport.OKHTTP -> "OkHttp"
-            PlayerTransport.CRONET -> "Cronet"
-        }
-    }
-
 }

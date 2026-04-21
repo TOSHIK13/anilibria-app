@@ -87,7 +87,7 @@ class AuthRepository @Inject constructor(
 
     suspend fun loadUser(): ProfileItem = withContext(Dispatchers.IO) {
         val profile = if (!authHolder.getSessionToken().isNullOrBlank()) {
-            authApi.loadV1User().toDomain(apiConfig)
+            loadV1UserWithLegacyAvatarFallback()
         } else {
             authApi.loadUser().toDomain(apiConfig)
         }
@@ -108,8 +108,7 @@ class AuthRepository @Inject constructor(
     suspend fun signInOtp(code: String): ProfileItem = withContext(Dispatchers.IO) {
         val tokenResponse = authApi.signInOtp(code, authHolder.getDeviceId())
         authHolder.setSessionToken(tokenResponse.token)
-        authApi.loadV1User()
-            .toDomain(apiConfig)
+        loadV1UserWithLegacyAvatarFallback()
             .also { updateUser(it) }
     }
 
@@ -117,7 +116,7 @@ class AuthRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val tokenResponse = authApi.signInV1(login, password)
             authHolder.setSessionToken(tokenResponse.token)
-            val profile = authApi.loadV1User().toDomain(apiConfig)
+            val profile = loadV1UserWithLegacyAvatarFallback()
             coRunCatching {
                 authApi.signIn(login, password, code2fa)
             }.onFailure {
@@ -164,7 +163,7 @@ class AuthRepository @Inject constructor(
             }
 
             val profile = if (!tokenResponse.token.isNullOrBlank()) {
-                authApi.loadV1User().toDomain(apiConfig)
+                loadV1UserWithLegacyAvatarFallback()
             } else {
                 authApi.loadUser().toDomain(apiConfig)
             }
@@ -183,6 +182,19 @@ class AuthRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             userHolder.saveUser(newUser)
         }
+    }
+
+    private suspend fun loadV1UserWithLegacyAvatarFallback(): ProfileItem {
+        val v1Profile = authApi.loadV1User().toDomain(apiConfig)
+        if (!v1Profile.avatarUrl.isNullOrBlank()) {
+            return v1Profile
+        }
+        val legacyAvatar = coRunCatching {
+            authApi.loadUser().toDomain(apiConfig)
+        }.onFailure {
+            Timber.e(it)
+        }.getOrNull()?.avatarUrl
+        return v1Profile.copy(avatarUrl = legacyAvatar ?: v1Profile.avatarUrl)
     }
 
     private fun computeAuthState(

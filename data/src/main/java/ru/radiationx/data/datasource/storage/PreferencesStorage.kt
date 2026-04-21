@@ -32,10 +32,16 @@ class PreferencesStorage @Inject constructor(
         private const val PLAYER_SKIPS_TIMER_KEY = "player_skips_timer"
         private const val PLAYER_INACTIVE_TIMER_KEY = "player_inactive_timer"
         private const val PLAYER_AUTO_PLAY_KEY = "player_auto_play"
+        private const val PLAYER_FORWARD_BUFFER_SECONDS_KEY = "player_forward_buffer_seconds"
+        private const val PLAYER_BACK_BUFFER_SECONDS_KEY = "player_back_buffer_seconds"
         private const val NOTIFICATIONS_ALL_KEY = "notifications.all"
         private const val NOTIFICATIONS_SERVICE_KEY = "notifications.service"
 
         private val DONATION_THRESHOLD = TimeUnit.DAYS.toMillis(7)
+        private const val DEFAULT_FORWARD_BUFFER_SECONDS = 50
+        private const val MAX_FORWARD_BUFFER_SECONDS = 600
+        private const val DEFAULT_BACK_BUFFER_SECONDS = 0
+        private const val MAX_BACK_BUFFER_SECONDS = 600
     }
 
     private val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
@@ -168,6 +174,30 @@ class PreferencesStorage @Inject constructor(
         },
         set = { key, value ->
             putBoolean(key, value)
+        }
+    )
+
+    override val playerForwardBufferSeconds: AppPreference<Int> = AppPreference(
+        key = PLAYER_FORWARD_BUFFER_SECONDS_KEY,
+        sharedPreferences = sharedPreferences,
+        get = { key ->
+            getInt(key, DEFAULT_FORWARD_BUFFER_SECONDS)
+                .coerceIn(1, MAX_FORWARD_BUFFER_SECONDS)
+        },
+        set = { key, value ->
+            putInt(key, value.coerceIn(1, MAX_FORWARD_BUFFER_SECONDS))
+        }
+    )
+
+    override val playerBackBufferSeconds: AppPreference<Int> = AppPreference(
+        key = PLAYER_BACK_BUFFER_SECONDS_KEY,
+        sharedPreferences = sharedPreferences,
+        get = { key ->
+            getInt(key, DEFAULT_BACK_BUFFER_SECONDS)
+                .coerceIn(0, MAX_BACK_BUFFER_SECONDS)
+        },
+        set = { key, value ->
+            putInt(key, value.coerceIn(0, MAX_BACK_BUFFER_SECONDS))
         }
     )
 

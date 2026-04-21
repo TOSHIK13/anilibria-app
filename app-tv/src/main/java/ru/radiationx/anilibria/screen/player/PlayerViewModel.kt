@@ -65,7 +65,16 @@ class PlayerViewModel @Inject constructor(
             .onEach { episodeId ->
                 currentEpisodes
                     .firstOrNull { it.id == episodeId }
-                    ?.also { playEpisode(it, true) }
+                    ?.also {
+                        if (getCurrentEpisodeIndex().let { currentIndex ->
+                                currentIndex != -1 && currentEpisodes.indexOf(it) > currentIndex
+                            }
+                        ) {
+                            maybeCompleteCurrentEpisodeOnForwardSwitch()
+                            flushProgress(force = true)
+                        }
+                        playEpisode(it, true)
+                    }
             }
             .launchIn(viewModelScope)
 
@@ -129,6 +138,7 @@ class PlayerViewModel @Inject constructor(
     fun onNextClick(position: Long, duration: Long) {
         getNextEpisode()?.also {
             updatePlaybackSnapshot(position, duration)
+            maybeCompleteCurrentEpisodeOnForwardSwitch()
             flushProgress(force = true)
             playEpisode(it)
         }
@@ -283,6 +293,21 @@ class PlayerViewModel @Inject constructor(
         lastKnownDuration = duration
     }
 
+    private fun maybeCompleteCurrentEpisodeOnForwardSwitch() {
+        if (currentComplete == true) {
+            return
+        }
+        val duration = lastKnownDuration
+        if (duration <= 0L) {
+            return
+        }
+        val progress = lastKnownPosition.toDouble() / duration.toDouble()
+        if (progress >= NEXT_SWITCH_VIEWED_THRESHOLD) {
+            currentComplete = true
+            lastKnownPosition = duration
+        }
+    }
+
     private fun playEpisode(episode: Episode, force: Boolean = false) {
         pendingSeekSyncJob?.cancel()
         currentEpisode = episode
@@ -332,5 +357,6 @@ class PlayerViewModel @Inject constructor(
         private const val HEARTBEAT_STEP_MS = 10_000L
         private const val SEEK_DEBOUNCE_MS = 1_500L
         private const val DUPLICATE_GUARD_MS = 2_000L
+        private const val NEXT_SWITCH_VIEWED_THRESHOLD = 0.8
     }
 }

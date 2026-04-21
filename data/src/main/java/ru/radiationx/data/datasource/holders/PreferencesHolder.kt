@@ -35,6 +35,10 @@ interface PreferencesHolder {
 
     val playerAutoplay: AppPreference<Boolean>
 
+    val playerForwardBufferSeconds: AppPreference<Int>
+
+    val playerBackBufferSeconds: AppPreference<Int>
+
     val notificationsAll: AppPreference<Boolean>
 
     val notificationsService: AppPreference<Boolean>

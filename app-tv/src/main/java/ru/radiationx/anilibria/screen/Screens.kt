@@ -14,18 +14,21 @@ import ru.radiationx.anilibria.screen.details.DetailFragment
 import ru.radiationx.anilibria.screen.details.other.DetailOtherGuidedFragment
 import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
 import ru.radiationx.anilibria.screen.player.PlayerFragment
+import ru.radiationx.anilibria.screen.player.BasePlayerGuidedFragment.Companion.ARG_EPISODE_ID
+import ru.radiationx.anilibria.screen.player.BasePlayerGuidedFragment.Companion.ARG_RELEASE_ID
 import ru.radiationx.anilibria.screen.player.end_episode.EndEpisodeGuidedFragment
 import ru.radiationx.anilibria.screen.player.end_season.EndSeasonGuidedFragment
 import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesGuidedFragment
-import ru.radiationx.anilibria.screen.player.putIds
+import ru.radiationx.anilibria.screen.player.settings.PlayerBufferSettingsGuidedFragment
+import ru.radiationx.anilibria.screen.player.settings.PlayerBufferTarget
 import ru.radiationx.anilibria.screen.player.quality.PlayerQualityGuidedFragment
 import ru.radiationx.anilibria.screen.player.settings.PlayerSettingsGuidedFragment
 import ru.radiationx.anilibria.screen.player.speed.PlayerSpeedGuidedFragment
 import ru.radiationx.anilibria.screen.schedule.ScheduleFragment
 import ru.radiationx.anilibria.screen.search.SearchFragment
+import ru.radiationx.anilibria.screen.search.BaseSearchValuesGuidedFragment.Companion.ARG_VALUES
 import ru.radiationx.anilibria.screen.search.completed.SearchCompletedGuidedFragment
 import ru.radiationx.anilibria.screen.search.genre.SearchGenreGuidedFragment
-import ru.radiationx.anilibria.screen.search.putValues
 import ru.radiationx.anilibria.screen.search.season.SearchSeasonGuidedFragment
 import ru.radiationx.anilibria.screen.search.sort.SearchSortGuidedFragment
 import ru.radiationx.anilibria.screen.search.year.SearchYearGuidedFragment
@@ -38,6 +41,7 @@ import ru.radiationx.data.entity.domain.search.SearchForm
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.domain.updater.UpdateData
+import ru.radiationx.shared.ktx.android.putExtra
 
 class ConfigScreen : FragmentScreen {
     override fun createFragment(factory: FragmentFactory): Fragment {
@@ -107,19 +111,25 @@ class SearchScreen : FragmentScreen {
 
 class SearchYearGuidedScreen(private val values: List<String>) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return SearchYearGuidedFragment().putValues(values)
+        return SearchYearGuidedFragment().putExtra {
+            putStringArrayList(ARG_VALUES, ArrayList(values))
+        }
     }
 }
 
 class SearchSeasonGuidedScreen(private val values: List<String>) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return SearchSeasonGuidedFragment().putValues(values)
+        return SearchSeasonGuidedFragment().putExtra {
+            putStringArrayList(ARG_VALUES, ArrayList(values))
+        }
     }
 }
 
 class SearchGenreGuidedScreen(private val values: List<String>) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return SearchGenreGuidedFragment().putValues(values)
+        return SearchGenreGuidedFragment().putExtra {
+            putStringArrayList(ARG_VALUES, ArrayList(values))
+        }
     }
 }
 
@@ -173,7 +183,10 @@ class PlayerQualityGuidedScreen(
     private val episodeId: EpisodeId?,
 ) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerQualityGuidedFragment().putIds(releaseId, episodeId)
+        return PlayerQualityGuidedFragment().putExtra {
+            putParcelable(ARG_RELEASE_ID, releaseId)
+            putParcelable(ARG_EPISODE_ID, episodeId)
+        }
     }
 }
 
@@ -182,7 +195,10 @@ class PlayerSpeedGuidedScreen(
     private val episodeId: EpisodeId?,
 ) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerSpeedGuidedFragment().putIds(releaseId, episodeId)
+        return PlayerSpeedGuidedFragment().putExtra {
+            putParcelable(ARG_RELEASE_ID, releaseId)
+            putParcelable(ARG_EPISODE_ID, episodeId)
+        }
     }
 }
 
@@ -191,7 +207,10 @@ class PlayerEpisodesGuidedScreen(
     private val episodeId: EpisodeId?,
 ) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerEpisodesGuidedFragment().putIds(releaseId, episodeId)
+        return PlayerEpisodesGuidedFragment().putExtra {
+            putParcelable(ARG_RELEASE_ID, releaseId)
+            putParcelable(ARG_EPISODE_ID, episodeId)
+        }
     }
 }
 
@@ -200,7 +219,10 @@ class PlayerEndEpisodeGuidedScreen(
     private val episodeId: EpisodeId?,
 ) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return EndEpisodeGuidedFragment().putIds(releaseId, episodeId)
+        return EndEpisodeGuidedFragment().putExtra {
+            putParcelable(ARG_RELEASE_ID, releaseId)
+            putParcelable(ARG_EPISODE_ID, episodeId)
+        }
     }
 }
 
@@ -209,7 +231,10 @@ class PlayerEndSeasonGuidedScreen(
     private val episodeId: EpisodeId?,
 ) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return EndSeasonGuidedFragment().putIds(releaseId, episodeId)
+        return EndSeasonGuidedFragment().putExtra {
+            putParcelable(ARG_RELEASE_ID, releaseId)
+            putParcelable(ARG_EPISODE_ID, episodeId)
+        }
     }
 }
 
@@ -220,10 +245,20 @@ class TestGuidedStepScreen : GuidedAppScreen() {
 }
 
 class PlayerSettingsGuidedScreen(
-    private val releaseId: ReleaseId,
-    private val episodeId: EpisodeId?,
+    @Suppress("UNUSED_PARAMETER")
+    private val releaseId: ReleaseId? = null,
+    @Suppress("UNUSED_PARAMETER")
+    private val episodeId: EpisodeId? = null,
 ) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerSettingsGuidedFragment().putIds(releaseId, episodeId)
+        return PlayerSettingsGuidedFragment()
+    }
+}
+
+class PlayerBufferSettingsGuidedScreen(
+    private val target: PlayerBufferTarget,
+) : GuidedAppScreen() {
+    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
+        return PlayerBufferSettingsGuidedFragment.newInstance(target)
     }
 }
