@@ -57,6 +57,7 @@ class PlayerEpisodesViewModel @Inject constructor(
             val groups = releases.toGroups(accesses)
             episodesData.value = groups
             selectedAction.value = groups.findAction { it.episodeId == argExtra.episodeId }
+                ?: groups.firstNotNullOfOrNull { it.actions.firstOrNull() }
         }
     }
 
@@ -74,7 +75,7 @@ class PlayerEpisodesViewModel @Inject constructor(
         var id = 0L
         return map { release ->
             val groupId = id++
-            val actions = release.episodes.asReversed().map { episode ->
+            val actions = release.episodes.map { episode ->
                 val access = accesses[episode.id]
                 val description = when {
                     access?.isViewed == true -> "Просмотрено"

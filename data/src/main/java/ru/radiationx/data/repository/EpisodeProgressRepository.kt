@@ -248,7 +248,7 @@ class EpisodeProgressRepository @Inject constructor(
     }
 
     private companion object {
-        private const val VIEWED_PROGRESS_THRESHOLD = 0.9
+        private const val VIEWED_PROGRESS_THRESHOLD = 0.95
 
         private fun createDateFormat() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
