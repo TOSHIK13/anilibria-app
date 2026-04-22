@@ -13,17 +13,12 @@ import ru.radiationx.anilibria.screen.details.collection.DetailCollectionGuidedF
 import ru.radiationx.anilibria.screen.details.DetailFragment
 import ru.radiationx.anilibria.screen.details.other.DetailOtherGuidedFragment
 import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
-import ru.radiationx.anilibria.screen.player.PlayerFragment
+import ru.radiationx.anilibria.screen.player.ComposePlayerFragment
 import ru.radiationx.anilibria.screen.player.BasePlayerGuidedFragment.Companion.ARG_EPISODE_ID
 import ru.radiationx.anilibria.screen.player.BasePlayerGuidedFragment.Companion.ARG_RELEASE_ID
-import ru.radiationx.anilibria.screen.player.end_episode.EndEpisodeGuidedFragment
-import ru.radiationx.anilibria.screen.player.end_season.EndSeasonGuidedFragment
 import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesGuidedFragment
 import ru.radiationx.anilibria.screen.player.settings.PlayerBufferSettingsGuidedFragment
 import ru.radiationx.anilibria.screen.player.settings.PlayerBufferTarget
-import ru.radiationx.anilibria.screen.player.quality.PlayerQualityGuidedFragment
-import ru.radiationx.anilibria.screen.player.settings.PlayerSettingsGuidedFragment
-import ru.radiationx.anilibria.screen.player.speed.PlayerSpeedGuidedFragment
 import ru.radiationx.anilibria.screen.schedule.ScheduleFragment
 import ru.radiationx.anilibria.screen.search.SearchFragment
 import ru.radiationx.anilibria.screen.search.BaseSearchValuesGuidedFragment.Companion.ARG_VALUES
@@ -174,31 +169,7 @@ class PlayerScreen(
     private val episodeId: EpisodeId?,
 ) : FragmentScreen {
     override fun createFragment(factory: FragmentFactory): Fragment {
-        return PlayerFragment.newInstance(releaseId, episodeId)
-    }
-}
-
-class PlayerQualityGuidedScreen(
-    private val releaseId: ReleaseId,
-    private val episodeId: EpisodeId?,
-) : GuidedAppScreen() {
-    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerQualityGuidedFragment().putExtra {
-            putParcelable(ARG_RELEASE_ID, releaseId)
-            putParcelable(ARG_EPISODE_ID, episodeId)
-        }
-    }
-}
-
-class PlayerSpeedGuidedScreen(
-    private val releaseId: ReleaseId,
-    private val episodeId: EpisodeId?,
-) : GuidedAppScreen() {
-    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerSpeedGuidedFragment().putExtra {
-            putParcelable(ARG_RELEASE_ID, releaseId)
-            putParcelable(ARG_EPISODE_ID, episodeId)
-        }
+        return ComposePlayerFragment.newInstance(releaseId, episodeId)
     }
 }
 
@@ -214,44 +185,9 @@ class PlayerEpisodesGuidedScreen(
     }
 }
 
-class PlayerEndEpisodeGuidedScreen(
-    private val releaseId: ReleaseId,
-    private val episodeId: EpisodeId?,
-) : GuidedAppScreen() {
-    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return EndEpisodeGuidedFragment().putExtra {
-            putParcelable(ARG_RELEASE_ID, releaseId)
-            putParcelable(ARG_EPISODE_ID, episodeId)
-        }
-    }
-}
-
-class PlayerEndSeasonGuidedScreen(
-    private val releaseId: ReleaseId,
-    private val episodeId: EpisodeId?,
-) : GuidedAppScreen() {
-    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return EndSeasonGuidedFragment().putExtra {
-            putParcelable(ARG_RELEASE_ID, releaseId)
-            putParcelable(ARG_EPISODE_ID, episodeId)
-        }
-    }
-}
-
 class TestGuidedStepScreen : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
         return DialogExampleFragment()
-    }
-}
-
-class PlayerSettingsGuidedScreen(
-    @Suppress("UNUSED_PARAMETER")
-    private val releaseId: ReleaseId? = null,
-    @Suppress("UNUSED_PARAMETER")
-    private val episodeId: EpisodeId? = null,
-) : GuidedAppScreen() {
-    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
-        return PlayerSettingsGuidedFragment()
     }
 }
 

@@ -31,6 +31,8 @@ google-flexbox = "3.0.0"
 androidx-activity = "1.11.0"
 androidx-fragment = "1.8.9"
 kotlin = "2.3.0"
+compose-bom = "2026.02.01"
+androidx-tv-material = "1.0.0"
 androidx-constraintlayout = "2.2.1"
 javax-inject = "1"
 toothpick = "3.1.0"
@@ -101,7 +103,14 @@ media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp"
 media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 media3-ui-leanback = { module = "androidx.media3:media3-ui-leanback", version.ref = "media3" }
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-animation = { module = "androidx.compose.animation:animation" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-tv-material = { module = "androidx.tv:tv-material", version.ref = "androidx-tv-material" }
 minitemplator = { module = "org.bsc.util:minitemplator-repackaged", version.ref = "minitemplator" }
 mintpermissions-flows = { module = "com.github.mintrocket.MintPermissions:mintpermissions-flows", version.ref = "mintpermissions" }
 mintpermissions = { module = "com.github.mintrocket.MintPermissions:mintpermissions", version.ref = "mintpermissions" }
@@ -121,6 +130,7 @@ viewbindingpropertydelegate = { module = "dev.androidbroadcast.vbpd:vbpd-reflect
 android-application = { id = "com.android.application", version.ref = "android-plugin" }
 android-library = { id = "com.android.library", version.ref = "android-plugin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp-plugin" }
 gms = { id = "com.google.gms.google-services", version.ref = "gms-plugin" }
 appmetrica = { id = "io.appmetrica.analytics", version.ref = "appmetrica-plugin" }

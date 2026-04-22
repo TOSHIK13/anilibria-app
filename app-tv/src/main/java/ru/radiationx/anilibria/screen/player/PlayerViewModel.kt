@@ -1,24 +1,20 @@
 package ru.radiationx.anilibria.screen.player
 
 import androidx.lifecycle.viewModelScope
+import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import ru.radiationx.anilibria.common.fragment.GuidedRouter
 import ru.radiationx.anilibria.screen.LifecycleViewModel
-import ru.radiationx.anilibria.screen.PlayerEndEpisodeGuidedScreen
-import ru.radiationx.anilibria.screen.PlayerEndSeasonGuidedScreen
-import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
-import ru.radiationx.anilibria.screen.PlayerQualityGuidedScreen
-import ru.radiationx.anilibria.screen.PlayerSettingsGuidedScreen
-import ru.radiationx.anilibria.screen.PlayerSpeedGuidedScreen
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.release.Episode
 import ru.radiationx.data.entity.domain.release.Release
+import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.HistoryRepository
 import ru.radiationx.shared.ktx.EventFlow
@@ -30,13 +26,16 @@ class PlayerViewModel @Inject constructor(
     private val releaseInteractor: ReleaseInteractor,
     private val historyRepository: HistoryRepository,
     private val preferencesHolder: PreferencesHolder,
-    private val guidedRouter: GuidedRouter,
     private val playerController: PlayerController,
+    private val router: Router,
 ) : LifecycleViewModel() {
 
     val videoData = MutableStateFlow<Video?>(null)
     val qualityState = MutableStateFlow<PlayerQuality?>(null)
     val speedState = MutableStateFlow<Float?>(null)
+    val controlsState = MutableStateFlow(PlayerControlsState())
+    val composeMenuState = MutableStateFlow(PlayerComposeMenuState())
+    val completionOverlay = MutableStateFlow<PlayerCompletionOverlay?>(null)
     val playAction = EventFlow<Boolean>()
     val settingsOverlayVisible = playerController.settingsOverlayVisible
 
@@ -45,20 +44,53 @@ class PlayerViewModel @Inject constructor(
     private var currentEpisode: Episode? = null
     private var currentQuality: PlayerQuality? = null
     private var currentComplete: Boolean? = null
-    private var pendingSeekSyncJob: Job? = null
+    private var progressSyncJob: Job? = null
     private var lastKnownPosition = 0L
     private var lastKnownDuration = 0L
+    private var progressDirty = false
+    private var syncQueued = false
+    private var syncForceRequested = false
     private var lastSyncedPosition = Long.MIN_VALUE
     private var lastSyncedDuration = Long.MIN_VALUE
     private var lastSyncedAt = 0L
-    private var heartbeatAnchorPosition = 0L
-    private var seekHeartbeatSuppressedUntil = 0L
+    private var lastPeriodicSyncAt = 0L
+    private var pendingAutoPlay = false
 
-    init {
+        init {
         playerController.reset()
         currentQuality = PlayerQuality.FULLHD
         qualityState.value = PlayerQuality.FULLHD
         speedState.value = preferencesHolder.playSpeed.value
+
+        combine(
+            combine(
+                preferencesHolder.availableSpeeds,
+                preferencesHolder.playSpeed,
+            ) { speeds, speed ->
+                speeds to speed
+            },
+            combine(
+                preferencesHolder.playerSkips,
+                preferencesHolder.playerSkipsTimer,
+                preferencesHolder.playerAutoplay,
+                preferencesHolder.playerBackBufferSeconds,
+                preferencesHolder.playerForwardBufferSeconds,
+            ) { skipsEnabled, autoSkipEnabled, autoplayEnabled, backBufferSeconds, forwardBufferSeconds ->
+                PlayerComposeSettingsState(
+                    skipsEnabled = skipsEnabled,
+                    autoSkipEnabled = autoSkipEnabled,
+                    autoplayEnabled = autoplayEnabled,
+                    backBufferSeconds = backBufferSeconds,
+                    forwardBufferSeconds = forwardBufferSeconds,
+                )
+            },
+        ) { speedPair, settings ->
+            composeMenuState.value = composeMenuState.value.copy(
+                availableSpeeds = speedPair.first,
+                selectedSpeed = speedPair.second,
+                settings = settings,
+            )
+        }.launchIn(viewModelScope)
 
         playerController
             .selectEpisodeRelay
@@ -85,6 +117,7 @@ class PlayerViewModel @Inject constructor(
                 currentQuality = it
                 updateQuality()
                 updateEpisode()
+                refreshComposeMenuState()
             }
             .launchIn(viewModelScope)
 
@@ -103,6 +136,8 @@ class PlayerViewModel @Inject constructor(
                 currentReleases = releases
                 currentEpisodes.clear()
                 currentEpisodes.addAll(releases.flatMap { it.episodes })
+                updateControlsState()
+                refreshComposeMenuState()
                 val episodeId = currentEpisode?.id ?: argExtra.episodeId
                 val episode = currentEpisodes
                     .firstOrNull { it.id == episodeId }
@@ -116,7 +151,7 @@ class PlayerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        pendingSeekSyncJob?.cancel()
+        progressSyncJob?.cancel()
         playerController.reset()
     }
 
@@ -152,40 +187,53 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun onEpisodesClick(position: Long, duration: Long) {
-        val release = getCurrentRelease() ?: return
-        val episode = currentEpisode ?: return
-        updatePlaybackSnapshot(position, duration)
-        flushProgress(force = true)
-        guidedRouter.open(PlayerEpisodesGuidedScreen(release.id, episode.id))
+    fun applyQuality(quality: PlayerQuality) {
+        preferencesHolder.playerQuality.value = quality
     }
 
-
-    fun onQualityClick(position: Long, duration: Long) {
-        val release = getCurrentRelease() ?: return
-        val episode = currentEpisode ?: return
-        updatePlaybackSnapshot(position, duration)
-        flushProgress(force = true)
-        guidedRouter.open(PlayerQualityGuidedScreen(release.id, episode.id))
+    fun applySpeed(speed: Float) {
+        preferencesHolder.playSpeed.value = speed
     }
 
-    fun onSpeedClick() {
-        val release = getCurrentRelease() ?: return
-        val episode = currentEpisode ?: return
-        guidedRouter.open(PlayerSpeedGuidedScreen(release.id, episode.id))
+    fun applyEpisode(episodeId: EpisodeId, position: Long, duration: Long) {
+        currentEpisodes
+            .firstOrNull { it.id == episodeId }
+            ?.also {
+                updatePlaybackSnapshot(position, duration)
+                if (getCurrentEpisodeIndex().let { currentIndex ->
+                        currentIndex != -1 && currentEpisodes.indexOf(it) > currentIndex
+                    }
+                ) {
+                    maybeCompleteCurrentEpisodeOnForwardSwitch()
+                }
+                flushProgress(force = true)
+                playEpisode(it, true)
+            }
     }
 
-    fun onSettingsClick(position: Long, duration: Long) {
-        val release = getCurrentRelease() ?: return
-        val episode = currentEpisode ?: return
-        updatePlaybackSnapshot(position, duration)
-        flushProgress(force = true)
-        guidedRouter.open(PlayerSettingsGuidedScreen(release.id, episode.id))
+    fun setSkipsEnabled(value: Boolean) {
+        preferencesHolder.playerSkips.value = value
+    }
+
+    fun setAutoSkipEnabled(value: Boolean) {
+        preferencesHolder.playerSkipsTimer.value = value
+    }
+
+    fun setAutoplayEnabled(value: Boolean) {
+        preferencesHolder.playerAutoplay.value = value
+    }
+
+    fun adjustBackBufferSeconds(delta: Int) {
+        preferencesHolder.playerBackBufferSeconds.value =
+            (preferencesHolder.playerBackBufferSeconds.value + delta).coerceAtLeast(0)
+    }
+
+    fun adjustForwardBufferSeconds(delta: Int) {
+        preferencesHolder.playerForwardBufferSeconds.value =
+            (preferencesHolder.playerForwardBufferSeconds.value + delta).coerceAtLeast(0)
     }
 
     fun onComplete(position: Long, duration: Long) {
-        val release = getCurrentRelease() ?: return
-        val episode = currentEpisode ?: return
         if (currentComplete == true) return
         currentComplete = true
 
@@ -193,32 +241,57 @@ class PlayerViewModel @Inject constructor(
         flushProgress(force = true)
         val nextEpisode = getNextEpisode()
         if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
-            playEpisode(nextEpisode)
+            playEpisode(nextEpisode, autoPlay = true)
         } else if (nextEpisode != null) {
-            guidedRouter.open(PlayerEndEpisodeGuidedScreen(release.id, episode.id))
+            showCompletionOverlay(hasNextEpisode = true)
         } else {
-            guidedRouter.open(PlayerEndSeasonGuidedScreen(release.id, episode.id))
+            showCompletionOverlay(hasNextEpisode = false)
+        }
+    }
+
+    fun onEndingSkipped(position: Long, duration: Long) {
+        val episode = currentEpisode ?: return
+        currentComplete = true
+        updatePlaybackSnapshot(position, duration)
+        progressDirty = false
+        syncQueued = false
+        syncForceRequested = false
+        progressSyncJob?.cancel()
+        progressSyncJob = viewModelScope.launch {
+            releaseInteractor.setAccessSeek(
+                id = episode.id,
+                serverId = episode.serverId,
+                seek = position,
+                duration = duration.takeIf { it > 0L },
+                forceViewed = true,
+            )
+            lastSyncedPosition = position
+            lastSyncedDuration = duration
+            lastSyncedAt = System.currentTimeMillis()
+            lastPeriodicSyncAt = lastSyncedAt
         }
     }
 
     fun onPrepare(duration: Long) {
         lastKnownDuration = duration
-        val release = getCurrentRelease() ?: return
         val episode = currentEpisode ?: return
         viewModelScope.launch {
             val access = releaseInteractor.getAccess(episode.id)
             val complete = access?.isViewed == true
             if (currentComplete == complete) return@launch
             currentComplete = complete
+            if (pendingAutoPlay && !complete) {
+                pendingAutoPlay = false
+                playAction.emit(true)
+                return@launch
+            }
             if (complete) {
+                pendingAutoPlay = false
                 playAction.emit(false)
                 val nextEpisode = getNextEpisode()
-                if (nextEpisode == null) {
-                    guidedRouter.open(PlayerEndSeasonGuidedScreen(release.id, episode.id))
-                } else {
-                    guidedRouter.open(PlayerEndEpisodeGuidedScreen(release.id, episode.id))
-                }
+                showCompletionOverlay(hasNextEpisode = nextEpisode != null)
             } else {
+                pendingAutoPlay = false
                 playAction.emit(true)
             }
         }
@@ -242,10 +315,7 @@ class PlayerViewModel @Inject constructor(
             return
         }
         val now = System.currentTimeMillis()
-        if (now < seekHeartbeatSuppressedUntil) {
-            return
-        }
-        if (kotlin.math.abs(position - heartbeatAnchorPosition) >= HEARTBEAT_STEP_MS) {
+        if (progressDirty && now - lastPeriodicSyncAt >= PERIODIC_SYNC_MS) {
             flushProgress()
         }
     }
@@ -255,40 +325,57 @@ class PlayerViewModel @Inject constructor(
             return
         }
         updatePlaybackSnapshot(position, duration)
-        seekHeartbeatSuppressedUntil = System.currentTimeMillis() + SEEK_DEBOUNCE_MS
-        pendingSeekSyncJob?.cancel()
-        pendingSeekSyncJob = viewModelScope.launch {
-            delay(SEEK_DEBOUNCE_MS)
-            flushProgress()
-        }
     }
 
     private fun flushProgress(force: Boolean = false) {
-        val episode = currentEpisode ?: return
-        val position = lastKnownPosition
-        if (position < 0) {
+        if (!force && !progressDirty) {
             return
         }
-        val duration = lastKnownDuration
-        val now = System.currentTimeMillis()
-        if (!force &&
-            position == lastSyncedPosition &&
-            duration == lastSyncedDuration &&
-            now - lastSyncedAt < DUPLICATE_GUARD_MS
-        ) {
+        syncQueued = true
+        syncForceRequested = syncForceRequested || force
+        if (progressSyncJob?.isActive == true) {
             return
         }
-        pendingSeekSyncJob?.cancel()
-        lastSyncedPosition = position
-        lastSyncedDuration = duration
-        lastSyncedAt = now
-        heartbeatAnchorPosition = position
-        viewModelScope.launch {
-            releaseInteractor.setAccessSeek(episode.id, episode.serverId, position, duration)
+        progressSyncJob = viewModelScope.launch {
+            while (syncQueued) {
+                syncQueued = false
+                val episode = currentEpisode ?: break
+                val position = lastKnownPosition
+                if (position < 0) {
+                    continue
+                }
+                val duration = lastKnownDuration
+                val forceSync = syncForceRequested
+                syncForceRequested = false
+                val now = System.currentTimeMillis()
+                if (!forceSync &&
+                    !progressDirty
+                ) {
+                    continue
+                }
+                if (!forceSync &&
+                    position == lastSyncedPosition &&
+                    duration == lastSyncedDuration &&
+                    now - lastSyncedAt < DUPLICATE_GUARD_MS
+                ) {
+                    progressDirty = false
+                    lastPeriodicSyncAt = now
+                    continue
+                }
+                releaseInteractor.setAccessSeek(episode.id, episode.serverId, position, duration)
+                lastSyncedPosition = position
+                lastSyncedDuration = duration
+                lastSyncedAt = System.currentTimeMillis()
+                lastPeriodicSyncAt = lastSyncedAt
+                progressDirty = false
+            }
         }
     }
 
     private fun updatePlaybackSnapshot(position: Long, duration: Long) {
+        if (lastKnownPosition != position || lastKnownDuration != duration) {
+            progressDirty = true
+        }
         lastKnownPosition = position
         lastKnownDuration = duration
     }
@@ -308,19 +395,25 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    private fun playEpisode(episode: Episode, force: Boolean = false) {
-        pendingSeekSyncJob?.cancel()
+    private fun playEpisode(episode: Episode, force: Boolean = false, autoPlay: Boolean = false) {
+        progressSyncJob?.cancel()
+        completionOverlay.value = null
         currentEpisode = episode
         currentComplete = null
+        pendingAutoPlay = autoPlay
         lastKnownPosition = 0
         lastKnownDuration = 0
+        progressDirty = false
+        syncQueued = false
+        syncForceRequested = false
         lastSyncedPosition = Long.MIN_VALUE
         lastSyncedDuration = Long.MIN_VALUE
         lastSyncedAt = 0
-        heartbeatAnchorPosition = 0
-        seekHeartbeatSuppressedUntil = 0
+        lastPeriodicSyncAt = System.currentTimeMillis()
         updateQuality()
         updateEpisode(force)
+        updateControlsState()
+        refreshComposeMenuState()
         viewModelScope.launch {
             historyRepository.putReleaseId(episode.id.releaseId)
         }
@@ -338,8 +431,13 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val newUrl = episode.qualityInfo.getSafeUrlFor(quality)
             val access = releaseInteractor.getAccess(episode.id)
-            heartbeatAnchorPosition = access?.seek ?: 0
             lastKnownPosition = access?.seek ?: 0
+            lastKnownDuration = 0
+            progressDirty = false
+            lastSyncedPosition = lastKnownPosition
+            lastSyncedDuration = 0
+            lastSyncedAt = System.currentTimeMillis()
+            lastPeriodicSyncAt = lastSyncedAt
             val newVideo = Video(
                 url = newUrl,
                 seek = access?.seek ?: 0,
@@ -353,10 +451,158 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    private fun updateControlsState() {
+        val release = getCurrentRelease()
+        val episode = currentEpisode
+        controlsState.value = PlayerControlsState(
+            title = release?.title.orEmpty(),
+            subtitle = episode?.title.orEmpty(),
+            hasPrevious = getPrevEpisode() != null,
+            hasNext = getNextEpisode() != null,
+        )
+    }
+
+    fun playNextEpisodeFromOverlay() {
+        completionOverlay.value = null
+        getNextEpisode()?.also { nextEpisode ->
+            playEpisode(nextEpisode, force = true, autoPlay = true)
+        }
+    }
+
+    fun closePlayerFromOverlay() {
+        completionOverlay.value = null
+        router.exit()
+    }
+
+    private fun showCompletionOverlay(hasNextEpisode: Boolean) {
+        val nextEpisode = getNextEpisode()
+        completionOverlay.value = if (hasNextEpisode && nextEpisode != null) {
+            val nextEpisodeTitle = nextEpisode.title?.takeIf { it.isNotBlank() } ?: "Следующая серия"
+            PlayerCompletionOverlay(
+                type = PlayerCompletionOverlayType.END_EPISODE,
+                title = "Серия закончилась",
+                subtitle = "Следом будет: $nextEpisodeTitle",
+                nextEpisodeLabel = "Следующая серия",
+                closeLabel = "Закрыть",
+                autoAdvanceEnabled = true,
+            )
+        } else {
+            PlayerCompletionOverlay(
+                type = PlayerCompletionOverlayType.END_SEASON,
+                title = "Сезон закончился",
+                subtitle = "Следующей серии нет. Можно закрыть плеер.",
+                nextEpisodeLabel = null,
+                closeLabel = "Закрыть",
+                autoAdvanceEnabled = false,
+            )
+        }
+    }
+
+    private fun refreshComposeMenuState() {
+        val selectedQuality = qualityState.value ?: currentQuality
+        val selectedEpisodeId = currentEpisode?.id
+        composeMenuState.value = composeMenuState.value.copy(
+            qualityOptions = currentEpisode
+                ?.qualityInfo
+                ?.available
+                ?.sortedByDescending { it.ordinal }
+                ?.map {
+                    PlayerComposeQualityOption(
+                        quality = it,
+                        selected = it == selectedQuality,
+                    )
+                }
+                .orEmpty(),
+            selectedQuality = selectedQuality,
+            episodeGroups = currentReleases
+                .orEmpty()
+                .map { release ->
+                    PlayerComposeEpisodeGroup(
+                        title = release.title.orEmpty(),
+                        episodes = release.episodes.map { episode ->
+                            PlayerComposeEpisodeItem(
+                                episodeId = episode.id,
+                                title = episode.title.orEmpty(),
+                                description = if (episode.id == selectedEpisodeId) "Сейчас" else null,
+                                selected = episode.id == selectedEpisodeId,
+                            )
+                        }
+                    )
+                },
+            selectedEpisodeId = selectedEpisodeId,
+        )
+    }
+
     private companion object {
-        private const val HEARTBEAT_STEP_MS = 10_000L
-        private const val SEEK_DEBOUNCE_MS = 1_500L
+        private const val PERIODIC_SYNC_MS = 5 * 60 * 1_000L
         private const val DUPLICATE_GUARD_MS = 2_000L
         private const val NEXT_SWITCH_VIEWED_THRESHOLD = 0.8
     }
 }
+
+data class PlayerControlsState(
+    val title: String = "",
+    val subtitle: String = "",
+    val hasPrevious: Boolean = false,
+    val hasNext: Boolean = false,
+)
+
+data class PlayerComposeMenuState(
+    val qualityOptions: List<PlayerComposeQualityOption> = emptyList(),
+    val selectedQuality: PlayerQuality? = null,
+    val availableSpeeds: List<Float> = emptyList(),
+    val selectedSpeed: Float = 1f,
+    val episodeGroups: List<PlayerComposeEpisodeGroup> = emptyList(),
+    val selectedEpisodeId: EpisodeId? = null,
+    val settings: PlayerComposeSettingsState = PlayerComposeSettingsState(),
+)
+
+data class PlayerComposeQualityOption(
+    val quality: PlayerQuality,
+    val selected: Boolean,
+)
+
+data class PlayerComposeEpisodeGroup(
+    val title: String,
+    val episodes: List<PlayerComposeEpisodeItem>,
+)
+
+data class PlayerComposeEpisodeItem(
+    val episodeId: EpisodeId,
+    val title: String,
+    val description: String?,
+    val selected: Boolean,
+)
+
+data class PlayerComposeSettingsState(
+    val skipsEnabled: Boolean = true,
+    val autoSkipEnabled: Boolean = true,
+    val autoplayEnabled: Boolean = true,
+    val backBufferSeconds: Int = 0,
+    val forwardBufferSeconds: Int = 50,
+)
+
+data class PlayerStatsState(
+    val playbackStateLabel: String = "Нет данных",
+    val bitrateLabel: String = "Нет данных",
+    val videoSizeLabel: String = "Нет данных",
+    val fpsLabel: String = "Нет данных",
+    val codecLabel: String = "Нет данных",
+    val bufferLabel: String = "Нет данных",
+    val droppedFramesLabel: String = "0",
+    val rebufferCountLabel: String = "0",
+)
+
+enum class PlayerCompletionOverlayType {
+    END_EPISODE,
+    END_SEASON,
+}
+
+data class PlayerCompletionOverlay(
+    val type: PlayerCompletionOverlayType,
+    val title: String,
+    val subtitle: String,
+    val nextEpisodeLabel: String?,
+    val closeLabel: String,
+    val autoAdvanceEnabled: Boolean,
+)

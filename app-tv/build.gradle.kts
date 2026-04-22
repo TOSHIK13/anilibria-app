@@ -5,6 +5,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
 
@@ -28,6 +29,7 @@ android {
     }
 
     buildFeatures {
+        compose = true
         viewBinding = true
         buildConfig = true
     }
@@ -126,9 +128,13 @@ dependencies {
 
     implementation(libs.cicerone)
 
+    implementation(libs.androidx.tv.material)
+
     compileOnly(libs.toothpick)
     ksp(libs.toothpick.compiler)
 
+    implementation(libs.media3.session)
+    implementation(libs.media3.ui)
     implementation(libs.media3.ui.leanback)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)

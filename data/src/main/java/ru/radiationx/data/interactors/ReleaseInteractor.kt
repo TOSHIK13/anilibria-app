@@ -153,11 +153,29 @@ class ReleaseInteractor @Inject constructor(
 
     suspend fun setAccessSeek(
         id: EpisodeId,
+        seek: Long,
+        duration: Long? = null,
+        forceViewed: Boolean,
+    ) {
+        val release = getFull(releaseId = id.releaseId) ?: return
+        val episode = release.episodes.find { it.id == id } ?: return
+        episodeProgressRepository.setAccessSeek(
+            episode.id,
+            episode.serverId,
+            seek,
+            duration,
+            forceViewed = forceViewed,
+        )
+    }
+
+    suspend fun setAccessSeek(
+        id: EpisodeId,
         serverId: String,
         seek: Long,
         duration: Long? = null,
+        forceViewed: Boolean = false,
     ) {
-        episodeProgressRepository.setAccessSeek(id, serverId, seek, duration)
+        episodeProgressRepository.setAccessSeek(id, serverId, seek, duration, forceViewed)
     }
 
     suspend fun importAccess(access: EpisodeAccess) {

@@ -58,12 +58,13 @@ class EpisodeProgressRepository @Inject constructor(
         serverId: String,
         seek: Long,
         duration: Long? = null,
+        forceViewed: Boolean = false,
     ) {
         if (!ensureServerSyncAllowed()) {
             return
         }
         val current = cache.getValue()[serverId]
-        val isWatched = (current?.isWatched == true) || duration
+        val isWatched = forceViewed || (current?.isWatched == true) || duration
             ?.takeIf { it > 0 }
             ?.let { seek >= it * VIEWED_PROGRESS_THRESHOLD }
             ?: false

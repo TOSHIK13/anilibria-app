@@ -1,3 +1,5 @@
+Read `AGENTS.md` first for the canonical workflow used in this workspace.
+
 Build and copy mobile releases
 ```
 ./gradlew :app-mobile:copyAppRelease :app-mobile:copyRustoreRelease :app-mobile:copyStoreRelease
