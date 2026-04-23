@@ -9,9 +9,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,7 +41,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,10 +78,73 @@ fun PlayerSubmenuSheet(
     onSetAutoSkipEnabled: (Boolean) -> Unit,
     onSetAutoplayEnabled: (Boolean) -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .width(360.dp)
-            .heightIn(max = 380.dp)
+    val entries = remember(submenu, state, stats) {
+        buildSubmenuEntries(
+            submenu = submenu,
+            state = state,
+            stats = stats,
+            onQualitySelected = onQualitySelected,
+            onSpeedSelected = onSpeedSelected,
+            onEpisodeSelected = onEpisodeSelected,
+            onSetSkipsEnabled = onSetSkipsEnabled,
+            onSetAutoSkipEnabled = onSetAutoSkipEnabled,
+            onSetAutoplayEnabled = onSetAutoplayEnabled,
+        )
+    }
+    val listState = rememberLazyListState()
+    val panelFocusRequester = remember { FocusRequester() }
+    var selectedIndex by remember(submenu) { mutableIntStateOf(entries.firstSelectableIndex()) }
+    var panelFocused by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+
+    LaunchedEffect(submenu) {
+        panelFocusRequester.requestFocusSafely()
+        selectedIndex = entries.firstSelectableIndex()
+        if (selectedIndex in entries.indices) {
+            listState.scrollToItem(selectedIndex)
+        }
+    }
+
+    LaunchedEffect(entries) {
+        if (entries.isEmpty()) {
+            selectedIndex = 0
+            return@LaunchedEffect
+        }
+        selectedIndex = when {
+            selectedIndex !in entries.indices -> entries.firstSelectableIndex()
+            entries[selectedIndex] is PlayerSubmenuEntry.Row -> selectedIndex
+            else -> entries.findNextSelectable(selectedIndex).takeIf { it != selectedIndex }
+                ?: entries.findPreviousSelectable(selectedIndex)
+        }
+    }
+
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex in entries.indices) {
+            listState.animateScrollToItem(selectedIndex)
+        }
+    }
+
+    LaunchedEffect(scrollCommand.token) {
+        if (scrollCommand.token != 0L && scrollCommand.deltaPx != 0f) {
+            listState.scrollBy(scrollCommand.deltaPx)
+        }
+    }
+
+    BoxWithConstraints(modifier = modifier) {
+        val panelWidth = entries.calculatePanelWidth(
+            headerTitle = submenu.title,
+            textMeasurer = textMeasurer,
+            density = density,
+            maxAvailableWidth = maxWidth,
+        )
+        val panelHeight = entries.calculatePanelHeight(maxAvailableHeight = maxHeight)
+        val listHeight = (panelHeight - PANEL_CHROME_HEIGHT).coerceAtLeast(0.dp)
+
+        Box(
+            modifier = Modifier
+            .width(panelWidth)
+            .height(panelHeight)
             .clip(RoundedCornerShape(26.dp))
             .background(Color(0xF4171717))
             .border(
@@ -83,195 +152,191 @@ fun PlayerSubmenuSheet(
                 brush = SolidColor(Color(0x2AFFFFFF)),
                 shape = RoundedCornerShape(26.dp),
             )
+            .focusRequester(panelFocusRequester)
+            .onFocusChanged { panelFocused = it.isFocused }
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                when (event.key) {
+                    Key.DirectionUp -> {
+                        selectedIndex = entries.findPreviousSelectable(selectedIndex)
+                        true
+                    }
+
+                    Key.DirectionDown -> {
+                        selectedIndex = entries.findNextSelectable(selectedIndex)
+                        true
+                    }
+
+                    Key.DirectionLeft,
+                    Key.DirectionRight -> true
+
+                    Key.DirectionCenter,
+                    Key.Enter,
+                    Key.NumPadEnter -> {
+                        (entries.getOrNull(selectedIndex) as? PlayerSubmenuEntry.Row)?.onClick?.invoke()
+                        true
+                    }
+
+                    else -> false
+                }
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
             ) {}
             .padding(horizontal = 16.dp, vertical = 16.dp)
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = submenu.title,
-                color = Color.White,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            when (submenu) {
-                PlayerSubmenuType.QUALITY -> {
-                    QualitySubmenu(
-                        state = state,
-                        onQualitySelected = onQualitySelected,
-                    )
-                }
-
-                PlayerSubmenuType.SPEED -> {
-                    SpeedSubmenu(
-                        state = state,
-                        onSpeedSelected = onSpeedSelected,
-                    )
-                }
-
-                PlayerSubmenuType.EPISODES -> {
-                    EpisodesSubmenu(
-                        state = state,
-                        scrollCommand = scrollCommand,
-                        onEpisodeSelected = onEpisodeSelected,
-                    )
-                }
-
-                PlayerSubmenuType.SETTINGS -> {
-                    SettingsSubmenu(
-                        settings = state.settings,
-                        onSetSkipsEnabled = onSetSkipsEnabled,
-                        onSetAutoSkipEnabled = onSetAutoSkipEnabled,
-                        onSetAutoplayEnabled = onSetAutoplayEnabled,
-                    )
-                }
-
-                PlayerSubmenuType.STATS -> {
-                    StatsSubmenu(
-                        stats = stats,
-                        scrollCommand = scrollCommand,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun QualitySubmenu(
-    state: PlayerComposeMenuState,
-    onQualitySelected: (PlayerQuality) -> Unit,
-) {
-    val initialFocusRequester = remember { FocusRequester() }
-    val selectedIndex = state.qualityOptions.indexOfFirst { it.selected }.coerceAtLeast(0)
-    LaunchedEffect(state.selectedQuality, state.qualityOptions) {
-        initialFocusRequester.requestFocusSafely()
-    }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        state.qualityOptions.forEachIndexed { index, option ->
-            SubmenuOptionRow(
-                modifier = if (index == selectedIndex) Modifier.focusRequester(initialFocusRequester) else Modifier,
-                selected = option.selected,
-                iconRes = option.quality.toSubmenuIconRes(),
-                title = option.quality.toQualityLabel(),
-                onClick = { onQualitySelected(option.quality) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun SpeedSubmenu(
-    state: PlayerComposeMenuState,
-    onSpeedSelected: (Float) -> Unit,
-) {
-    val initialFocusRequester = remember { FocusRequester() }
-    val selectedIndex = state.availableSpeeds.indexOf(state.selectedSpeed).coerceAtLeast(0)
-    LaunchedEffect(state.selectedSpeed, state.availableSpeeds) {
-        initialFocusRequester.requestFocusSafely()
-    }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        state.availableSpeeds.forEachIndexed { index, speed ->
-            SubmenuOptionRow(
-                modifier = if (index == selectedIndex) Modifier.focusRequester(initialFocusRequester) else Modifier,
-                selected = speed == state.selectedSpeed,
-                title = speed.toSpeedLabel(),
-                subtitle = if (speed == 1f) "Стандартная" else null,
-                onClick = { onSpeedSelected(speed) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun EpisodesSubmenu(
-    state: PlayerComposeMenuState,
-    scrollCommand: SubmenuScrollCommand,
-    onEpisodeSelected: (EpisodeId) -> Unit,
-) {
-    val initialFocusRequester = remember { FocusRequester() }
-    val listState = rememberLazyListState()
-    val flatEpisodes = state.episodeGroups.flatMap { it.episodes }
-    val firstSelectedIndex = flatEpisodes.indexOfFirst { it.selected }.coerceAtLeast(0)
-    LaunchedEffect(state.selectedEpisodeId, state.episodeGroups) {
-        initialFocusRequester.requestFocusSafely()
-    }
-    LaunchedEffect(scrollCommand.token) {
-        if (scrollCommand.token != 0L && scrollCommand.deltaPx != 0f) {
-            listState.scrollBy(scrollCommand.deltaPx)
-        }
-    }
-
-    LazyColumn(
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        state.episodeGroups.forEach { group ->
-            item {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(
-                    text = group.title,
-                    color = Color(0xFF8C8C8C),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp, start = 2.dp)
+                    text = submenu.title,
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
                 )
-            }
-            itemsIndexed(group.episodes) { index, episode ->
-                val globalIndex = flatEpisodes.indexOfFirst { it.episodeId == episode.episodeId }
-                val isInitialFocus = if (firstSelectedIndex >= 0) {
-                    globalIndex == firstSelectedIndex
-                } else {
-                    index == 0
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.height(listHeight),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    itemsIndexed(entries) { index, entry ->
+                        when (entry) {
+                            is PlayerSubmenuEntry.GroupHeader -> {
+                                Text(
+                                    text = entry.title,
+                                    color = Color(0xFF8C8C8C),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 2.dp, start = 2.dp)
+                                )
+                            }
+
+                            is PlayerSubmenuEntry.Row -> {
+                                SubmenuOptionRow(
+                                    title = entry.title,
+                                    subtitle = entry.subtitle,
+                                    iconRes = entry.iconRes,
+                                    selected = entry.selected,
+                                    wrapTitle = entry.wrapTitle,
+                                    highlighted = panelFocused && index == selectedIndex,
+                                    showSelectedIndicator = entry.showSelectedIndicator,
+                                    onClick = {
+                                        selectedIndex = index
+                                        entry.onClick?.invoke()
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
-                SubmenuOptionRow(
-                    modifier = if (isInitialFocus) Modifier.focusRequester(initialFocusRequester) else Modifier,
-                    selected = episode.selected,
-                    title = episode.title,
-                    subtitle = episode.description,
-                    onClick = { onEpisodeSelected(episode.episodeId) },
-                )
             }
         }
     }
 }
 
-@Composable
-private fun SettingsSubmenu(
-    settings: PlayerComposeSettingsState,
+private sealed interface PlayerSubmenuEntry {
+    val selectedOrDefault: Boolean
+
+    data class GroupHeader(
+        val title: String,
+    ) : PlayerSubmenuEntry {
+        override val selectedOrDefault: Boolean = false
+    }
+
+    data class Row(
+        val title: String,
+        val subtitle: String? = null,
+        val iconRes: Int? = null,
+        val selected: Boolean = false,
+        val wrapTitle: Boolean = false,
+        val showSelectedIndicator: Boolean = true,
+        val onClick: (() -> Unit)? = null,
+    ) : PlayerSubmenuEntry {
+        override val selectedOrDefault: Boolean = selected
+    }
+}
+
+private fun buildSubmenuEntries(
+    submenu: PlayerSubmenuType,
+    state: PlayerComposeMenuState,
+    stats: PlayerStatsState,
+    onQualitySelected: (PlayerQuality) -> Unit,
+    onSpeedSelected: (Float) -> Unit,
+    onEpisodeSelected: (EpisodeId) -> Unit,
     onSetSkipsEnabled: (Boolean) -> Unit,
     onSetAutoSkipEnabled: (Boolean) -> Unit,
     onSetAutoplayEnabled: (Boolean) -> Unit,
-) {
-    val initialFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(settings) {
-        initialFocusRequester.requestFocusSafely()
-    }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        ToggleOptionRow(
-            modifier = Modifier.focusRequester(initialFocusRequester),
-            title = "Пропуски",
-            selected = settings.skipsEnabled,
-            onClick = { onSetSkipsEnabled(!settings.skipsEnabled) },
+): List<PlayerSubmenuEntry> {
+    return when (submenu) {
+        PlayerSubmenuType.QUALITY -> state.qualityOptions.map { option ->
+            PlayerSubmenuEntry.Row(
+                title = option.quality.toQualityLabel(),
+                iconRes = option.quality.toSubmenuIconRes(),
+                selected = option.selected,
+                onClick = { onQualitySelected(option.quality) },
+            )
+        }
+
+        PlayerSubmenuType.SPEED -> state.availableSpeeds.map { speed ->
+            PlayerSubmenuEntry.Row(
+                title = speed.toSpeedLabel(),
+                subtitle = if (speed == 1f) "Стандартная" else null,
+                selected = speed == state.selectedSpeed,
+                onClick = { onSpeedSelected(speed) },
+            )
+        }
+
+        PlayerSubmenuType.EPISODES -> buildList {
+            state.episodeGroups.forEach { group ->
+                add(PlayerSubmenuEntry.GroupHeader(group.title))
+                group.episodes.forEach { episode ->
+                    add(
+                        PlayerSubmenuEntry.Row(
+                            title = episode.title,
+                            subtitle = episode.description,
+                            selected = episode.selected,
+                            wrapTitle = true,
+                            onClick = { onEpisodeSelected(episode.episodeId) },
+                        )
+                    )
+                }
+            }
+        }
+
+        PlayerSubmenuType.SETTINGS -> listOf(
+            PlayerSubmenuEntry.Row(
+                title = "Пропуски",
+                subtitle = if (state.settings.skipsEnabled) "Включено" else "Выключено",
+                selected = state.settings.skipsEnabled,
+                onClick = { onSetSkipsEnabled(!state.settings.skipsEnabled) },
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Автопропуск",
+                subtitle = if (state.settings.autoSkipEnabled) "Включено" else "Выключено",
+                selected = state.settings.autoSkipEnabled,
+                onClick = { onSetAutoSkipEnabled(!state.settings.autoSkipEnabled) },
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Следующая серия",
+                subtitle = if (state.settings.autoplayEnabled) "Включено" else "Выключено",
+                selected = state.settings.autoplayEnabled,
+                onClick = { onSetAutoplayEnabled(!state.settings.autoplayEnabled) },
+            ),
         )
-        ToggleOptionRow(
-            title = "Автопропуск",
-            selected = settings.autoSkipEnabled,
-            onClick = { onSetAutoSkipEnabled(!settings.autoSkipEnabled) },
-        )
-        ToggleOptionRow(
-            title = "Следующая серия",
-            selected = settings.autoplayEnabled,
-            onClick = { onSetAutoplayEnabled(!settings.autoplayEnabled) },
+
+        PlayerSubmenuType.STATS -> listOf(
+            PlayerSubmenuEntry.Row("Состояние", stats.playbackStateLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("Битрейт", stats.bitrateLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("Видео", stats.videoSizeLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("FPS", stats.fpsLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("Кодек", stats.codecLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("Буфер", stats.bufferLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("Потеряно кадров", stats.droppedFramesLabel, showSelectedIndicator = false),
+            PlayerSubmenuEntry.Row("Ребуферов", stats.rebufferCountLabel, showSelectedIndicator = false),
         )
     }
 }
@@ -279,45 +344,34 @@ private fun SettingsSubmenu(
 @Composable
 private fun SubmenuOptionRow(
     title: String,
-    modifier: Modifier = Modifier,
-    selected: Boolean,
-    iconRes: Int? = null,
     subtitle: String? = null,
+    iconRes: Int? = null,
+    selected: Boolean,
+    wrapTitle: Boolean,
+    highlighted: Boolean,
+    showSelectedIndicator: Boolean,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
     val background = when {
-        focused -> Color(0xFFFE3635)
+        highlighted -> Color(0xFFFE3635)
         selected -> Color(0xFF2A2A2A)
         else -> Color(0xFF1F1F1F)
     }
     val borderColor = when {
-        focused -> Color(0x66FFFFFF)
+        highlighted -> Color(0x66FFFFFF)
         selected -> Color(0x33FFFFFF)
         else -> Color.Transparent
     }
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(background)
             .border(
-                width = if (focused || selected) 1.dp else 0.dp,
+                width = if (highlighted || selected) 1.dp else 0.dp,
                 brush = SolidColor(borderColor),
                 shape = RoundedCornerShape(18.dp),
             )
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -352,7 +406,7 @@ private fun SubmenuOptionRow(
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
+                maxLines = if (wrapTitle) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
             subtitle?.let {
@@ -365,7 +419,7 @@ private fun SubmenuOptionRow(
                 )
             }
         }
-        if (selected) {
+        if (showSelectedIndicator && selected) {
             Box(
                 modifier = Modifier
                     .size(8.dp)
@@ -376,77 +430,106 @@ private fun SubmenuOptionRow(
     }
 }
 
-@Composable
-private fun ToggleOptionRow(
-    title: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    SubmenuOptionRow(
-        modifier = modifier,
-        title = title,
-        subtitle = if (selected) "Включено" else "Выключено",
-        selected = selected,
-        onClick = onClick,
-    )
-}
-
-@Composable
-private fun StatsSubmenu(
-    stats: PlayerStatsState,
-    scrollCommand: SubmenuScrollCommand,
-) {
-    val listState = rememberLazyListState()
-    LaunchedEffect(scrollCommand.token) {
-        if (scrollCommand.token != 0L && scrollCommand.deltaPx != 0f) {
-            listState.scrollBy(scrollCommand.deltaPx)
+private fun List<PlayerSubmenuEntry>.findPreviousSelectable(currentIndex: Int): Int {
+    for (index in (currentIndex - 1) downTo 0) {
+        if (this[index] is PlayerSubmenuEntry.Row) {
+            return index
         }
     }
-    LazyColumn(
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        item { StatsRow("Состояние", stats.playbackStateLabel) }
-        item { StatsRow("Битрейт", stats.bitrateLabel) }
-        item { StatsRow("Видео", stats.videoSizeLabel) }
-        item { StatsRow("FPS", stats.fpsLabel) }
-        item { StatsRow("Кодек", stats.codecLabel) }
-        item { StatsRow("Буфер", stats.bufferLabel) }
-        item { StatsRow("Потеряно кадров", stats.droppedFramesLabel) }
-        item { StatsRow("Ребуферов", stats.rebufferCountLabel) }
-    }
+    return currentIndex
 }
 
-@Composable
-private fun StatsRow(
-    label: String,
-    value: String,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1F1F1F))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            color = Color(0xFFBDBDBD),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-        )
-        Text(
-            text = value,
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+private fun List<PlayerSubmenuEntry>.findNextSelectable(currentIndex: Int): Int {
+    for (index in (currentIndex + 1) until size) {
+        if (this[index] is PlayerSubmenuEntry.Row) {
+            return index
+        }
     }
+    return currentIndex
+}
+
+private fun List<PlayerSubmenuEntry>.firstSelectableIndex(): Int {
+    return indexOfFirst { it is PlayerSubmenuEntry.Row }
+        .takeIf { it >= 0 }
+        ?: 0
+}
+
+private fun List<PlayerSubmenuEntry>.calculatePanelWidth(
+    headerTitle: String,
+    textMeasurer: androidx.compose.ui.text.TextMeasurer,
+    density: androidx.compose.ui.unit.Density,
+    maxAvailableWidth: Dp,
+): Dp {
+    val headerWidth = density.run {
+        textMeasurer.measure(
+            text = headerTitle,
+            style = TextStyle(
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        ).size.width.toDp()
+    }
+    val contentWidth = maxOfOrNull { entry ->
+        when (entry) {
+            is PlayerSubmenuEntry.GroupHeader -> {
+                density.run {
+                    textMeasurer.measure(
+                        text = entry.title,
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    ).size.width.toDp()
+                } + 12.dp
+            }
+
+            is PlayerSubmenuEntry.Row -> {
+                val titleWidth = density.run {
+                    textMeasurer.measure(
+                        text = entry.title,
+                        style = TextStyle(
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    ).size.width.toDp()
+                }
+                val subtitleWidth = entry.subtitle?.let { subtitle ->
+                    density.run {
+                        textMeasurer.measure(
+                            text = subtitle,
+                            style = TextStyle(fontSize = 12.sp),
+                        ).size.width.toDp()
+                    }
+                } ?: 0.dp
+                val leadingWidth = if (entry.iconRes != null) 48.dp else 0.dp
+                val trailingWidth = if (entry.showSelectedIndicator) 18.dp else 0.dp
+                28.dp + leadingWidth + maxOf(titleWidth, subtitleWidth) + trailingWidth
+            }
+        }
+    } ?: 0.dp
+    val preferredWidth = maxOf(headerWidth, contentWidth) + 32.dp
+    val boundedMaxWidth = maxAvailableWidth.coerceAtMost(520.dp)
+    return preferredWidth.coerceIn(172.dp, boundedMaxWidth)
+}
+
+private fun List<PlayerSubmenuEntry>.calculatePanelHeight(
+    maxAvailableHeight: Dp,
+): Dp {
+    val rowsHeight = fold(0.dp) { acc, entry ->
+        acc + when (entry) {
+            is PlayerSubmenuEntry.GroupHeader -> 20.dp
+            is PlayerSubmenuEntry.Row -> when {
+                entry.wrapTitle && entry.subtitle != null -> 88.dp
+                entry.wrapTitle -> 76.dp
+                entry.subtitle != null -> 64.dp
+                else -> 56.dp
+            }
+        }
+    }
+    val spacingHeight = if (isEmpty()) 0.dp else ((size - 1) * 8).dp
+    val preferredHeight = PANEL_CHROME_HEIGHT + rowsHeight + spacingHeight
+    val boundedMaxHeight = maxAvailableHeight.coerceAtMost(430.dp)
+    return preferredHeight.coerceIn(132.dp, boundedMaxHeight)
 }
 
 private fun PlayerQuality.toSubmenuIconRes(): Int {
@@ -479,3 +562,5 @@ private fun FocusRequester.requestFocusSafely() {
         requestFocus()
     }
 }
+
+private val PANEL_CHROME_HEIGHT = 72.dp

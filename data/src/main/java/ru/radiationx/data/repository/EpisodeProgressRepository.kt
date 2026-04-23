@@ -64,10 +64,7 @@ class EpisodeProgressRepository @Inject constructor(
             return
         }
         val current = cache.getValue()[serverId]
-        val isWatched = forceViewed || (current?.isWatched == true) || duration
-            ?.takeIf { it > 0 }
-            ?.let { seek >= it * VIEWED_PROGRESS_THRESHOLD }
-            ?: false
+        val isWatched = forceViewed || (current?.isWatched == true)
         val request = ViewTimecodeUpdateRequest(
             time = seek.toDouble() / 1000.0,
             isWatched = isWatched,
@@ -249,8 +246,6 @@ class EpisodeProgressRepository @Inject constructor(
     }
 
     private companion object {
-        private const val VIEWED_PROGRESS_THRESHOLD = 0.95
-
         private fun createDateFormat() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }

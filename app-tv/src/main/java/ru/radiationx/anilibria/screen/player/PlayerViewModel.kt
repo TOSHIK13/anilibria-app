@@ -1,9 +1,10 @@
 package ru.radiationx.anilibria.screen.player
 
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
@@ -16,6 +17,7 @@ import ru.radiationx.data.entity.domain.release.Episode
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.interactors.ReleaseInteractor
+import ru.radiationx.data.player.EpisodePlaybackRules
 import ru.radiationx.data.repository.HistoryRepository
 import ru.radiationx.shared.ktx.EventFlow
 import ru.radiationx.shared.ktx.coRunCatching
@@ -43,20 +45,21 @@ class PlayerViewModel @Inject constructor(
     private var currentReleases: List<Release>? = null
     private var currentEpisode: Episode? = null
     private var currentQuality: PlayerQuality? = null
-    private var currentComplete: Boolean? = null
+    private var watchedReached = false
+    private var watchedSynced = false
+    private var completionHandled = false
     private var progressSyncJob: Job? = null
+    private var episodeTransitionJob: Job? = null
     private var lastKnownPosition = 0L
     private var lastKnownDuration = 0L
     private var progressDirty = false
-    private var syncQueued = false
-    private var syncForceRequested = false
     private var lastSyncedPosition = Long.MIN_VALUE
     private var lastSyncedDuration = Long.MIN_VALUE
     private var lastSyncedAt = 0L
     private var lastPeriodicSyncAt = 0L
     private var pendingAutoPlay = false
 
-        init {
+    init {
         playerController.reset()
         currentQuality = PlayerQuality.FULLHD
         qualityState.value = PlayerQuality.FULLHD
@@ -98,14 +101,7 @@ class PlayerViewModel @Inject constructor(
                 currentEpisodes
                     .firstOrNull { it.id == episodeId }
                     ?.also {
-                        if (getCurrentEpisodeIndex().let { currentIndex ->
-                                currentIndex != -1 && currentEpisodes.indexOf(it) > currentIndex
-                            }
-                        ) {
-                            maybeCompleteCurrentEpisodeOnForwardSwitch()
-                            flushProgress(force = true)
-                        }
-                        playEpisode(it, true)
+                        transitionToEpisode(it, reason = "controller_select", force = true)
                     }
             }
             .launchIn(viewModelScope)
@@ -152,6 +148,7 @@ class PlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         progressSyncJob?.cancel()
+        episodeTransitionJob?.cancel()
         playerController.reset()
     }
 
@@ -162,28 +159,25 @@ class PlayerViewModel @Inject constructor(
 
     fun onPauseClick(position: Long, duration: Long) {
         updatePlaybackSnapshot(position, duration)
-        flushProgress(force = true)
+        launchImmediateEpisodeSync(reason = "pause")
     }
 
     fun onStopClick(position: Long, duration: Long) {
         updatePlaybackSnapshot(position, duration)
-        flushProgress(force = true)
+        launchImmediateEpisodeSync(reason = "stop")
     }
 
     fun onNextClick(position: Long, duration: Long) {
         getNextEpisode()?.also {
             updatePlaybackSnapshot(position, duration)
-            maybeCompleteCurrentEpisodeOnForwardSwitch()
-            flushProgress(force = true)
-            playEpisode(it)
+            transitionToEpisode(it, reason = "next_click")
         }
     }
 
     fun onPrevClick(position: Long, duration: Long) {
         getPrevEpisode()?.also {
             updatePlaybackSnapshot(position, duration)
-            flushProgress(force = true)
-            playEpisode(it)
+            transitionToEpisode(it, reason = "prev_click")
         }
     }
 
@@ -200,14 +194,7 @@ class PlayerViewModel @Inject constructor(
             .firstOrNull { it.id == episodeId }
             ?.also {
                 updatePlaybackSnapshot(position, duration)
-                if (getCurrentEpisodeIndex().let { currentIndex ->
-                        currentIndex != -1 && currentEpisodes.indexOf(it) > currentIndex
-                    }
-                ) {
-                    maybeCompleteCurrentEpisodeOnForwardSwitch()
-                }
-                flushProgress(force = true)
-                playEpisode(it, true)
+                transitionToEpisode(it, reason = "episode_select", force = true)
             }
     }
 
@@ -234,65 +221,82 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun onComplete(position: Long, duration: Long) {
-        if (currentComplete == true) return
-        currentComplete = true
-
         updatePlaybackSnapshot(position, duration)
-        flushProgress(force = true)
-        val nextEpisode = getNextEpisode()
-        if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
-            playEpisode(nextEpisode, autoPlay = true)
-        } else if (nextEpisode != null) {
-            showCompletionOverlay(hasNextEpisode = true)
-        } else {
-            showCompletionOverlay(hasNextEpisode = false)
-        }
+        handleEpisodeCompletion("complete")
     }
 
     fun onEndingSkipped(position: Long, duration: Long) {
-        val episode = currentEpisode ?: return
-        currentComplete = true
         updatePlaybackSnapshot(position, duration)
-        progressDirty = false
-        syncQueued = false
-        syncForceRequested = false
-        progressSyncJob?.cancel()
-        progressSyncJob = viewModelScope.launch {
-            releaseInteractor.setAccessSeek(
-                id = episode.id,
-                serverId = episode.serverId,
-                seek = position,
-                duration = duration.takeIf { it > 0L },
-                forceViewed = true,
-            )
-            lastSyncedPosition = position
-            lastSyncedDuration = duration
-            lastSyncedAt = System.currentTimeMillis()
-            lastPeriodicSyncAt = lastSyncedAt
-        }
+        markWatchedIfNeeded(reason = "ending_skip")
+        launchImmediateEpisodeSync(reason = "ending_skip")
     }
 
     fun onPrepare(duration: Long) {
-        lastKnownDuration = duration
-        val episode = currentEpisode ?: return
+        if (duration > 0L) {
+            lastKnownDuration = duration
+        }
+        if (currentEpisode == null) {
+            return
+        }
         viewModelScope.launch {
-            val access = releaseInteractor.getAccess(episode.id)
-            val complete = access?.isViewed == true
-            if (currentComplete == complete) return@launch
-            currentComplete = complete
-            if (pendingAutoPlay && !complete) {
-                pendingAutoPlay = false
-                playAction.emit(true)
-                return@launch
-            }
-            if (complete) {
-                pendingAutoPlay = false
-                playAction.emit(false)
-                val nextEpisode = getNextEpisode()
-                showCompletionOverlay(hasNextEpisode = nextEpisode != null)
-            } else {
-                pendingAutoPlay = false
-                playAction.emit(true)
+            val autoPlay = pendingAutoPlay
+            pendingAutoPlay = false
+            Log.d(TAG, "prepare episode=${currentEpisode?.id} duration=$lastKnownDuration autoPlay=$autoPlay watched=$watchedReached")
+            playAction.emit(true)
+        }
+    }
+
+    fun onPlaybackProgress(position: Long, duration: Long, isPlaying: Boolean) {
+        if (position < 0) {
+            return
+        }
+        updatePlaybackSnapshot(position, duration)
+        markWatchedIfNeeded(reason = "progress")
+        if (isEpisodeActuallyFinished(lastKnownPosition, lastKnownDuration)) {
+            handleEpisodeCompletion("progress")
+            return
+        }
+        if (!isPlaying || completionHandled) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (progressDirty && now - lastPeriodicSyncAt >= PERIODIC_SYNC_MS) {
+            scheduleEpisodeSync(reason = "periodic")
+        }
+    }
+
+    fun onSeek(position: Long, duration: Long) {
+        if (position < 0) {
+            return
+        }
+        updatePlaybackSnapshot(position, duration)
+    }
+
+    private fun handleEpisodeCompletion(source: String) {
+        if (completionHandled) {
+            return
+        }
+        completionHandled = true
+        markWatchedIfNeeded(reason = "completion:$source", force = true)
+        Log.d(TAG, "end source=$source episode=${currentEpisode?.id} position=$lastKnownPosition duration=$lastKnownDuration watched=$watchedReached")
+        val nextEpisode = getNextEpisode()
+        if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
+            Log.d(TAG, "auto-next episode=${currentEpisode?.id} -> ${nextEpisode.id}")
+            transitionToEpisode(
+                episode = nextEpisode,
+                reason = "auto_next:$source",
+                force = true,
+                autoPlay = true,
+            )
+        } else {
+            viewModelScope.launch {
+                syncCurrentEpisodeNow(force = true, reason = "completion:$source")
+                if (nextEpisode == null) {
+                    Log.d(TAG, "season-end episode=${currentEpisode?.id}")
+                    showSeasonCompletionOverlay()
+                } else {
+                    Log.d(TAG, "auto-next-disabled episode=${currentEpisode?.id}")
+                }
             }
         }
     }
@@ -306,106 +310,166 @@ class PlayerViewModel @Inject constructor(
     private fun getCurrentEpisodeIndex(): Int =
         currentEpisodes.indexOfFirst { it.id == currentEpisode?.id }
 
-    fun onPlaybackProgress(position: Long, duration: Long, isPlaying: Boolean) {
-        if (position < 0) {
-            return
-        }
-        updatePlaybackSnapshot(position, duration)
-        if (!isPlaying || currentComplete == true) {
-            return
-        }
-        val now = System.currentTimeMillis()
-        if (progressDirty && now - lastPeriodicSyncAt >= PERIODIC_SYNC_MS) {
-            flushProgress()
-        }
-    }
 
-    fun onSeek(position: Long, duration: Long) {
-        if (position < 0) {
-            return
-        }
-        updatePlaybackSnapshot(position, duration)
-    }
-
-    private fun flushProgress(force: Boolean = false) {
-        if (!force && !progressDirty) {
-            return
-        }
-        syncQueued = true
-        syncForceRequested = syncForceRequested || force
+    private fun scheduleEpisodeSync(reason: String) {
         if (progressSyncJob?.isActive == true) {
             return
         }
         progressSyncJob = viewModelScope.launch {
-            while (syncQueued) {
-                syncQueued = false
-                val episode = currentEpisode ?: break
-                val position = lastKnownPosition
-                if (position < 0) {
-                    continue
+            sendCurrentEpisodeSync(force = false, reason = reason)
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (progressSyncJob === job) {
+                    progressSyncJob = null
                 }
-                val duration = lastKnownDuration
-                val forceSync = syncForceRequested
-                syncForceRequested = false
-                val now = System.currentTimeMillis()
-                if (!forceSync &&
-                    !progressDirty
-                ) {
-                    continue
-                }
-                if (!forceSync &&
-                    position == lastSyncedPosition &&
-                    duration == lastSyncedDuration &&
-                    now - lastSyncedAt < DUPLICATE_GUARD_MS
-                ) {
-                    progressDirty = false
-                    lastPeriodicSyncAt = now
-                    continue
-                }
-                releaseInteractor.setAccessSeek(episode.id, episode.serverId, position, duration)
-                lastSyncedPosition = position
-                lastSyncedDuration = duration
-                lastSyncedAt = System.currentTimeMillis()
-                lastPeriodicSyncAt = lastSyncedAt
-                progressDirty = false
             }
         }
     }
 
     private fun updatePlaybackSnapshot(position: Long, duration: Long) {
-        if (lastKnownPosition != position || lastKnownDuration != duration) {
+        val snapshot = normalizePlaybackSnapshot(position, duration)
+        if ((lastKnownPosition != snapshot.positionMs || lastKnownDuration != snapshot.durationMs) &&
+            !(watchedReached && watchedSynced)
+        ) {
             progressDirty = true
         }
-        lastKnownPosition = position
-        lastKnownDuration = duration
+        lastKnownPosition = snapshot.positionMs
+        lastKnownDuration = snapshot.durationMs
     }
 
-    private fun maybeCompleteCurrentEpisodeOnForwardSwitch() {
-        if (currentComplete == true) {
+    private fun launchImmediateEpisodeSync(reason: String) {
+        viewModelScope.launch {
+            syncCurrentEpisodeNow(force = true, reason = reason)
+        }
+    }
+
+    private fun transitionToEpisode(
+        episode: Episode,
+        reason: String,
+        force: Boolean = false,
+        autoPlay: Boolean = false,
+    ) {
+        if (episodeTransitionJob?.isActive == true) {
+            return
+        }
+        episodeTransitionJob = viewModelScope.launch {
+            markWatchedIfNeeded(reason = reason)
+            syncCurrentEpisodeNow(force = true, reason = reason)
+            playEpisode(episode, force = force, autoPlay = autoPlay)
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (episodeTransitionJob === job) {
+                    episodeTransitionJob = null
+                }
+            }
+        }
+    }
+
+    private suspend fun syncCurrentEpisodeNow(force: Boolean, reason: String) {
+        progressSyncJob?.cancelAndJoin()
+        progressSyncJob = null
+        sendCurrentEpisodeSync(force = force, reason = reason)
+    }
+
+    private suspend fun sendCurrentEpisodeSync(force: Boolean, reason: String) {
+        val episode = currentEpisode ?: return
+        val position = lastKnownPosition
+        if (position < 0L) {
             return
         }
         val duration = lastKnownDuration
-        if (duration <= 0L) {
+        val sendWatched = watchedReached && !watchedSynced
+        val sendProgress = !watchedReached
+        if (!force && !progressDirty && !sendWatched) {
             return
         }
-        val progress = lastKnownPosition.toDouble() / duration.toDouble()
-        if (progress >= NEXT_SWITCH_VIEWED_THRESHOLD) {
-            currentComplete = true
-            lastKnownPosition = duration
+        if (!sendProgress && !sendWatched) {
+            progressDirty = false
+            return
         }
+        val now = System.currentTimeMillis()
+        if (!force &&
+            !sendWatched &&
+            position == lastSyncedPosition &&
+            duration == lastSyncedDuration &&
+            now - lastSyncedAt < DUPLICATE_GUARD_MS
+        ) {
+            progressDirty = false
+            lastPeriodicSyncAt = now
+            return
+        }
+        Log.d(
+            TAG,
+            "progress-sync reason=$reason episode=${episode.id} position=$position duration=$duration sendProgress=$sendProgress sendWatched=$sendWatched"
+        )
+        releaseInteractor.setAccessSeek(
+            id = episode.id,
+            serverId = episode.serverId,
+            seek = position,
+            duration = duration.takeIf { it > 0L },
+            forceViewed = sendWatched,
+        )
+        if (currentEpisode?.id == episode.id) {
+            lastSyncedPosition = position
+            lastSyncedDuration = duration
+            lastSyncedAt = System.currentTimeMillis()
+            lastPeriodicSyncAt = lastSyncedAt
+            progressDirty = false
+            if (sendWatched) {
+                watchedSynced = true
+            }
+        }
+        if (sendWatched) {
+            Log.d(TAG, "watched-sync episode=${episode.id} position=$position duration=$duration")
+        }
+    }
+
+    private fun markWatchedIfNeeded(reason: String, force: Boolean = false) {
+        if (watchedReached || watchedSynced) {
+            return
+        }
+        if (!force && !hasReachedWatchedThreshold(lastKnownPosition, lastKnownDuration)) {
+            return
+        }
+        watchedReached = true
+        progressDirty = true
+        Log.d(
+            TAG,
+            "watched-threshold reason=$reason episode=${currentEpisode?.id} position=$lastKnownPosition duration=$lastKnownDuration"
+        )
+    }
+
+    private fun hasReachedWatchedThreshold(position: Long, duration: Long): Boolean {
+        return EpisodePlaybackRules.hasReachedWatchedThreshold(position, duration)
+    }
+
+    private fun normalizePlaybackSnapshot(position: Long, duration: Long): NormalizedPlaybackSnapshot {
+        val effectiveDuration = duration.takeIf { it > 0L } ?: lastKnownDuration
+        val effectivePosition = EpisodePlaybackRules.clampPosition(position, effectiveDuration)
+        return NormalizedPlaybackSnapshot(
+            positionMs = effectivePosition,
+            durationMs = effectiveDuration,
+        )
+    }
+
+    private fun isEpisodeActuallyFinished(position: Long, duration: Long): Boolean {
+        if (completionHandled) {
+            return false
+        }
+        return EpisodePlaybackRules.isAtEpisodeEnd(position, duration)
     }
 
     private fun playEpisode(episode: Episode, force: Boolean = false, autoPlay: Boolean = false) {
         progressSyncJob?.cancel()
         completionOverlay.value = null
         currentEpisode = episode
-        currentComplete = null
+        watchedReached = false
+        watchedSynced = false
+        completionHandled = false
         pendingAutoPlay = autoPlay
         lastKnownPosition = 0
         lastKnownDuration = 0
         progressDirty = false
-        syncQueued = false
-        syncForceRequested = false
         lastSyncedPosition = Long.MIN_VALUE
         lastSyncedDuration = Long.MIN_VALUE
         lastSyncedAt = 0
@@ -431,16 +495,24 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val newUrl = episode.qualityInfo.getSafeUrlFor(quality)
             val access = releaseInteractor.getAccess(episode.id)
-            lastKnownPosition = access?.seek ?: 0
+            val initialSeek = if (access?.isViewed == true) 0L else access?.seek ?: 0L
+            watchedReached = access?.isViewed == true
+            watchedSynced = access?.isViewed == true
+            completionHandled = false
+            lastKnownPosition = initialSeek
             lastKnownDuration = 0
             progressDirty = false
             lastSyncedPosition = lastKnownPosition
             lastSyncedDuration = 0
             lastSyncedAt = System.currentTimeMillis()
             lastPeriodicSyncAt = lastSyncedAt
+            Log.d(
+                TAG,
+                "episode-load episode=${episode.id} seek=$initialSeek watched=$watchedReached autoPlay=$pendingAutoPlay"
+            )
             val newVideo = Video(
                 url = newUrl,
-                seek = access?.seek ?: 0,
+                seek = initialSeek,
                 title = release.title.orEmpty(),
                 subtitle = episode.title.orEmpty(),
                 episode.skips
@@ -474,28 +546,15 @@ class PlayerViewModel @Inject constructor(
         router.exit()
     }
 
-    private fun showCompletionOverlay(hasNextEpisode: Boolean) {
-        val nextEpisode = getNextEpisode()
-        completionOverlay.value = if (hasNextEpisode && nextEpisode != null) {
-            val nextEpisodeTitle = nextEpisode.title?.takeIf { it.isNotBlank() } ?: "Следующая серия"
-            PlayerCompletionOverlay(
-                type = PlayerCompletionOverlayType.END_EPISODE,
-                title = "Серия закончилась",
-                subtitle = "Следом будет: $nextEpisodeTitle",
-                nextEpisodeLabel = "Следующая серия",
-                closeLabel = "Закрыть",
-                autoAdvanceEnabled = true,
-            )
-        } else {
-            PlayerCompletionOverlay(
-                type = PlayerCompletionOverlayType.END_SEASON,
-                title = "Сезон закончился",
-                subtitle = "Следующей серии нет. Можно закрыть плеер.",
-                nextEpisodeLabel = null,
-                closeLabel = "Закрыть",
-                autoAdvanceEnabled = false,
-            )
-        }
+    private fun showSeasonCompletionOverlay() {
+        completionOverlay.value = PlayerCompletionOverlay(
+            type = PlayerCompletionOverlayType.END_SEASON,
+            title = "Сезон закончился",
+            subtitle = "Следующей серии нет. Можно закрыть плеер.",
+            nextEpisodeLabel = null,
+            closeLabel = "Закрыть",
+            autoAdvanceEnabled = false,
+        )
     }
 
     private fun refreshComposeMenuState() {
@@ -534,11 +593,16 @@ class PlayerViewModel @Inject constructor(
     }
 
     private companion object {
+        private const val TAG = "PlayerFlow"
         private const val PERIODIC_SYNC_MS = 5 * 60 * 1_000L
         private const val DUPLICATE_GUARD_MS = 2_000L
-        private const val NEXT_SWITCH_VIEWED_THRESHOLD = 0.8
     }
 }
+
+private data class NormalizedPlaybackSnapshot(
+    val positionMs: Long,
+    val durationMs: Long,
+)
 
 data class PlayerControlsState(
     val title: String = "",
@@ -589,6 +653,8 @@ data class PlayerStatsState(
     val fpsLabel: String = "Нет данных",
     val codecLabel: String = "Нет данных",
     val bufferLabel: String = "Нет данных",
+    val memoryUsedLabel: String = "Нет данных",
+    val memoryAvailableLabel: String = "Нет данных",
     val droppedFramesLabel: String = "0",
     val rebufferCountLabel: String = "0",
 )

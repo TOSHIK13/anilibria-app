@@ -3,6 +3,7 @@ package ru.radiationx.anilibria.screen.player
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -95,6 +96,7 @@ import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.release.PlayerSkips
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
+import ru.radiationx.data.player.EpisodePlaybackRules
 import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.quill.get
 import ru.radiationx.quill.viewModel
@@ -110,6 +112,7 @@ import java.util.Locale
 class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     companion object {
+        private const val TAG = "PlayerFlow"
 
         private const val ARG_RELEASE_ID = "release id"
         private const val ARG_EPISODE_ID = "episode id"
@@ -160,6 +163,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var skipHud by mutableStateOf<SkipHudState?>(null)
     private var skipActionSelection by mutableStateOf(SkipOverlayAction.Skip)
     private var activeSubmenu by mutableStateOf<PlayerSubmenuType?>(null)
+    private var statsOverlayVisible by mutableStateOf(false)
     private var completionOverlay by mutableStateOf<PlayerCompletionOverlay?>(null)
     private var completionActionSelection by mutableStateOf(CompletionOverlayAction.Next)
     private var completionProgress by mutableStateOf(0f)
@@ -181,25 +185,31 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var touchGestureDetector: GestureDetector? = null
     private var touchSeekAccumulatorPx = 0f
     private var genericMotionAccumulator = 0f
-    private val dismissedSkips = mutableSetOf<String>()
-
+    private var suppressedSkip by mutableStateOf<SuppressedSkipState?>(null)
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_BUFFERING && lastPlaybackState != Player.STATE_IDLE) {
                 rebufferCount += 1
             }
+            val previousPlaybackState = lastPlaybackState
             lastPlaybackState = playbackState
             updatePlaybackSnapshot()
             when (playbackState) {
                 Player.STATE_ENDED -> {
-                    val snapshot = playbackSnapshot
-                    viewModel.onComplete(snapshot.positionMs, snapshot.durationMs)
+                    notifyEpisodeCompleted(playbackSnapshot, "state_ended")
                 }
 
                 Player.STATE_READY -> {
                     val snapshot = playbackSnapshot
                     viewModel.onPrepare(snapshot.durationMs)
+                }
+
+                Player.STATE_IDLE -> {
+                    val snapshot = playbackSnapshot
+                    if (previousPlaybackState != Player.STATE_IDLE && isPlaybackFinished(snapshot)) {
+                        notifyEpisodeCompleted(snapshot, "state_idle")
+                    }
                 }
             }
         }
@@ -290,9 +300,9 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
         subscribeTo(viewModel.videoData.filterNotNull()) {
             currentVideo = it
-            dismissedSkips.clear()
             skipHud = null
             skipTimerJob?.cancel()
+            suppressedSkip = null
             preparePlayer(it.url, it.seek)
         }
 
@@ -446,11 +456,13 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         val settingsFocusRequester = remember { FocusRequester() }
         val statsFocusRequester = remember { FocusRequester() }
         var currentZone by remember { mutableStateOf(OverlayZone.ROOT) }
+        var restoreMenuFocus by remember { mutableStateOf(false) }
         val currentTimeText = rememberCurrentTimeText()
 
         val closeSubmenu = {
             val submenu = activeSubmenu
             activeSubmenu = null
+            restoreMenuFocus = true
             when (submenu) {
                 PlayerSubmenuType.QUALITY -> qualityFocusRequester.requestFocusSafely()
                 PlayerSubmenuType.SPEED -> speedFocusRequester.requestFocusSafely()
@@ -465,16 +477,24 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             activeSubmenu = null
             controlsVisible = false
             currentZone = OverlayZone.ROOT
+            restoreMenuFocus = false
         }
 
-        LaunchedEffect(controlsVisible, activeSubmenu, completionOverlay) {
+        LaunchedEffect(controlsVisible, completionOverlay) {
             if (completionOverlay != null) {
                 return@LaunchedEffect
             }
             if (!controlsVisible) {
+                restoreMenuFocus = false
                 rootFocusRequester.requestFocusSafely()
-            } else if (activeSubmenu == null) {
+            } else if (activeSubmenu == null && !restoreMenuFocus) {
                 primaryFocusRequester.requestFocusSafely()
+            }
+        }
+
+        LaunchedEffect(activeSubmenu) {
+            if (activeSubmenu != null) {
+                restoreMenuFocus = false
             }
         }
 
@@ -528,6 +548,15 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 update = { it.player = player },
                 modifier = Modifier.fillMaxSize()
             )
+
+            if (statsOverlayVisible) {
+                PlayerStatsOverlay(
+                    stats = playerStats,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 32.dp, end = 32.dp)
+                )
+            }
 
             PlaybackHudOverlay(
                 playPauseHud = playPauseHud,
@@ -634,7 +663,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                                     color = Color.White,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
+                                    maxLines = 3,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
@@ -768,14 +797,14 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                                 label = "Статистика",
                                 iconRes = R.drawable.ic_alert_circle_outline,
                                 modifier = Modifier.focusRequester(statsFocusRequester),
-                                selected = activeSubmenu == PlayerSubmenuType.STATS,
-                                onClick = { activeSubmenu = PlayerSubmenuType.STATS }
+                                selected = statsOverlayVisible,
+                                onClick = { statsOverlayVisible = !statsOverlayVisible }
                             )
                         }
                         }
                         }
                     }
-                    activeSubmenu?.let { submenu ->
+                    activeSubmenu?.takeIf { it != PlayerSubmenuType.STATS }?.let { submenu ->
                         PlayerSubmenuSheet(
                             submenu = submenu,
                             state = composeMenuState,
@@ -1172,9 +1201,14 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun skipCurrentSegment() {
         val current = skipHud ?: return
-        dismissedSkips += current.key
         skipTimerJob?.cancel()
+        suppressedSkip = SuppressedSkipState(
+            key = current.key,
+            activationStartMs = activationStart(current.skip),
+            activationEndMs = activationEnd(current.skip),
+        )
         val targetPosition = current.skip.end.coerceAtLeast(0L)
+        Log.d(TAG, "skip type=${current.type} target=$targetPosition position=${playbackSnapshot.positionMs} duration=${playbackSnapshot.durationMs}")
         player.seekTo(targetPosition)
         if (current.type == SkipHudType.Ending) {
             val duration = player.duration.takeIf { it > 0L } ?: playbackSnapshot.durationMs
@@ -1187,19 +1221,24 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun dismissCurrentSkip() {
         val current = skipHud ?: return
-        dismissedSkips += current.key
         skipTimerJob?.cancel()
+        suppressedSkip = SuppressedSkipState(
+            key = current.key,
+            activationStartMs = activationStart(current.skip),
+            activationEndMs = activationEnd(current.skip),
+        )
         skipHud = null
         skipActionSelection = SkipOverlayAction.Skip
     }
 
     private fun updateSkipHud() {
+        clearExpiredSuppressedSkip(playbackSnapshot.positionMs)
         val video = currentVideo ?: run {
             skipHud = null
             skipTimerJob?.cancel()
             return
         }
-        if (controlsVisible || !preferencesHolder.playerSkips.value) {
+        if (!preferencesHolder.playerSkips.value) {
             skipHud = null
             skipTimerJob?.cancel()
             return
@@ -1216,6 +1255,10 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             return
         }
 
+        Log.d(
+            TAG,
+            "skip-active type=${activeSkip.type} start=${activeSkip.skip.start} end=${activeSkip.skip.end} position=${playbackSnapshot.positionMs}"
+        )
         skipHud = activeSkip
         skipActionSelection = SkipOverlayAction.Skip
         skipTimerJob?.cancel()
@@ -1276,20 +1319,32 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         positionMs: Long,
     ): Boolean {
         val key = skipKey(type, skip)
-        if (key in dismissedSkips) {
+        val suppressed = suppressedSkip
+        if (suppressed?.key == key && positionMs in suppressed.activationStartMs..suppressed.activationEndMs) {
             return false
         }
-        val activationStart = (skip.start - SKIP_EDGE_TOLERANCE_MS).coerceAtLeast(0L)
-        val activationEnd = skip.end + SKIP_EDGE_TOLERANCE_MS
-        if (positionMs > activationEnd) {
-            dismissedSkips += key
-            return false
-        }
+        val activationStart = activationStart(skip)
+        val activationEnd = activationEnd(skip)
         return positionMs in activationStart..activationEnd
     }
 
     private fun skipKey(type: String, skip: PlayerSkips.Skip): String {
         return "$type:${skip.start}:${skip.end}"
+    }
+
+    private fun activationStart(skip: PlayerSkips.Skip): Long {
+        return (skip.start - SKIP_EDGE_TOLERANCE_MS).coerceAtLeast(0L)
+    }
+
+    private fun activationEnd(skip: PlayerSkips.Skip): Long {
+        return skip.end + SKIP_EDGE_TOLERANCE_MS
+    }
+
+    private fun clearExpiredSuppressedSkip(positionMs: Long) {
+        val suppressed = suppressedSkip ?: return
+        if (positionMs !in suppressed.activationStartMs..suppressed.activationEndMs) {
+            suppressedSkip = null
+        }
     }
 
     private fun preparePlayer(url: String, seek: Long) {
@@ -1364,10 +1419,17 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     }
 
     private fun updatePlaybackSnapshot() {
+        val knownDuration = playbackSnapshot.durationMs
+        val currentDuration = player.duration.takeIf { it > 0 } ?: knownDuration
+        val rawPosition = player.currentPosition.coerceAtLeast(0L)
+        val normalizedPosition = EpisodePlaybackRules.clampPosition(rawPosition, currentDuration)
+        val normalizedBuffer = player.bufferedPosition
+            .coerceAtLeast(0L)
+            .let { buffered -> if (currentDuration > 0L) buffered.coerceAtMost(currentDuration) else buffered }
         playbackSnapshot = ComposePlaybackSnapshot(
-            positionMs = player.currentPosition.coerceAtLeast(0L),
-            durationMs = player.duration.takeIf { it > 0 } ?: 0L,
-            bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
+            positionMs = normalizedPosition,
+            durationMs = currentDuration,
+            bufferedPositionMs = normalizedBuffer,
             isPlaying = player.isPlaying,
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
         )
@@ -1375,10 +1437,26 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         updateSkipHud()
     }
 
+    private fun notifyEpisodeCompleted(snapshot: ComposePlaybackSnapshot, source: String) {
+        Log.d(
+            TAG,
+            "end-detected source=$source position=${snapshot.positionMs} duration=${snapshot.durationMs} state=${player.playbackState}"
+        )
+        viewModel.onComplete(snapshot.positionMs, snapshot.durationMs)
+    }
+
+    private fun isPlaybackFinished(snapshot: ComposePlaybackSnapshot): Boolean {
+        return EpisodePlaybackRules.isAtEpisodeEnd(snapshot.positionMs, snapshot.durationMs)
+    }
+
     private fun updatePlayerStats() {
         val snapshot = playbackSnapshot
         val videoFormat = currentVideoFormat ?: player.videoFormat
         val audioFormat = currentAudioFormat ?: player.audioFormat
+        val runtime = Runtime.getRuntime()
+        val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
+        val maxMemoryBytes = runtime.maxMemory().coerceAtLeast(0L)
+        val availableMemoryBytes = (maxMemoryBytes - usedMemoryBytes).coerceAtLeast(0L)
         playerStats = PlayerStatsState(
             playbackStateLabel = player.playbackState.toPlaybackStateLabel(snapshot.isPlaying),
             bitrateLabel = formatBitrate(estimatedBitrate ?: videoFormat?.bitrate?.toLong()),
@@ -1389,6 +1467,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 ?: audioFormat?.sampleMimeType
                 ?: "Нет данных",
             bufferLabel = formatBuffer(snapshot.bufferedPositionMs, snapshot.durationMs),
+            memoryUsedLabel = formatMemory(usedMemoryBytes),
+            memoryAvailableLabel = "${formatMemory(availableMemoryBytes)} / ${formatMemory(maxMemoryBytes)}",
             droppedFramesLabel = droppedFramesCount.toString(),
             rebufferCountLabel = rebufferCount.toString(),
         )
@@ -1428,6 +1508,12 @@ private data class ComposePlaybackSnapshot(
     val bufferedPositionMs: Long = 0L,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
+)
+
+private data class SuppressedSkipState(
+    val key: String,
+    val activationStartMs: Long,
+    val activationEndMs: Long,
 )
 
 private data class PlayPauseHudState(
@@ -1764,6 +1850,70 @@ private fun CompletionOverlay(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlayerStatsOverlay(
+    stats: PlayerStatsState,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .width(320.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xC8121212))
+            .border(
+                width = 1.dp,
+                brush = SolidColor(Color(0x26FFFFFF)),
+                shape = RoundedCornerShape(20.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "Статистика",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        PlayerStatsRow("Состояние", stats.playbackStateLabel)
+        PlayerStatsRow("Битрейт", stats.bitrateLabel)
+        PlayerStatsRow("Видео", stats.videoSizeLabel)
+        PlayerStatsRow("FPS", stats.fpsLabel)
+        PlayerStatsRow("Кодек", stats.codecLabel)
+        PlayerStatsRow("Буфер", stats.bufferLabel)
+        PlayerStatsRow("Память", stats.memoryUsedLabel)
+        PlayerStatsRow("Доступно", stats.memoryAvailableLabel)
+        PlayerStatsRow("Потеряно кадров", stats.droppedFramesLabel)
+        PlayerStatsRow("Ребуферов", stats.rebufferCountLabel)
+    }
+}
+
+@Composable
+private fun PlayerStatsRow(
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFF9E9E9E),
+            fontSize = 13.sp,
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -2145,6 +2295,11 @@ private fun formatBuffer(bufferedPositionMs: Long, durationMs: Long): String {
     val bufferedSeconds = (bufferedPositionMs / 1000L).coerceAtLeast(0L)
     val durationSuffix = durationMs.takeIf { it > 0 }?.let { " / ${formatDuration(it)}" }.orEmpty()
     return "${bufferedSeconds}с$durationSuffix"
+}
+
+private fun formatMemory(value: Long): String {
+    if (value <= 0L) return "n/a"
+    return String.format(Locale.US, "%.1f MB", value / 1024f / 1024f)
 }
 
 private fun Int.toPlaybackStateLabel(isPlaying: Boolean): String {

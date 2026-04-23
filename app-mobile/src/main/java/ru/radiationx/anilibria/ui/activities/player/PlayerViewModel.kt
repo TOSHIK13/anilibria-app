@@ -33,9 +33,9 @@ import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.interactors.ReleaseInteractor
+import ru.radiationx.data.player.EpisodePlaybackRules
 import ru.radiationx.data.repository.HistoryRepository
 import ru.radiationx.shared.ktx.coRunCatching
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 class PlayerViewModel @Inject constructor(
@@ -46,7 +46,6 @@ class PlayerViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private val seekThreshold = TimeUnit.SECONDS.toMillis(10)
     }
 
 
@@ -114,7 +113,10 @@ class PlayerViewModel @Inject constructor(
     @OptIn(DelicateCoroutinesApi::class)
     fun saveEpisodeSeek(episode: EpisodeState, seek: Long, duration: Long? = null) {
         GlobalScope.launch {
-            releaseInteractor.setAccessSeek(episode.id, episode.serverId, seek, duration)
+            val forceViewed = duration
+                ?.let { EpisodePlaybackRules.hasReachedWatchedThreshold(seek, it) }
+                ?: false
+            releaseInteractor.setAccessSeek(episode.id, episode.serverId, seek, duration, forceViewed)
         }
     }
 
@@ -123,7 +125,8 @@ class PlayerViewModel @Inject constructor(
             val quality = preferencesHolder.playerQuality.value
             val access = releaseInteractor.getAccess(episodeId)
             val episodeStates = data.episodes.map { it.toState(quality) }
-            val action = PlayerAction.PlayEpisode(episodeStates, episodeId, access?.seek ?: 0)
+            val seek = if (access?.isViewed == true) 0L else access?.seek ?: 0L
+            val action = PlayerAction.PlayEpisode(episodeStates, episodeId, seek)
             _actions.emit(action)
         }
     }
@@ -137,7 +140,7 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val access = releaseInteractor.getAccess(episodeId)
             val accessSeek = access?.seek
-            if ((accessSeek ?: 0) >= duration - seekThreshold) {
+            if (access?.isViewed == true) {
                 _actions.emit(PlayerAction.Play(0))
             } else {
                 _actions.emit(PlayerAction.Play(accessSeek))
