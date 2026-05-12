@@ -39,6 +39,14 @@ interface PreferencesHolder {
 
     val playerBackBufferSeconds: AppPreference<Int>
 
+    val playerBufferMemoryLimitMb: AppPreference<Int>
+
+    val playerDiskCacheEnabled: AppPreference<Boolean>
+
+    val playerDiskCacheSizeMb: AppPreference<Int>
+
+    val playerPreloadNextEpisode: AppPreference<Boolean>
+
     val notificationsAll: AppPreference<Boolean>
 
     val notificationsService: AppPreference<Boolean>

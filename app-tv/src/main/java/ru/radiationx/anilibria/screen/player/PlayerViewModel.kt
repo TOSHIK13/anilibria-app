@@ -73,25 +73,41 @@ class PlayerViewModel @Inject constructor(
                 speeds to speed
             },
             combine(
-                preferencesHolder.playerSkips,
-                preferencesHolder.playerSkipsTimer,
-                preferencesHolder.playerAutoplay,
-                preferencesHolder.playerBackBufferSeconds,
-                preferencesHolder.playerForwardBufferSeconds,
-            ) { skipsEnabled, autoSkipEnabled, autoplayEnabled, backBufferSeconds, forwardBufferSeconds ->
-                PlayerComposeSettingsState(
-                    skipsEnabled = skipsEnabled,
-                    autoSkipEnabled = autoSkipEnabled,
-                    autoplayEnabled = autoplayEnabled,
-                    backBufferSeconds = backBufferSeconds,
-                    forwardBufferSeconds = forwardBufferSeconds,
-                )
+                preferencesHolder.playerBufferMemoryLimitMb,
+                combine(
+                    preferencesHolder.playerSkips,
+                    preferencesHolder.playerSkipsTimer,
+                    preferencesHolder.playerAutoplay,
+                    preferencesHolder.playerBackBufferSeconds,
+                    preferencesHolder.playerForwardBufferSeconds,
+                ) { skipsEnabled, autoSkipEnabled, autoplayEnabled, backBufferSeconds, forwardBufferSeconds ->
+                    PlayerComposeSettingsState(
+                        skipsEnabled = skipsEnabled,
+                        autoSkipEnabled = autoSkipEnabled,
+                        autoplayEnabled = autoplayEnabled,
+                        backBufferSeconds = backBufferSeconds,
+                        forwardBufferSeconds = forwardBufferSeconds,
+                    )
+                },
+            ) { bufferMemoryLimitMb, settings ->
+                settings.copy(bufferMemoryLimitMb = bufferMemoryLimitMb)
             },
-        ) { speedPair, settings ->
+            combine(
+                preferencesHolder.playerDiskCacheEnabled,
+                preferencesHolder.playerDiskCacheSizeMb,
+                preferencesHolder.playerPreloadNextEpisode,
+            ) { diskCacheEnabled, diskCacheSizeMb, preloadNextEpisode ->
+                Triple(diskCacheEnabled, diskCacheSizeMb, preloadNextEpisode)
+            },
+        ) { speedPair, settings, cachePair ->
             composeMenuState.value = composeMenuState.value.copy(
                 availableSpeeds = speedPair.first,
                 selectedSpeed = speedPair.second,
-                settings = settings,
+                settings = settings.copy(
+                    diskCacheEnabled = cachePair.first,
+                    diskCacheSizeMb = cachePair.second,
+                    preloadNextEpisode = cachePair.third,
+                ),
             )
         }.launchIn(viewModelScope)
 
@@ -208,6 +224,22 @@ class PlayerViewModel @Inject constructor(
 
     fun setAutoplayEnabled(value: Boolean) {
         preferencesHolder.playerAutoplay.value = value
+    }
+
+    fun setDiskCacheEnabled(value: Boolean) {
+        preferencesHolder.playerDiskCacheEnabled.value = value
+    }
+
+    fun setBufferMemoryLimitMb(value: Int) {
+        preferencesHolder.playerBufferMemoryLimitMb.value = value
+    }
+
+    fun setDiskCacheSizeMb(value: Int) {
+        preferencesHolder.playerDiskCacheSizeMb.value = value
+    }
+
+    fun setPreloadNextEpisode(value: Boolean) {
+        preferencesHolder.playerPreloadNextEpisode.value = value
     }
 
     fun adjustBackBufferSeconds(delta: Int) {
@@ -494,6 +526,7 @@ class PlayerViewModel @Inject constructor(
         val quality = currentQuality ?: return
         viewModelScope.launch {
             val newUrl = episode.qualityInfo.getSafeUrlFor(quality)
+            val nextUrl = getNextEpisode()?.qualityInfo?.getSafeUrlFor(quality)
             val access = releaseInteractor.getAccess(episode.id)
             val initialSeek = if (access?.isViewed == true) 0L else access?.seek ?: 0L
             watchedReached = access?.isViewed == true
@@ -512,6 +545,7 @@ class PlayerViewModel @Inject constructor(
             )
             val newVideo = Video(
                 url = newUrl,
+                nextUrl = nextUrl,
                 seek = initialSeek,
                 title = release.title.orEmpty(),
                 subtitle = episode.title.orEmpty(),
@@ -644,6 +678,10 @@ data class PlayerComposeSettingsState(
     val autoplayEnabled: Boolean = true,
     val backBufferSeconds: Int = 0,
     val forwardBufferSeconds: Int = 50,
+    val bufferMemoryLimitMb: Int = 32,
+    val diskCacheEnabled: Boolean = false,
+    val diskCacheSizeMb: Int = 512,
+    val preloadNextEpisode: Boolean = true,
 )
 
 data class PlayerStatsState(
@@ -655,6 +693,8 @@ data class PlayerStatsState(
     val bufferLabel: String = "Нет данных",
     val memoryUsedLabel: String = "Нет данных",
     val memoryAvailableLabel: String = "Нет данных",
+    val diskCacheLabel: String = "Нет данных",
+    val prefetchLabel: String = "Выкл",
     val droppedFramesLabel: String = "0",
     val rebufferCountLabel: String = "0",
 )

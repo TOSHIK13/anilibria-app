@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="player_tv_previous" type="id" />
+    <item name="player_tv_play_pause" type="id" />
+    <item name="player_tv_next" type="id" />
+    <item name="player_tv_quality" type="id" />
+    <item name="player_tv_speed" type="id" />
+    <item name="player_tv_settings" type="id" />
+    <item name="player_tv_stats" type="id" />
+</resources>

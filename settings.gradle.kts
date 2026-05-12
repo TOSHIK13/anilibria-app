@@ -23,6 +23,8 @@ include(
     ":shared-android-ktx",
     ":searchbar",
     ":app-tv",
+    ":app-external-player",
+    ":player-tv",
     ":shared-app",
     ":quill-di",
     ":media-mobile",

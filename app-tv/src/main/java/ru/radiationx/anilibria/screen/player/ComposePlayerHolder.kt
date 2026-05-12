@@ -6,6 +6,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
+import ru.radiationx.data.player.PlayerCacheDataSourceProvider
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.player.PlayerBufferConfig
 import ru.radiationx.data.player.PlayerDataSourceProvider
@@ -13,6 +14,7 @@ import java.util.UUID
 
 class ComposePlayerHolder(
     private val dataSourceProvider: PlayerDataSourceProvider,
+    private val cacheDataSourceProvider: PlayerCacheDataSourceProvider,
     private val preferencesHolder: PreferencesHolder,
 ) {
 
@@ -25,15 +27,18 @@ class ComposePlayerHolder(
     @UnstableApi
     fun attach(context: Context): ExoPlayer {
         player?.let { return it }
+        cacheDataSourceProvider.refresh()
 
         val dataSourceType = dataSourceProvider.get()
-        val dataSourceFactory = DefaultDataSource.Factory(context, dataSourceType.factory)
+        val upstreamFactory = DefaultDataSource.Factory(context, dataSourceType.factory)
+        val dataSourceFactory = cacheDataSourceProvider.createCacheFactory(upstreamFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(context).apply {
             setDataSourceFactory(dataSourceFactory)
         }
         val loadControl = PlayerBufferConfig.createLoadControl(
             preferencesHolder.playerForwardBufferSeconds.value,
             preferencesHolder.playerBackBufferSeconds.value,
+            preferencesHolder.playerBufferMemoryLimitMb.value,
         )
         val newPlayer = ExoPlayer.Builder(context.applicationContext)
             .setMediaSourceFactory(mediaSourceFactory)
@@ -42,10 +47,25 @@ class ComposePlayerHolder(
             .setSeekBackIncrementMs(SEEK_STEP_MS)
             .setSeekForwardIncrementMs(SEEK_STEP_MS)
             .build()
+        applyRuntimeSettings(newPlayer)
 
         player = newPlayer
         startMediaSession(context, newPlayer)
         return newPlayer
+    }
+
+    fun applyRuntimeSettings(
+        player: ExoPlayer = requireNotNull(this.player),
+        allowNextEpisodePreload: Boolean = preferencesHolder.playerPreloadNextEpisode.value,
+    ) {
+        val preloadDurationUs = if (allowNextEpisodePreload && preferencesHolder.playerPreloadNextEpisode.value) {
+            preferencesHolder.playerForwardBufferSeconds.value
+                .coerceAtLeast(0)
+                .toLong() * 1_000_000L
+        } else {
+            0L
+        }
+        player.setPreloadConfiguration(ExoPlayer.PreloadConfiguration(preloadDurationUs))
     }
 
     fun detach() {

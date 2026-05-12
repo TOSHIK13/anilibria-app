@@ -34,6 +34,10 @@ class PreferencesStorage @Inject constructor(
         private const val PLAYER_AUTO_PLAY_KEY = "player_auto_play"
         private const val PLAYER_FORWARD_BUFFER_SECONDS_KEY = "player_forward_buffer_seconds"
         private const val PLAYER_BACK_BUFFER_SECONDS_KEY = "player_back_buffer_seconds"
+        private const val PLAYER_BUFFER_MEMORY_LIMIT_MB_KEY = "player_buffer_memory_limit_mb"
+        private const val PLAYER_DISK_CACHE_ENABLED_KEY = "player_disk_cache_enabled"
+        private const val PLAYER_DISK_CACHE_SIZE_MB_KEY = "player_disk_cache_size_mb"
+        private const val PLAYER_PRELOAD_NEXT_EPISODE_KEY = "player_preload_next_episode"
         private const val NOTIFICATIONS_ALL_KEY = "notifications.all"
         private const val NOTIFICATIONS_SERVICE_KEY = "notifications.service"
 
@@ -42,6 +46,10 @@ class PreferencesStorage @Inject constructor(
         private const val MAX_FORWARD_BUFFER_SECONDS = 600
         private const val DEFAULT_BACK_BUFFER_SECONDS = 0
         private const val MAX_BACK_BUFFER_SECONDS = 600
+        private const val DEFAULT_BUFFER_MEMORY_LIMIT_MB = 32
+        private const val MAX_BUFFER_MEMORY_LIMIT_MB = 256
+        private const val DEFAULT_DISK_CACHE_SIZE_MB = 1024
+        private const val MAX_DISK_CACHE_SIZE_MB = 8 * 1024
     }
 
     private val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
@@ -198,6 +206,52 @@ class PreferencesStorage @Inject constructor(
         },
         set = { key, value ->
             putInt(key, value.coerceIn(0, MAX_BACK_BUFFER_SECONDS))
+        }
+    )
+
+    override val playerBufferMemoryLimitMb: AppPreference<Int> = AppPreference(
+        key = PLAYER_BUFFER_MEMORY_LIMIT_MB_KEY,
+        sharedPreferences = sharedPreferences,
+        get = { key ->
+            getInt(key, DEFAULT_BUFFER_MEMORY_LIMIT_MB)
+                .coerceIn(8, MAX_BUFFER_MEMORY_LIMIT_MB)
+        },
+        set = { key, value ->
+            putInt(key, value.coerceIn(8, MAX_BUFFER_MEMORY_LIMIT_MB))
+        }
+    )
+
+    override val playerDiskCacheEnabled: AppPreference<Boolean> = AppPreference(
+        key = PLAYER_DISK_CACHE_ENABLED_KEY,
+        sharedPreferences = sharedPreferences,
+        get = { key ->
+            getBoolean(key, true)
+        },
+        set = { key, value ->
+            putBoolean(key, value)
+        }
+    )
+
+    override val playerDiskCacheSizeMb: AppPreference<Int> = AppPreference(
+        key = PLAYER_DISK_CACHE_SIZE_MB_KEY,
+        sharedPreferences = sharedPreferences,
+        get = { key ->
+            getInt(key, DEFAULT_DISK_CACHE_SIZE_MB)
+                .coerceIn(64, MAX_DISK_CACHE_SIZE_MB)
+        },
+        set = { key, value ->
+            putInt(key, value.coerceIn(64, MAX_DISK_CACHE_SIZE_MB))
+        }
+    )
+
+    override val playerPreloadNextEpisode: AppPreference<Boolean> = AppPreference(
+        key = PLAYER_PRELOAD_NEXT_EPISODE_KEY,
+        sharedPreferences = sharedPreferences,
+        get = { key ->
+            getBoolean(key, true)
+        },
+        set = { key, value ->
+            putBoolean(key, value)
         }
     )
 

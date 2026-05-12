@@ -1,4 +1,4 @@
-package ru.radiationx.anilibria.screen.player
+﻿package ru.radiationx.anilibria.screen.player
 
 import android.graphics.Color as AndroidColor
 import android.net.Uri
@@ -22,6 +22,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -63,6 +65,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Dp
@@ -76,7 +79,9 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -97,6 +102,7 @@ import ru.radiationx.data.entity.domain.release.PlayerSkips
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.player.EpisodePlaybackRules
+import ru.radiationx.data.player.PlayerCacheDataSourceProvider
 import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.quill.get
 import ru.radiationx.quill.viewModel
@@ -142,7 +148,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private val playerHolder by lazy {
         ComposePlayerHolder(
-            dataSourceProvider = get<PlayerDataSourceProvider>(),
+            dataSourceProvider = playerDataSourceProvider,
+            cacheDataSourceProvider = cacheDataSourceProvider,
             preferencesHolder = preferencesHolder,
         )
     }
@@ -151,9 +158,16 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         get<PreferencesHolder>()
     }
 
-    private val player by lazy {
-        playerHolder.attach(requireContext())
+    private val cacheDataSourceProvider by lazy {
+        get<PlayerCacheDataSourceProvider>()
     }
+
+    private val playerDataSourceProvider by lazy {
+        get<PlayerDataSourceProvider>()
+    }
+
+    private val player: ExoPlayer
+        get() = playerHolder.player ?: playerHolder.attach(requireContext())
 
     private var currentVideo by mutableStateOf<Video?>(null)
     private var controlsVisible by mutableStateOf(false)
@@ -164,6 +178,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var skipActionSelection by mutableStateOf(SkipOverlayAction.Skip)
     private var activeSubmenu by mutableStateOf<PlayerSubmenuType?>(null)
     private var statsOverlayVisible by mutableStateOf(false)
+    private var numericSettingDialog by mutableStateOf<PlayerNumericSettingDialogState?>(null)
     private var completionOverlay by mutableStateOf<PlayerCompletionOverlay?>(null)
     private var completionActionSelection by mutableStateOf(CompletionOverlayAction.Next)
     private var completionProgress by mutableStateOf(0f)
@@ -176,16 +191,29 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var droppedFramesCount by mutableStateOf(0)
     private var rebufferCount by mutableStateOf(0)
     private var lastPlaybackState by mutableStateOf(Player.STATE_IDLE)
+    private var currentPlaylistCacheDescriptor: HlsPlaylistCacheDescriptor? = null
+    private var nextPlaylistCacheDescriptor: HlsPlaylistCacheDescriptor? = null
+    private var cacheInspection by mutableStateOf(HlsCacheInspection())
+    private var lastCacheInspectionAt = 0L
 
     private var progressJob: Job? = null
     private var playPauseHudJob: Job? = null
     private var seekHudJob: Job? = null
     private var skipTimerJob: Job? = null
     private var completionTimerJob: Job? = null
+    private var playlistCacheJob: Job? = null
     private var touchGestureDetector: GestureDetector? = null
     private var touchSeekAccumulatorPx = 0f
     private var genericMotionAccumulator = 0f
     private var suppressedSkip by mutableStateOf<SuppressedSkipState?>(null)
+    private var lastAppliedRuntimeSettings: AppliedRuntimeSettings? = null
+    private var preloadGuardActive by mutableStateOf(false)
+    private var memoryPreloadGuardActive by mutableStateOf(false)
+    private var preloadWaitingCurrentBuffer by mutableStateOf(false)
+    private var hlsRollingPrefetcher: HlsRollingPrefetcher? = null
+    private var hlsRollingPrefetchState by mutableStateOf(HlsRollingPrefetchState())
+    private var hlsRollingPrefetchStateJob: Job? = null
+    private var lastPrefetchUpdateAt = 0L
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -229,6 +257,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             ) {
                 val snapshot = playbackSnapshot
                 viewModel.onSeek(snapshot.positionMs, snapshot.durationMs)
+                updateHlsRollingPrefetch(force = true)
             }
         }
     }
@@ -303,7 +332,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             skipHud = null
             skipTimerJob?.cancel()
             suppressedSkip = null
-            preparePlayer(it.url, it.seek)
+            preparePlayer(it)
         }
 
         subscribeTo(viewModel.playAction.filterNotNull()) {
@@ -346,6 +375,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         super.onPause()
         player.pause()
         val snapshot = playbackSnapshot
+        val settings = viewModel.composeMenuState.value.settings
         viewModel.onPauseClick(snapshot.positionMs, snapshot.durationMs)
     }
 
@@ -361,6 +391,11 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         seekHudJob?.cancel()
         skipTimerJob?.cancel()
         completionTimerJob?.cancel()
+        playlistCacheJob?.cancel()
+        hlsRollingPrefetcher?.stop()
+        hlsRollingPrefetcher = null
+        hlsRollingPrefetchStateJob?.cancel()
+        hlsRollingPrefetchStateJob = null
         touchGestureDetector = null
         touchSeekAccumulatorPx = 0f
         genericMotionAccumulator = 0f
@@ -446,6 +481,13 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         val controlsState by viewModel.controlsState.collectAsState()
         val qualityState by viewModel.qualityState.collectAsState()
         val composeMenuState by viewModel.composeMenuState.collectAsState()
+        val allowNextEpisodePreload = shouldAllowNextEpisodePreload(
+            composeMenuState.settings,
+            playbackSnapshot,
+        )
+        val runtimeSettings = composeMenuState.settings.toAppliedRuntimeSettings(
+            allowNextEpisodePreload = allowNextEpisodePreload,
+        )
 
         val rootFocusRequester = remember { FocusRequester() }
         val primaryFocusRequester = remember { FocusRequester() }
@@ -496,6 +538,28 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             if (activeSubmenu != null) {
                 restoreMenuFocus = false
             }
+        }
+
+        LaunchedEffect(runtimeSettings) {
+            if (lastAppliedRuntimeSettings != runtimeSettings) {
+                playerHolder.applyRuntimeSettings(
+                    player = player,
+                    allowNextEpisodePreload = runtimeSettings.allowNextEpisodePreload,
+                )
+                lastAppliedRuntimeSettings = runtimeSettings
+            }
+        }
+
+        LaunchedEffect(
+            composeMenuState.settings.preloadNextEpisode,
+            composeMenuState.settings.forwardBufferSeconds,
+            playbackSnapshot.positionMs,
+            playbackSnapshot.durationMs,
+            playbackSnapshot.bufferedPositionMs,
+            playbackSnapshot.cachedPositionMs,
+        ) {
+            updatePreloadGuard(composeMenuState.settings, playbackSnapshot)
+            updateHlsRollingPrefetch(force = true)
         }
 
         Box(
@@ -550,12 +614,18 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             )
 
             if (statsOverlayVisible) {
-                PlayerStatsOverlay(
-                    stats = playerStats,
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 32.dp, end = 32.dp)
-                )
+                        .padding(top = 32.dp, end = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    PlayerStatsOverlay(
+                        stats = playerStats,
+                        cacheInspection = cacheInspection,
+                    )
+                    CacheBreakdownOverlay(cacheInspection = cacheInspection)
+                }
             }
 
             PlaybackHudOverlay(
@@ -829,9 +899,64 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                             onSetSkipsEnabled = viewModel::setSkipsEnabled,
                             onSetAutoSkipEnabled = viewModel::setAutoSkipEnabled,
                             onSetAutoplayEnabled = viewModel::setAutoplayEnabled,
+                            onEditBackBufferSeconds = {
+                                numericSettingDialog = PlayerNumericSettingDialogState(
+                                    title = "Буфер назад",
+                                    value = composeMenuState.settings.backBufferSeconds.toString(),
+                                    hint = "Введите секунды",
+                                    onApply = { value -> preferencesHolder.playerBackBufferSeconds.value = value },
+                                )
+                                closeSubmenu()
+                            },
+                            onEditForwardBufferSeconds = {
+                                numericSettingDialog = PlayerNumericSettingDialogState(
+                                    title = "Буфер вперёд",
+                                    value = composeMenuState.settings.forwardBufferSeconds.toString(),
+                                    hint = "Введите секунды",
+                                    onApply = { value -> preferencesHolder.playerForwardBufferSeconds.value = value },
+                                )
+                                closeSubmenu()
+                            },
+                            onEditBufferMemoryLimitMb = {
+                                numericSettingDialog = PlayerNumericSettingDialogState(
+                                    title = "\u041b\u0438\u043c\u0438\u0442 \u041e\u0417\u0423 \u0434\u043b\u044f \u0431\u0443\u0444\u0435\u0440\u0430",
+                                    value = composeMenuState.settings.bufferMemoryLimitMb.toString(),
+                                    hint = "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043b\u0438\u043c\u0438\u0442 \u0432 MB",
+                                    onApply = viewModel::setBufferMemoryLimitMb,
+                                )
+                                closeSubmenu()
+                            },
+                            onSetDiskCacheEnabled = viewModel::setDiskCacheEnabled,
+                            onEditDiskCacheSize = {
+                                numericSettingDialog = PlayerNumericSettingDialogState(
+                                    title = "Размер кэша на диске",
+                                    value = composeMenuState.settings.diskCacheSizeMb.toString(),
+                                    hint = "Введите размер в MB",
+                                    onApply = viewModel::setDiskCacheSizeMb,
+                                )
+                                closeSubmenu()
+                            },
+                            onSetPreloadNextEpisode = viewModel::setPreloadNextEpisode,
                         )
                     }
                 }
+            }
+            numericSettingDialog?.let { dialogState ->
+                DiskCacheInputOverlay(
+                    title = dialogState.title,
+                    value = dialogState.value,
+                    hint = dialogState.hint,
+                    onValueChange = { newValue ->
+                        numericSettingDialog = dialogState.copy(
+                            value = newValue.filter { it.isDigit() }.take(5)
+                        )
+                    },
+                    onDismiss = { numericSettingDialog = null },
+                    onApply = {
+                        dialogState.value.toIntOrNull()?.let(dialogState.onApply)
+                        numericSettingDialog = null
+                    },
+                )
             }
     }
 
@@ -1347,20 +1472,57 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         }
     }
 
-    private fun preparePlayer(url: String, seek: Long) {
+    private fun preparePlayer(video: Video) {
+        val seek = video.seek.coerceAtLeast(0L)
+        hlsRollingPrefetcher?.stop()
+        hlsRollingPrefetchState = HlsRollingPrefetchState()
+        lastPrefetchUpdateAt = 0L
+        currentPlaylistCacheDescriptor = null
+        nextPlaylistCacheDescriptor = null
+        cacheInspection = HlsCacheInspection()
+        lastCacheInspectionAt = 0L
         playbackSnapshot = ComposePlaybackSnapshot(
-            positionMs = seek.coerceAtLeast(0L),
+            positionMs = seek,
             durationMs = 0L,
             bufferedPositionMs = 0L,
+            cachedPositionMs = 0L,
             isPlaying = false,
             isBuffering = true,
         )
         updatePlayerStats()
         updateSkipHud()
-        player.setMediaItem(MediaItem.fromUri(Uri.parse(url)), false)
+        val mediaItems = buildList {
+            add(MediaItem.fromUri(Uri.parse(video.url)))
+            if (preferencesHolder.playerPreloadNextEpisode.value) {
+                video.nextUrl?.takeIf { it.isNotBlank() }?.let { nextUrl ->
+                    add(MediaItem.fromUri(Uri.parse(nextUrl)))
+                }
+            }
+        }
+        val settings = viewModel.composeMenuState.value.settings
+        val allowNextEpisodePreload = updatePreloadGuard(settings, playbackSnapshot)
+        playerHolder.applyRuntimeSettings(
+            player = player,
+            allowNextEpisodePreload = allowNextEpisodePreload,
+        )
+        player.setPauseAtEndOfMediaItems(true)
+        player.setMediaItems(mediaItems, 0, seek)
         player.prepare()
-        player.seekTo(seek)
+        loadPlaylistCacheDescriptors(video)
         updatePlaybackSnapshot()
+    }
+
+    private fun loadPlaylistCacheDescriptors(video: Video) {
+        playlistCacheJob?.cancel()
+        playlistCacheJob = viewLifecycleOwner.lifecycleScope.launch {
+            currentPlaylistCacheDescriptor = HlsPlaylistCacheInspector.loadDescriptor(video.url)
+            nextPlaylistCacheDescriptor = video.nextUrl
+                ?.takeIf { preferencesHolder.playerPreloadNextEpisode.value }
+                ?.let { HlsPlaylistCacheInspector.loadDescriptor(it) }
+            updateCacheInspection()
+            updatePlaybackSnapshot()
+            startHlsRollingPrefetch()
+        }
     }
 
     private fun initializeTouchpadControls(view: View) {
@@ -1423,16 +1585,24 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         val currentDuration = player.duration.takeIf { it > 0 } ?: knownDuration
         val rawPosition = player.currentPosition.coerceAtLeast(0L)
         val normalizedPosition = EpisodePlaybackRules.clampPosition(rawPosition, currentDuration)
-        val normalizedBuffer = player.bufferedPosition
+        maybeRefreshCacheInspection(normalizedPosition)
+        val effectiveBufferedPosition = player.bufferedPosition
             .coerceAtLeast(0L)
             .let { buffered -> if (currentDuration > 0L) buffered.coerceAtMost(currentDuration) else buffered }
+        val cachedPositionMs = if (currentDuration > 0L) {
+            cacheInspection.cachedPositionMs.coerceIn(0L, currentDuration)
+        } else {
+            cacheInspection.cachedPositionMs.coerceAtLeast(0L)
+        }
         playbackSnapshot = ComposePlaybackSnapshot(
             positionMs = normalizedPosition,
             durationMs = currentDuration,
-            bufferedPositionMs = normalizedBuffer,
+            bufferedPositionMs = effectiveBufferedPosition,
+            cachedPositionMs = cachedPositionMs,
             isPlaying = player.isPlaying,
             isBuffering = player.playbackState == Player.STATE_BUFFERING,
         )
+        updateHlsRollingPrefetch(force = false)
         updatePlayerStats()
         updateSkipHud()
     }
@@ -1451,28 +1621,245 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun updatePlayerStats() {
         val snapshot = playbackSnapshot
+        val settings = viewModel.composeMenuState.value.settings
         val videoFormat = currentVideoFormat ?: player.videoFormat
         val audioFormat = currentAudioFormat ?: player.audioFormat
+        val diskCacheUsedBytes = cacheDataSourceProvider.getCacheSpaceBytes()
+        val diskCacheMaxBytes = cacheDataSourceProvider.getConfiguredMaxBytes()
         val runtime = Runtime.getRuntime()
         val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
         val maxMemoryBytes = runtime.maxMemory().coerceAtLeast(0L)
         val availableMemoryBytes = (maxMemoryBytes - usedMemoryBytes).coerceAtLeast(0L)
         playerStats = PlayerStatsState(
-            playbackStateLabel = player.playbackState.toPlaybackStateLabel(snapshot.isPlaying),
+            playbackStateLabel = buildLoadingLabel(settings, snapshot),
             bitrateLabel = formatBitrate(estimatedBitrate ?: videoFormat?.bitrate?.toLong()),
             videoSizeLabel = formatVideoSize(videoFormat),
-            fpsLabel = formatFps(videoFormat),
+            fpsLabel = buildBufferingModeLabel(settings, snapshot, usedMemoryBytes, maxMemoryBytes),
             codecLabel = videoFormat?.sampleMimeType
                 ?: videoFormat?.codecs
                 ?: audioFormat?.sampleMimeType
                 ?: "Нет данных",
-            bufferLabel = formatBuffer(snapshot.bufferedPositionMs, snapshot.durationMs),
+            bufferLabel = buildBufferingModeLabel(settings, snapshot, usedMemoryBytes, maxMemoryBytes),
+            diskCacheLabel = if (cacheDataSourceProvider.isEnabled()) {
+                "${formatMemory(diskCacheUsedBytes)} / ${formatMemory(diskCacheMaxBytes)}"
+            } else {
+                "Выкл"
+            },
+            prefetchLabel = hlsRollingPrefetchState.label,
             memoryUsedLabel = formatMemory(usedMemoryBytes),
             memoryAvailableLabel = "${formatMemory(availableMemoryBytes)} / ${formatMemory(maxMemoryBytes)}",
             droppedFramesLabel = droppedFramesCount.toString(),
             rebufferCountLabel = rebufferCount.toString(),
         )
     }
+
+    private fun buildLoadingLabel(
+        settings: PlayerComposeSettingsState,
+        snapshot: ComposePlaybackSnapshot,
+    ): String {
+        if (!cacheDataSourceProvider.isEnabled()) {
+            return if (snapshot.isBuffering) "Текущая серия" else "Кэш диска выкл"
+        }
+        if (snapshot.isBuffering) {
+            return "Текущая серия"
+        }
+        if (!settings.preloadNextEpisode || nextPlaylistCacheDescriptor == null) {
+            return "Только текущая серия"
+        }
+        if (memoryPreloadGuardActive) {
+            return "Текущая серия (защита ОЗУ)"
+        }
+
+        if (preloadWaitingCurrentBuffer) {
+            return "Текущая серия"
+        }
+
+        val desiredForwardBufferMs = settings.forwardBufferSeconds.coerceAtLeast(0) * 1_000L
+        val readyHorizonMs = maxOf(snapshot.bufferedPositionMs, snapshot.cachedPositionMs)
+        val bufferedAheadMs = (readyHorizonMs - snapshot.positionMs).coerceAtLeast(0L)
+        val currentDuration = snapshot.durationMs
+        val currentTargetReady = desiredForwardBufferMs <= 0L ||
+            bufferedAheadMs >= desiredForwardBufferMs ||
+            (currentDuration > 0L && readyHorizonMs >= currentDuration)
+
+        return if (currentTargetReady) "Следующая серия" else "Текущая серия"
+    }
+
+    private fun buildBufferingModeLabel(
+        settings: PlayerComposeSettingsState,
+        snapshot: ComposePlaybackSnapshot,
+        usedMemoryBytes: Long,
+        maxMemoryBytes: Long,
+    ): String {
+        if (!cacheDataSourceProvider.isEnabled()) {
+            return "\u0411\u0435\u0437 \u0434\u043e\u043f. \u043a\u044d\u0448\u0430"
+        }
+        val desiredForwardBufferMs = settings.forwardBufferSeconds.coerceAtLeast(0) * 1_000L
+        val readyHorizonMs = maxOf(snapshot.bufferedPositionMs, snapshot.cachedPositionMs)
+        val bufferedAheadMs = (readyHorizonMs - snapshot.positionMs).coerceAtLeast(0L)
+        val heapPercent = if (maxMemoryBytes > 0L) {
+            ((usedMemoryBytes * 100L) / maxMemoryBytes).toInt()
+        } else {
+            0
+        }
+        return when {
+            memoryPreloadGuardActive -> "Защита ОЗУ, heap ${heapPercent}%"
+            preloadWaitingCurrentBuffer ->
+                "Добор текущей: ${bufferedAheadMs / 1000}с / ${desiredForwardBufferMs / 1000}с"
+            !settings.preloadNextEpisode -> "Только текущая серия"
+            nextPlaylistCacheDescriptor == null -> "Только текущая серия"
+            desiredForwardBufferMs > 0L && bufferedAheadMs < desiredForwardBufferMs ->
+                "Добор текущей: ${bufferedAheadMs / 1000}с / ${desiredForwardBufferMs / 1000}с"
+            else -> "Текущая + следующая серия"
+        }
+    }
+    private fun shouldAllowNextEpisodePreload(
+        settings: PlayerComposeSettingsState,
+        snapshot: ComposePlaybackSnapshot,
+    ): Boolean {
+        if (!settings.preloadNextEpisode) {
+            return false
+        }
+        val runtime = Runtime.getRuntime()
+        val maxMemoryBytes = runtime.maxMemory().coerceAtLeast(1L)
+        val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
+        val usageRatio = usedMemoryBytes.toFloat() / maxMemoryBytes.toFloat()
+        if (usageRatio >= HEAP_PRELOAD_DISABLE_RATIO) {
+            return false
+        }
+
+        val desiredForwardBufferMs = settings.forwardBufferSeconds
+            .coerceAtLeast(0)
+            .toLong() * 1_000L
+        if (desiredForwardBufferMs <= 0L) {
+            return true
+        }
+
+        val currentDuration = snapshot.durationMs
+        if (currentDuration <= 0L) {
+            return false
+        }
+
+        val readyHorizonMs = maxOf(snapshot.bufferedPositionMs, snapshot.cachedPositionMs)
+        val bufferedAheadMs = (readyHorizonMs - snapshot.positionMs).coerceAtLeast(0L)
+        val remainingMs = (currentDuration - snapshot.positionMs).coerceAtLeast(0L)
+        return bufferedAheadMs >= desiredForwardBufferMs ||
+            remainingMs <= desiredForwardBufferMs ||
+            readyHorizonMs >= currentDuration
+    }
+
+    private fun updatePreloadGuard(
+        settings: PlayerComposeSettingsState,
+        snapshot: ComposePlaybackSnapshot,
+    ): Boolean {
+        val runtime = Runtime.getRuntime()
+        val maxMemoryBytes = runtime.maxMemory().coerceAtLeast(1L)
+        val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
+        val usageRatio = usedMemoryBytes.toFloat() / maxMemoryBytes.toFloat()
+        val readyHorizonMs = maxOf(snapshot.bufferedPositionMs, snapshot.cachedPositionMs)
+        val bufferedAheadMs = (readyHorizonMs - snapshot.positionMs).coerceAtLeast(0L)
+        val desiredForwardBufferMs = settings.forwardBufferSeconds.coerceAtLeast(0).toLong() * 1_000L
+        val currentDuration = snapshot.durationMs
+        val remainingMs = (currentDuration - snapshot.positionMs).coerceAtLeast(0L)
+        val memoryGuard = settings.preloadNextEpisode && usageRatio >= HEAP_PRELOAD_DISABLE_RATIO
+        val waitingCurrentBuffer = settings.preloadNextEpisode && !memoryGuard && desiredForwardBufferMs > 0L && currentDuration > 0L && bufferedAheadMs < desiredForwardBufferMs && remainingMs > desiredForwardBufferMs && readyHorizonMs < currentDuration
+        val shouldAllow = settings.preloadNextEpisode && !memoryGuard && !waitingCurrentBuffer
+        val guardActive = settings.preloadNextEpisode && !shouldAllow
+        if (preloadGuardActive != guardActive || memoryPreloadGuardActive != memoryGuard || preloadWaitingCurrentBuffer != waitingCurrentBuffer) {
+            Log.d(
+                TAG,
+                "preload-guard active=$guardActive memory=$memoryGuard waiting=$waitingCurrentBuffer used=${formatMemory(usedMemoryBytes)} max=${formatMemory(maxMemoryBytes)} ahead=${bufferedAheadMs / 1000}s target=${settings.forwardBufferSeconds}s"
+            )
+            preloadGuardActive = guardActive
+            memoryPreloadGuardActive = memoryGuard
+            preloadWaitingCurrentBuffer = waitingCurrentBuffer
+        }
+        return shouldAllow
+    }
+
+    private fun startHlsRollingPrefetch() {
+        if (currentPlaylistCacheDescriptor == null) {
+            return
+        }
+        val settings = viewModel.composeMenuState.value.settings
+        val prefetcher = getOrCreateHlsRollingPrefetcher()
+        prefetcher.start(
+            HlsPrefetchSession(
+                current = currentPlaylistCacheDescriptor,
+                next = nextPlaylistCacheDescriptor,
+                positionMs = playbackSnapshot.positionMs,
+                diskCacheEnabled = settings.diskCacheEnabled,
+                preloadNextEpisode = settings.preloadNextEpisode,
+            )
+        )
+        lastPrefetchUpdateAt = 0L
+        updateHlsRollingPrefetch(force = true)
+    }
+
+    private fun updateHlsRollingPrefetch(force: Boolean) {
+        val prefetcher = hlsRollingPrefetcher ?: return
+        if (currentPlaylistCacheDescriptor == null) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (!force && now - lastPrefetchUpdateAt < PREFETCH_UPDATE_INTERVAL_MS) {
+            return
+        }
+        lastPrefetchUpdateAt = now
+        val settings = viewModel.composeMenuState.value.settings
+        val snapshot = playbackSnapshot
+        prefetcher.update(
+            HlsPrefetchPlaybackState(
+                positionMs = snapshot.positionMs,
+                durationMs = snapshot.durationMs,
+                playbackState = player.playbackState,
+                rebufferCount = rebufferCount,
+                diskCacheEnabled = settings.diskCacheEnabled,
+                preloadNextEpisode = settings.preloadNextEpisode,
+            )
+        )
+    }
+
+    private fun getOrCreateHlsRollingPrefetcher(): HlsRollingPrefetcher {
+        hlsRollingPrefetcher?.let { return it }
+        val dataSourceType = playerDataSourceProvider.get()
+        val upstreamFactory = DefaultDataSource.Factory(requireContext(), dataSourceType.factory)
+        val prefetcher = HlsRollingPrefetcher(
+            cacheProvider = cacheDataSourceProvider,
+            upstreamFactory = upstreamFactory,
+        )
+        hlsRollingPrefetcher = prefetcher
+        hlsRollingPrefetchStateJob?.cancel()
+        hlsRollingPrefetchStateJob = viewLifecycleOwner.lifecycleScope.launch {
+            prefetcher.state.collect { state ->
+                hlsRollingPrefetchState = state
+                updatePlayerStats()
+            }
+        }
+        return prefetcher
+    }
+
+    private fun maybeRefreshCacheInspection(positionMs: Long) {
+        if (!cacheDataSourceProvider.isEnabled()) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        if (now - lastCacheInspectionAt < 1_000L) {
+            return
+        }
+        updateCacheInspection(positionMs)
+        lastCacheInspectionAt = now
+    }
+
+    private fun updateCacheInspection(positionMs: Long = playbackSnapshot.positionMs) {
+        cacheInspection = HlsPlaylistCacheInspector.inspect(
+            cacheProvider = cacheDataSourceProvider,
+            current = currentPlaylistCacheDescriptor,
+            next = nextPlaylistCacheDescriptor,
+            positionMs = positionMs,
+        )
+    }
+
 }
 
 private enum class OverlayZone {
@@ -1506,6 +1893,7 @@ private data class ComposePlaybackSnapshot(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val bufferedPositionMs: Long = 0L,
+    val cachedPositionMs: Long = 0L,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
 )
@@ -1514,6 +1902,23 @@ private data class SuppressedSkipState(
     val key: String,
     val activationStartMs: Long,
     val activationEndMs: Long,
+)
+
+private data class AppliedRuntimeSettings(
+    val backBufferSeconds: Int,
+    val forwardBufferSeconds: Int,
+    val bufferMemoryLimitMb: Int,
+    val diskCacheEnabled: Boolean,
+    val diskCacheSizeMb: Int,
+    val preloadNextEpisode: Boolean,
+    val allowNextEpisodePreload: Boolean,
+)
+
+private data class PlayerNumericSettingDialogState(
+    val title: String,
+    val value: String,
+    val hint: String,
+    val onApply: (Int) -> Unit,
 )
 
 private data class PlayPauseHudState(
@@ -1856,6 +2261,7 @@ private fun CompletionOverlay(
 @Composable
 private fun PlayerStatsOverlay(
     stats: PlayerStatsState,
+    cacheInspection: HlsCacheInspection,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -1880,9 +2286,10 @@ private fun PlayerStatsOverlay(
         PlayerStatsRow("Состояние", stats.playbackStateLabel)
         PlayerStatsRow("Битрейт", stats.bitrateLabel)
         PlayerStatsRow("Видео", stats.videoSizeLabel)
-        PlayerStatsRow("FPS", stats.fpsLabel)
         PlayerStatsRow("Кодек", stats.codecLabel)
         PlayerStatsRow("Буфер", stats.bufferLabel)
+        PlayerStatsRow("Кэш на диске", stats.diskCacheLabel)
+        PlayerStatsRow("Предзагрузка", stats.prefetchLabel)
         PlayerStatsRow("Память", stats.memoryUsedLabel)
         PlayerStatsRow("Доступно", stats.memoryAvailableLabel)
         PlayerStatsRow("Потеряно кадров", stats.droppedFramesLabel)
@@ -1914,6 +2321,222 @@ private fun PlayerStatsRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+private fun CacheBreakdownOverlay(
+    cacheInspection: HlsCacheInspection,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .width(320.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xC8121212))
+            .border(
+                width = 1.dp,
+                brush = SolidColor(Color(0x26FFFFFF)),
+                shape = RoundedCornerShape(20.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "Кэш по сериям",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        PlayerStatsRow(
+            "Текущая серия",
+            formatCacheSegments(
+                bytes = cacheInspection.currentBytes,
+                cachedSegments = cacheInspection.currentSegmentsCached,
+                totalSegments = cacheInspection.currentSegmentsTotal,
+            ),
+        )
+        PlayerStatsRow(
+            "Следующая серия",
+            formatCacheSegments(
+                bytes = cacheInspection.nextBytes,
+                cachedSegments = cacheInspection.nextSegmentsCached,
+                totalSegments = cacheInspection.nextSegmentsTotal,
+            ),
+        )
+        PlayerStatsRow("Прочее", formatMemory(cacheInspection.otherBytes))
+    }
+}
+
+@Composable
+private fun DiskCacheInputOverlay(
+    title: String,
+    value: String,
+    hint: String,
+    onValueChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onApply: () -> Unit,
+) {
+    val fieldFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        fieldFocusRequester.requestFocusSafely()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0x7A000000))
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(420.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xEE141414))
+                .border(
+                    width = 1.dp,
+                    brush = SolidColor(Color(0x24FFFFFF)),
+                    shape = RoundedCornerShape(24.dp),
+                )
+                .padding(horizontal = 22.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(fieldFocusRequester)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF1F1F1F))
+                    .border(
+                        width = 1.dp,
+                        brush = SolidColor(Color(0x22FFFFFF)),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                decorationBox = { innerTextField ->
+                    if (value.isBlank()) {
+                        Text(
+                            text = hint,
+                            color = Color(0xFF8C8C8C),
+                            fontSize = 16.sp,
+                        )
+                    }
+                    innerTextField()
+                },
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OverlayTextButton(
+                    label = "Отмена",
+                    selected = false,
+                    onClick = onDismiss,
+                )
+                OverlayTextButton(
+                    label = "Сохранить",
+                    selected = true,
+                    onClick = onApply,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiskCacheInputOverlay(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onApply: () -> Unit,
+) {
+    val fieldFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        fieldFocusRequester.requestFocusSafely()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0x7A000000))
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .width(420.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xEE141414))
+                .border(
+                    width = 1.dp,
+                    brush = SolidColor(Color(0x24FFFFFF)),
+                    shape = RoundedCornerShape(24.dp),
+                )
+                .padding(horizontal = 22.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Размер кэша на диске",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(fieldFocusRequester)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF1F1F1F))
+                    .border(
+                        width = 1.dp,
+                        brush = SolidColor(Color(0x22FFFFFF)),
+                        shape = RoundedCornerShape(16.dp),
+                    )
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                decorationBox = { innerTextField ->
+                    if (value.isBlank()) {
+                        Text(
+                            text = "Введите размер в MB",
+                            color = Color(0xFF8C8C8C),
+                            fontSize = 16.sp,
+                        )
+                    }
+                    innerTextField()
+                },
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OverlayTextButton(
+                    label = "Отмена",
+                    selected = false,
+                    onClick = onDismiss,
+                )
+                OverlayTextButton(
+                    label = "Сохранить",
+                    selected = true,
+                    onClick = onApply,
+                )
+            }
+        }
     }
 }
 
@@ -2121,6 +2744,7 @@ private fun TimelineControl(
     val duration = snapshot.durationMs.takeIf { it > 0 } ?: 1L
     val playedFraction = (snapshot.positionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
     val bufferedFraction = (snapshot.bufferedPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    val cachedFraction = (snapshot.cachedPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 
     Column(
         modifier = modifier
@@ -2148,6 +2772,10 @@ private fun TimelineControl(
         ) {
             val totalWidth = maxWidth
 
+            TimelineFill(
+                width = totalWidth * cachedFraction,
+                color = Color(0xFF2F3D47),
+            )
             TimelineFill(
                 width = totalWidth * bufferedFraction,
                 color = Color(0xFF4B4B4B),
@@ -2260,6 +2888,20 @@ private fun formatDuration(durationMs: Long): String {
     }
 }
 
+private fun PlayerComposeSettingsState.toAppliedRuntimeSettings(
+    allowNextEpisodePreload: Boolean,
+): AppliedRuntimeSettings {
+    return AppliedRuntimeSettings(
+        backBufferSeconds = backBufferSeconds,
+        forwardBufferSeconds = forwardBufferSeconds,
+        bufferMemoryLimitMb = bufferMemoryLimitMb,
+        diskCacheEnabled = diskCacheEnabled,
+        diskCacheSizeMb = diskCacheSizeMb,
+        preloadNextEpisode = preloadNextEpisode,
+        allowNextEpisodePreload = allowNextEpisodePreload,
+    )
+}
+
 private fun formatDelta(durationMs: Long): String {
     val seconds = abs(durationMs) / 1000
     return "${seconds}с"
@@ -2302,6 +2944,21 @@ private fun formatMemory(value: Long): String {
     return String.format(Locale.US, "%.1f MB", value / 1024f / 1024f)
 }
 
+private fun formatCacheSegments(
+    bytes: Long,
+    cachedSegments: Int,
+    totalSegments: Int,
+): String {
+    val sizeLabel = formatMemory(bytes)
+    if (totalSegments <= 0) {
+        return sizeLabel
+    }
+    return "$sizeLabel ($cachedSegments/$totalSegments)"
+}
+
+private const val HEAP_PRELOAD_DISABLE_RATIO = 0.75f
+private const val PREFETCH_UPDATE_INTERVAL_MS = 10_000L
+
 private fun Int.toPlaybackStateLabel(isPlaying: Boolean): String {
     return when (this) {
         Player.STATE_IDLE -> "Ожидание"
@@ -2324,3 +2981,5 @@ private fun FocusRequester.requestFocusSafely() {
         requestFocus()
     }
 }
+
+

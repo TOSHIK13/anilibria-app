@@ -8,8 +8,8 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,10 +44,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
@@ -77,6 +77,12 @@ fun PlayerSubmenuSheet(
     onSetSkipsEnabled: (Boolean) -> Unit,
     onSetAutoSkipEnabled: (Boolean) -> Unit,
     onSetAutoplayEnabled: (Boolean) -> Unit,
+    onEditBackBufferSeconds: () -> Unit,
+    onEditForwardBufferSeconds: () -> Unit,
+    onEditBufferMemoryLimitMb: () -> Unit,
+    onSetDiskCacheEnabled: (Boolean) -> Unit,
+    onEditDiskCacheSize: () -> Unit,
+    onSetPreloadNextEpisode: (Boolean) -> Unit,
 ) {
     val entries = remember(submenu, state, stats) {
         buildSubmenuEntries(
@@ -89,6 +95,12 @@ fun PlayerSubmenuSheet(
             onSetSkipsEnabled = onSetSkipsEnabled,
             onSetAutoSkipEnabled = onSetAutoSkipEnabled,
             onSetAutoplayEnabled = onSetAutoplayEnabled,
+            onEditBackBufferSeconds = onEditBackBufferSeconds,
+            onEditForwardBufferSeconds = onEditForwardBufferSeconds,
+            onEditBufferMemoryLimitMb = onEditBufferMemoryLimitMb,
+            onSetDiskCacheEnabled = onSetDiskCacheEnabled,
+            onEditDiskCacheSize = onEditDiskCacheSize,
+            onSetPreloadNextEpisode = onSetPreloadNextEpisode,
         )
     }
     val listState = rememberLazyListState()
@@ -143,51 +155,51 @@ fun PlayerSubmenuSheet(
 
         Box(
             modifier = Modifier
-            .width(panelWidth)
-            .height(panelHeight)
-            .clip(RoundedCornerShape(26.dp))
-            .background(Color(0xF4171717))
-            .border(
-                width = 1.dp,
-                brush = SolidColor(Color(0x2AFFFFFF)),
-                shape = RoundedCornerShape(26.dp),
-            )
-            .focusRequester(panelFocusRequester)
-            .onFocusChanged { panelFocused = it.isFocused }
-            .focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) {
-                    return@onPreviewKeyEvent false
+                .width(panelWidth)
+                .height(panelHeight)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Color(0xF4171717))
+                .border(
+                    width = 1.dp,
+                    brush = SolidColor(Color(0x2AFFFFFF)),
+                    shape = RoundedCornerShape(26.dp),
+                )
+                .focusRequester(panelFocusRequester)
+                .onFocusChanged { panelFocused = it.isFocused }
+                .focusable()
+                .onPreviewKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) {
+                        return@onPreviewKeyEvent false
+                    }
+                    when (event.key) {
+                        Key.DirectionUp -> {
+                            selectedIndex = entries.findPreviousSelectable(selectedIndex)
+                            true
+                        }
+
+                        Key.DirectionDown -> {
+                            selectedIndex = entries.findNextSelectable(selectedIndex)
+                            true
+                        }
+
+                        Key.DirectionLeft,
+                        Key.DirectionRight -> true
+
+                        Key.DirectionCenter,
+                        Key.Enter,
+                        Key.NumPadEnter -> {
+                            (entries.getOrNull(selectedIndex) as? PlayerSubmenuEntry.Row)?.onClick?.invoke()
+                            true
+                        }
+
+                        else -> false
+                    }
                 }
-                when (event.key) {
-                    Key.DirectionUp -> {
-                        selectedIndex = entries.findPreviousSelectable(selectedIndex)
-                        true
-                    }
-
-                    Key.DirectionDown -> {
-                        selectedIndex = entries.findNextSelectable(selectedIndex)
-                        true
-                    }
-
-                    Key.DirectionLeft,
-                    Key.DirectionRight -> true
-
-                    Key.DirectionCenter,
-                    Key.Enter,
-                    Key.NumPadEnter -> {
-                        (entries.getOrNull(selectedIndex) as? PlayerSubmenuEntry.Row)?.onClick?.invoke()
-                        true
-                    }
-
-                    else -> false
-                }
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {}
-            .padding(horizontal = 16.dp, vertical = 16.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) {}
+                .padding(horizontal = 16.dp, vertical = 16.dp)
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -270,6 +282,12 @@ private fun buildSubmenuEntries(
     onSetSkipsEnabled: (Boolean) -> Unit,
     onSetAutoSkipEnabled: (Boolean) -> Unit,
     onSetAutoplayEnabled: (Boolean) -> Unit,
+    onEditBackBufferSeconds: () -> Unit,
+    onEditForwardBufferSeconds: () -> Unit,
+    onEditBufferMemoryLimitMb: () -> Unit,
+    onSetDiskCacheEnabled: (Boolean) -> Unit,
+    onEditDiskCacheSize: () -> Unit,
+    onSetPreloadNextEpisode: (Boolean) -> Unit,
 ): List<PlayerSubmenuEntry> {
     return when (submenu) {
         PlayerSubmenuType.QUALITY -> state.qualityOptions.map { option ->
@@ -325,6 +343,42 @@ private fun buildSubmenuEntries(
                 subtitle = if (state.settings.autoplayEnabled) "Включено" else "Выключено",
                 selected = state.settings.autoplayEnabled,
                 onClick = { onSetAutoplayEnabled(!state.settings.autoplayEnabled) },
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Буфер назад",
+                subtitle = "${state.settings.backBufferSeconds} с",
+                selected = false,
+                onClick = onEditBackBufferSeconds,
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Буфер вперёд",
+                subtitle = "${state.settings.forwardBufferSeconds} с",
+                selected = false,
+                onClick = onEditForwardBufferSeconds,
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "\u041b\u0438\u043c\u0438\u0442 \u041e\u0417\u0423 \u0434\u043b\u044f \u0431\u0443\u0444\u0435\u0440\u0430",
+                subtitle = "${state.settings.bufferMemoryLimitMb} MB",
+                selected = false,
+                onClick = onEditBufferMemoryLimitMb,
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Доп. кэш на диске",
+                subtitle = if (state.settings.diskCacheEnabled) "Включено" else "Выключено",
+                selected = state.settings.diskCacheEnabled,
+                onClick = { onSetDiskCacheEnabled(!state.settings.diskCacheEnabled) },
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Размер кэша на диске",
+                subtitle = "${state.settings.diskCacheSizeMb} MB",
+                selected = false,
+                onClick = onEditDiskCacheSize,
+            ),
+            PlayerSubmenuEntry.Row(
+                title = "Предзагрузка следующей серии",
+                subtitle = if (state.settings.preloadNextEpisode) "Включено" else "Выключено",
+                selected = state.settings.preloadNextEpisode,
+                onClick = { onSetPreloadNextEpisode(!state.settings.preloadNextEpisode) },
             ),
         )
 
