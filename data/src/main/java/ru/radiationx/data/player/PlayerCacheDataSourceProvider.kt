@@ -7,6 +7,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import ru.radiationx.data.datasource.holders.PreferencesHolder
@@ -88,11 +89,37 @@ class PlayerCacheDataSourceProvider @Inject constructor(
         if (!isEnabled() && cacheHolder == null) {
             return false
         }
-        return if (expectedLengthBytes != null && expectedLengthBytes > 0L) {
-            getOrCreateCache().isCached(key, position.coerceAtLeast(0L), expectedLengthBytes)
+        val cache = getOrCreateCache()
+        // Для сегментов без byte-range длину берём из метаданных кэша (её пишет CacheDataSource),
+        // чтобы частично скачанный сегмент не считался закэшированным.
+        val lengthBytes = expectedLengthBytes?.takeIf { it > 0L }
+            ?: ContentMetadata.getContentLength(cache.getContentMetadata(key)).takeIf { it > 0L }
+        return if (lengthBytes != null) {
+            cache.isCached(key, position.coerceAtLeast(0L), lengthBytes)
         } else {
             getCachedBytesForKey(key) > 0L
         }
+    }
+
+    /**
+     * Удаляет ресурсы по ключам (URI сегментов). Вызывать не с main-потока.
+     * Возвращает число освобождённых байт.
+     */
+    fun removeCachedResources(keys: Collection<String>): Long {
+        if (cacheHolder == null || keys.isEmpty()) {
+            return 0L
+        }
+        val cache = getOrCreateCache()
+        var freedBytes = 0L
+        keys.forEach { key ->
+            val bytes = cache.getCachedSpans(key).sumOf { it.length.coerceAtLeast(0L) }
+            if (bytes <= 0L) {
+                return@forEach
+            }
+            runCatching { cache.removeResource(key) }
+                .onSuccess { freedBytes += bytes }
+        }
+        return freedBytes
     }
 
     @Synchronized

@@ -9,4 +9,9 @@ data class Video(
     val title: String,
     val subtitle: String,
     val skips: PlayerSkips?,
+    /**
+     * true — серия уже играет в плеере как следующий MediaItem очереди (переход сделал ExoPlayer),
+     * повторный setMediaItems/prepare не нужен.
+     */
+    val reuseLoadedItem: Boolean = false,
 )
