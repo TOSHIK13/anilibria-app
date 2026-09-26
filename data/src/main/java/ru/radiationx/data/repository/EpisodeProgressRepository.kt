@@ -24,6 +24,7 @@ import kotlin.math.roundToLong
 class EpisodeProgressRepository @Inject constructor(
     private val viewsApi: ViewsApi,
     private val authRepository: AuthRepository,
+    private val watchProgressRepository: WatchProgressRepository,
 ) {
 
     private val cache = SuspendMutableStateFlow<Map<String, ViewTimecodeResponse>> { emptyMap() }
@@ -70,7 +71,6 @@ class EpisodeProgressRepository @Inject constructor(
             isWatched = isWatched,
             releaseEpisodeId = serverId,
         )
-        viewsApi.updateTimecodes(listOf(request))
         val updatedValue = ViewTimecodeResponse(
             id = current?.id,
             time = request.time.toFloat(),
@@ -79,8 +79,11 @@ class EpisodeProgressRepository @Inject constructor(
             updatedAt = formatDateTime(System.currentTimeMillis()),
             releaseEpisodeId = serverId,
         )
+        // Кеш обновляется до запроса: позиция не теряется, даже если отправка не дошла.
         cache.update { it + (serverId to updatedValue) }
         checkedEpisodes += serverId
+        watchProgressRepository.onEpisodeChanged(episodeId.releaseId, serverId, isWatched)
+        viewsApi.updateTimecodes(listOf(request))
     }
 
     suspend fun importAccess(
@@ -96,6 +99,7 @@ class EpisodeProgressRepository @Inject constructor(
             releaseEpisodeId = episode.serverId,
         )
         viewsApi.updateTimecodes(listOf(request))
+        watchProgressRepository.onEpisodeChanged(episode.id.releaseId, episode.serverId, request.isWatched)
         cache.update { old ->
             old + (episode.serverId to ViewTimecodeResponse(
                 id = old[episode.serverId]?.id,
@@ -116,6 +120,7 @@ class EpisodeProgressRepository @Inject constructor(
         viewsApi.deleteTimecodes(listOf(ViewTimecodeDeleteRequest(episode.serverId)))
         cache.update { it - episode.serverId }
         checkedEpisodes += episode.serverId
+        watchProgressRepository.onEpisodeRemoved(episode.id.releaseId, episode.serverId)
     }
 
     suspend fun markAllViewed(release: Release) {
@@ -149,6 +154,10 @@ class EpisodeProgressRepository @Inject constructor(
         }
         checkedEpisodes += requests.map { it.releaseEpisodeId }
         syncedReleases += release.id
+        watchProgressRepository.onReleaseReplaced(
+            release.id,
+            requests.associate { it.releaseEpisodeId to true },
+        )
     }
 
     suspend fun resetAccessHistory(release: Release) {
@@ -163,6 +172,7 @@ class EpisodeProgressRepository @Inject constructor(
         cache.update { old -> old - requests.map { it.releaseEpisodeId }.toSet() }
         checkedEpisodes += requests.map { it.releaseEpisodeId }
         syncedReleases += release.id
+        watchProgressRepository.onReleaseReplaced(release.id, emptyMap())
     }
 
     private suspend fun refreshRelease(release: Release) {
@@ -175,6 +185,10 @@ class EpisodeProgressRepository @Inject constructor(
         }
         checkedEpisodes += release.episodes.map { it.serverId }
         syncedReleases += release.id
+        watchProgressRepository.onReleaseReplaced(
+            release.id,
+            response.associate { it.releaseEpisodeId to (it.isWatched == true) },
+        )
     }
 
     private suspend fun refreshEpisode(episode: Episode) {
@@ -210,6 +224,7 @@ class EpisodeProgressRepository @Inject constructor(
         cache.setValue(emptyMap())
         syncedReleases.clear()
         checkedEpisodes.clear()
+        watchProgressRepository.clear()
     }
 
     private fun mapToAccesses(

@@ -20,12 +20,10 @@ import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerScreen
 import ru.radiationx.anilibria.screen.player.PlayerController
 import ru.radiationx.data.entity.common.AuthState
-import ru.radiationx.data.entity.domain.collection.CollectionType
 import ru.radiationx.data.entity.domain.release.EpisodeAccess
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.AuthRepository
-import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.FavoriteRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -35,7 +33,6 @@ class DetailHeaderViewModel @Inject constructor(
     argExtra: DetailExtra,
     private val releaseInteractor: ReleaseInteractor,
     private val favoriteRepository: FavoriteRepository,
-    private val collectionRepository: CollectionRepository,
     private val authRepository: AuthRepository,
     private val converter: DetailDataConverter,
     private val router: Router,
@@ -87,9 +84,19 @@ class DetailHeaderViewModel @Inject constructor(
 
     fun onContinueClick() {
         viewModelScope.launch {
-            releaseInteractor.getAccesses(releaseId).maxByOrNull { it.lastAccessRaw }?.also {
-                router.navigateTo(PlayerScreen(releaseId, it.id))
+            val lastAccess = releaseInteractor
+                .getAccesses(releaseId)
+                .maxByOrNull { it.lastAccessRaw }
+                ?: return@launch
+            // Последняя серия досмотрена — продолжаем со следующей, если она есть.
+            val episodes = currentRelease?.episodes.orEmpty()
+            val episodeId = if (lastAccess.isViewed) {
+                val index = episodes.indexOfFirst { it.id == lastAccess.id }
+                episodes.getOrNull(index + 1)?.id ?: lastAccess.id
+            } else {
+                lastAccess.id
             }
+            router.navigateTo(PlayerScreen(releaseId, episodeId))
         }
     }
 
@@ -98,7 +105,6 @@ class DetailHeaderViewModel @Inject constructor(
         if (release.episodes.isEmpty()) return
 
         viewModelScope.launch {
-            addToWatchingIfNoCollection()
             if (release.episodes.size == 1) {
                 router.navigateTo(PlayerScreen(releaseId, null))
             } else {
@@ -157,20 +163,6 @@ class DetailHeaderViewModel @Inject constructor(
 
     fun onOtherClick() {
         guidedRouter.open(DetailOtherGuidedScreen(releaseId))
-    }
-
-    private suspend fun addToWatchingIfNoCollection() {
-        if (authRepository.getAuthState() != AuthState.AUTH) {
-            return
-        }
-        coRunCatching {
-            val currentCollection = collectionRepository.getReleaseCollection(releaseId)
-            if (currentCollection == null) {
-                collectionRepository.setReleaseCollection(releaseId, CollectionType.WATCHING)
-            }
-        }.onFailure {
-            Timber.e(it)
-        }
     }
 
     private fun updateRelease(release: Release, accesses: List<EpisodeAccess>) {

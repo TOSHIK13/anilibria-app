@@ -120,6 +120,7 @@ import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.data.repository.CollectionRepository
+import ru.radiationx.data.repository.WatchProgressRepository
 import ru.radiationx.data.repository.ConfigurationRepository
 import ru.radiationx.data.repository.DonationRepository
 import ru.radiationx.data.repository.EpisodeProgressRepository
@@ -250,6 +251,7 @@ class DataModule(context: Context) : QuillModule() {
         single<TeamsRepository>()
         single<RemoteFileRepository>()
         single<EpisodeProgressRepository>()
+        single<WatchProgressRepository>()
 
         single<ReleaseUpdateMiddleware>()
 

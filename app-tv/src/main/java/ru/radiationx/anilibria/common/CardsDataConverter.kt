@@ -26,7 +26,8 @@ class CardsDataConverter(
             title.orEmpty(),
             descItems.joinToString(" • "),
             poster.orEmpty(),
-            LibriaCard.Type.Release(releaseItem.id)
+            LibriaCard.Type.Release(releaseItem.id),
+            episodesTotal = series?.trim()?.toIntOrNull()?.takeIf { it > 0 },
         )
     }
 

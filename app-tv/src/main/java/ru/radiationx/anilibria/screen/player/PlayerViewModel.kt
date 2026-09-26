@@ -1,21 +1,26 @@
 package ru.radiationx.anilibria.screen.player
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import ru.radiationx.anilibria.common.WatchCollectionSync
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.release.Episode
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.entity.domain.types.EpisodeId
+import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.player.EpisodePlaybackRules
 import ru.radiationx.data.repository.HistoryRepository
@@ -30,6 +35,7 @@ class PlayerViewModel @Inject constructor(
     private val preferencesHolder: PreferencesHolder,
     private val playerController: PlayerController,
     private val router: Router,
+    private val watchCollectionSync: WatchCollectionSync,
 ) : LifecycleViewModel() {
 
     val videoData = MutableStateFlow<Video?>(null)
@@ -58,6 +64,9 @@ class PlayerViewModel @Inject constructor(
     private var lastSyncedAt = 0L
     private var lastPeriodicSyncAt = 0L
     private var pendingAutoPlay = false
+    private var playedMs = 0L
+    private var lastPlayTickAt = 0L
+    private val playbackStartReported = mutableSetOf<ReleaseId>()
 
     init {
         playerController.reset()
@@ -284,6 +293,7 @@ class PlayerViewModel @Inject constructor(
         }
         updatePlaybackSnapshot(position, duration)
         markWatchedIfNeeded(reason = "progress")
+        trackPlaybackStart(isPlaying)
         if (isEpisodeActuallyFinished(lastKnownPosition, lastKnownDuration)) {
             handleEpisodeCompletion("progress")
             return
@@ -397,7 +407,9 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    private suspend fun syncCurrentEpisodeNow(force: Boolean, reason: String) {
+    // NonCancellable: при выходе из плеера viewModelScope отменяется,
+    // а последняя позиция всё равно должна дойти до сервера.
+    private suspend fun syncCurrentEpisodeNow(force: Boolean, reason: String) = withContext(NonCancellable) {
         progressSyncJob?.cancelAndJoin()
         progressSyncJob = null
         sendCurrentEpisodeSync(force = force, reason = reason)
@@ -434,13 +446,21 @@ class PlayerViewModel @Inject constructor(
             TAG,
             "progress-sync reason=$reason episode=${episode.id} position=$position duration=$duration sendProgress=$sendProgress sendWatched=$sendWatched"
         )
-        releaseInteractor.setAccessSeek(
-            id = episode.id,
-            serverId = episode.serverId,
-            seek = position,
-            duration = duration.takeIf { it > 0L },
-            forceViewed = sendWatched,
-        )
+        val synced = coRunCatching {
+            releaseInteractor.setAccessSeek(
+                id = episode.id,
+                serverId = episode.serverId,
+                seek = position,
+                duration = duration.takeIf { it > 0L },
+                forceViewed = sendWatched,
+            )
+        }.onFailure {
+            // progressDirty остаётся true — отправка повторится на следующем триггере.
+            Log.w(TAG, "progress-sync failed reason=$reason episode=${episode.id}", it)
+        }.isSuccess
+        if (!synced) {
+            return
+        }
         if (currentEpisode?.id == episode.id) {
             lastSyncedPosition = position
             lastSyncedDuration = duration
@@ -453,6 +473,33 @@ class PlayerViewModel @Inject constructor(
         }
         if (sendWatched) {
             Log.d(TAG, "watched-sync episode=${episode.id} position=$position duration=$duration")
+            launchCollectionSync { watchCollectionSync.onEpisodeWatched(episode.id.releaseId) }
+        }
+    }
+
+    private fun trackPlaybackStart(isPlaying: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        val lastTick = lastPlayTickAt
+        lastPlayTickAt = now
+        if (!isPlaying || lastTick == 0L) {
+            return
+        }
+        val releaseId = currentEpisode?.id?.releaseId ?: return
+        if (releaseId in playbackStartReported) {
+            return
+        }
+        playedMs += (now - lastTick).coerceIn(0L, MAX_PLAY_TICK_MS)
+        if (playedMs < PLAYBACK_STARTED_MS) {
+            return
+        }
+        playbackStartReported += releaseId
+        Log.d(TAG, "playback-started release=${releaseId.id} playedMs=$playedMs")
+        launchCollectionSync { watchCollectionSync.onPlaybackStarted(releaseId) }
+    }
+
+    private fun launchCollectionSync(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            withContext(NonCancellable) { block() }
         }
     }
 
@@ -499,6 +546,8 @@ class PlayerViewModel @Inject constructor(
         watchedSynced = false
         completionHandled = false
         pendingAutoPlay = autoPlay
+        playedMs = 0L
+        lastPlayTickAt = 0L
         lastKnownPosition = 0
         lastKnownDuration = 0
         progressDirty = false
@@ -628,7 +677,9 @@ class PlayerViewModel @Inject constructor(
 
     private companion object {
         private const val TAG = "PlayerFlow"
-        private const val PERIODIC_SYNC_MS = 5 * 60 * 1_000L
+        private const val PERIODIC_SYNC_MS = 60 * 1_000L
+        private const val PLAYBACK_STARTED_MS = 30 * 1_000L
+        private const val MAX_PLAY_TICK_MS = 2_000L
         private const val DUPLICATE_GUARD_MS = 2_000L
     }
 }
