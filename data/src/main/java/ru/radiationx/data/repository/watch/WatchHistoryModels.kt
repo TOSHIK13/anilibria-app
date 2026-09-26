@@ -43,6 +43,24 @@ data class PendingTimecode(
     val isDelete: Boolean get() = time == null
 }
 
+/**
+ * Минимум о релизе для карточки «Продолжить просмотр» — хранится на диске,
+ * чтобы ряд рисовался при холодном старте без сети.
+ */
+@JsonClass(generateAdapter = true)
+data class ReleaseCardInfo(
+    @Json(name = "id") val id: Int,
+    @Json(name = "title") val title: String? = null,
+    @Json(name = "poster") val poster: String? = null,
+    @Json(name = "year") val year: String? = null,
+    @Json(name = "season") val season: String? = null,
+    @Json(name = "genres") val genres: List<String> = emptyList(),
+    /** episodes_total строкой, как Release.series. */
+    @Json(name = "series") val series: String? = null,
+    /** fresh_at, unix-секунды (Release.torrentUpdate). */
+    @Json(name = "torrent_update") val torrentUpdate: Int = 0,
+)
+
 /** Релиз для «Продолжить просмотр»: последняя серия, которую смотрели. */
 data class ContinueWatchingItem(
     val releaseId: ReleaseId,

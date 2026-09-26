@@ -97,6 +97,7 @@ import ru.radiationx.data.datasource.storage.SocialAuthStorage
 import ru.radiationx.data.datasource.storage.TeamsStorage
 import ru.radiationx.data.datasource.storage.UserStorage
 import ru.radiationx.data.datasource.storage.YearsStorage
+import ru.radiationx.data.datasource.storage.ReleaseCardStorage
 import ru.radiationx.data.datasource.storage.WatchHistoryStorage
 import ru.radiationx.data.di.providers.ApiClientWrapper
 import ru.radiationx.data.di.providers.ApiNetworkClient
@@ -121,6 +122,7 @@ import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.data.repository.CollectionRepository
+import ru.radiationx.data.repository.ReleaseCardRepository
 import ru.radiationx.data.repository.WatchProgressRepository
 import ru.radiationx.data.repository.ConfigurationRepository
 import ru.radiationx.data.repository.DonationRepository
@@ -199,6 +201,7 @@ class DataModule(context: Context) : QuillModule() {
         single<ApiConfig>()
         single<ApiConfigStorage>()
         single<WatchHistoryStorage>()
+        single<ReleaseCardStorage>()
 
 
         single<PlayerOkHttpProvider>()
@@ -254,6 +257,7 @@ class DataModule(context: Context) : QuillModule() {
         single<RemoteFileRepository>()
         single<EpisodeProgressRepository>()
         single<WatchProgressRepository>()
+        single<ReleaseCardRepository>()
 
         single<ReleaseUpdateMiddleware>()
 

@@ -270,22 +270,31 @@ class WatchProgressRepository @Inject constructor(
         if (restored) return
         restoreMutex.withLock {
             if (restored) return
-            restored = true
-            if (authRepository.getAuthState() != AuthState.AUTH) return
-            val start = LoadTiming.now()
-            val snapshot = storage.getSnapshot() ?: return
-            val fromDisk = WatchHistoryLogic.applyPending(
-                snapshot.episodes.associateBy { it.episodeId },
-                storage.getPending()
-            )
-            state.update { current ->
-                // Локальные изменения, сделанные до восстановления, важнее дискового снимка.
-                fromDisk + current.orEmpty().mapValues { (id, episode) ->
-                    WatchHistoryLogic.mergeEpisode(fromDisk[id], episode)
-                }
+            // restored выставляется только после чтения снимка: иначе параллельный вызов
+            // (ряд «Продолжить просмотр») проскакивает мимо мьютекса с пустым state и ждёт сервер.
+            try {
+                restoreLocked()
+            } finally {
+                restored = true
             }
-            LoadTiming.span("watch", "history restored", start, "items=${snapshot.episodes.size}")
         }
+    }
+
+    private suspend fun restoreLocked() {
+        if (authRepository.getAuthState() != AuthState.AUTH) return
+        val start = LoadTiming.now()
+        val snapshot = storage.getSnapshot() ?: return
+        val fromDisk = WatchHistoryLogic.applyPending(
+            snapshot.episodes.associateBy { it.episodeId },
+            storage.getPending()
+        )
+        state.update { current ->
+            // Локальные изменения, сделанные до восстановления, важнее дискового снимка.
+            fromDisk + current.orEmpty().mapValues { (id, episode) ->
+                WatchHistoryLogic.mergeEpisode(fromDisk[id], episode)
+            }
+        }
+        LoadTiming.span("watch", "history restored", start, "items=${snapshot.episodes.size}")
     }
 
     private suspend fun refresh() {

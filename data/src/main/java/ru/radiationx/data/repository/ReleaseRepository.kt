@@ -51,6 +51,14 @@ class ReleaseRepository @Inject constructor(
             .also { updateMiddleware.handle(it) }
     }
 
+    /** Краткие релизы (поля ленты) — для карточек, не для деталей. */
+    suspend fun getShortReleasesById(ids: List<ReleaseId>): List<Release> = withContext(Dispatchers.IO) {
+        releaseApi
+            .getShortReleasesByIds(ids.map { it.id })
+            .map { it.toDomain(apiUtils, apiConfig) }
+            .also { updateMiddleware.handle(it) }
+    }
+
     suspend fun getFullReleasesById(ids: List<ReleaseId>): List<Release> = withContext(Dispatchers.IO) {
         releaseApi
             .getFullReleasesByIds(ids.map { it.id })

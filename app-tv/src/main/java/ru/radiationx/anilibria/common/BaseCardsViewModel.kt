@@ -89,6 +89,9 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
 
     protected open fun getEmptyCard(): CardItem? = null
 
+    /** Дополнение к строке LoadTiming о загрузке страницы (например, `source=cache`). */
+    protected open fun timingExtra(): String? = null
+
     private fun loadPage(requestPage: Int) {
         if (requestJob?.isActive == true) {
             return
@@ -110,7 +113,9 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
                 }
             }.onSuccess { newCards ->
                 if (timingName != null) {
-                    LoadTiming.span("main", "$timingName page=$requestPage data", timingStart, "items=${newCards.size}")
+                    LoadTiming.span("main", "$timingName page=$requestPage data", timingStart,
+                        listOfNotNull("items=${newCards.size}", timingExtra()).joinToString(" ")
+                    )
                     if (newCards.isNotEmpty()) {
                         LoadTiming.markOnce("startup", "first_row_data", timingName)
                     }
@@ -135,7 +140,8 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
                     cardsData.value = if (currentCards.isEmpty()) {
                         getEmptyCard()?.let { listOf(it) }.orEmpty()
                     } else {
-                        currentCards
+                        // Копия: тот же экземпляр StateFlow счёл бы равным и не отдал обновление.
+                        currentCards.toList()
                     }
                 }
                 if (timingName != null && LoadTiming.enabled) {
