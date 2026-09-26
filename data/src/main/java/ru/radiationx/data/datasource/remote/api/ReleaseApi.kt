@@ -86,7 +86,8 @@ class ReleaseApi @Inject constructor(
 
     suspend fun getRecommendedReleases(releaseId: Int? = null): List<CollectionReleaseResponse> {
         val args = buildMap {
-            put("limit", "10")
+            // Сервер принимает не больше 14.
+            put("limit", "14")
             releaseId?.also { put("release_id", it.toString()) }
         }
         return client
