@@ -103,7 +103,8 @@ V1-эквивалентов в OpenAPI нет для: app update, config, menu, 
 - `TeamsApi` уже на V1. Лента (`FeedApi`) и YouTube (`YoutubeApi`) переведены на V1.
 - Список социальных провайдеров (`AuthApi.loadSocialAuth`) захардкожен, сети не трогает.
 - `CheckerApi` (обновления): TV (`TvCheckerSources.useLegacyApi = false`) берёт обновление только
-  из reserve `check-tv.json` (GitHub/Bitbucket, JSON без `{status,data}` обёртки). Legacy
+  из `check-tv.json` форка TOSHIK13/anilibria-app (ветка `develop`, JSON без `{status,data}` обёртки).
+  При новом релизе мода поднимать там `version_code` и ссылку на APK. Legacy
   `query=app_update` отдаёт обновление мобильного приложения, поэтому для TV не вызывается.
   Mobile по-прежнему: legacy → fallback на `check.json`.
 - `ConfigurationApi` bootstrap: `query=config` на `www.anilibria.tv` оставлен, т.к. reserve
