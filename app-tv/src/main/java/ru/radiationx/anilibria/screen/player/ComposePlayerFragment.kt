@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -413,7 +414,10 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         }
 
         subscribeTo(viewModel.playAction.filterNotNull()) {
-            if (it) {
+            if (it && !viewLifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                // Экран не виден (сон приставки): автостарт не делаем, пауза пользователя сохраняется.
+                Log.d(PLAYER_NET_TAG, "play skipped: player screen stopped")
+            } else if (it) {
                 player.play()
             } else {
                 player.pause()
@@ -461,9 +465,16 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         viewModel.onPauseClick(snapshot.positionMs, snapshot.durationMs)
     }
 
+    override fun onStart() {
+        super.onStart()
+        playerHolder.setMediaSessionActive(requireContext(), active = true)
+    }
+
     override fun onStop() {
         super.onStop()
         commitPendingSeek("stop")
+        player.pause()
+        playerHolder.setMediaSessionActive(requireContext(), active = false)
         val snapshot = playbackSnapshot
         viewModel.onStopClick(snapshot.positionMs, snapshot.durationMs)
     }
