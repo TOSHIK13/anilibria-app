@@ -33,6 +33,7 @@ class AppLauncherViewModel @Inject constructor(
 
     private var firstLaunch = true
     private var configShown = false
+    private var splashShown = false
 
     val appReadyState = MutableStateFlow<Unit?>(null)
 
@@ -63,9 +64,12 @@ class AppLauncherViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         if (startupConfigChecker.canStartWithoutConfig()) {
-            // сохранённый конфиг: сразу главная, проверка адреса в фоне
+            // сохранённый конфиг: экран проверки пропускаем, показываем только вступительную
+            // анимацию; главная откроется по её окончании (onIntroFinished), сеть не ждём —
+            // проверка адреса и загрузка профиля идут в фоне параллельно анимации
             LoadTiming.mark("startup", "config_skipped", "tag=${apiConfig.tag}")
-            initMain()
+            showSplash()
+            startUserLoading()
             viewModelScope.launch {
                 coRunCatching {
                     startupConfigChecker.checkInBackground()
@@ -78,13 +82,27 @@ class AppLauncherViewModel @Inject constructor(
         }
     }
 
+    /** Конец вступительной анимации в режиме splash-only. */
+    fun onIntroFinished() {
+        // экран конфигурации уже заменил splash, либо главная уже открыта
+        if (configShown || (!splashShown && !firstLaunch)) return
+        splashShown = false
+        initMain(loadUser = false)
+    }
+
+    private fun showSplash() {
+        splashShown = true
+        router.newRootScreen(ConfigScreen(splashOnly = true))
+    }
+
     private fun showConfig() {
+        // если показан splash (фоновая проверка не нашла живой адрес) — конфигурация заменяет его
+        splashShown = false
         configShown = true
         router.newRootScreen(ConfigScreen())
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
-    private fun initMain() {
+    private fun initMain(loadUser: Boolean = true) {
         firstLaunch = false
         viewModelScope.launch {
             router.newRootScreen(MainPagesScreen())
@@ -93,6 +111,13 @@ class AppLauncherViewModel @Inject constructor(
             }
             appReadyState.value = Unit
         }
+        if (loadUser) {
+            startUserLoading()
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun startUserLoading() {
         GlobalScope.launch {
             coRunCatching {
                 authRepository.loadUser()

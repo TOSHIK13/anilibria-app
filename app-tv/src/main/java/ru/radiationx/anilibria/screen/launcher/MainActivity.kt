@@ -18,6 +18,7 @@ import ru.radiationx.anilibria.di.NavigationModule
 import ru.radiationx.anilibria.di.PlayerModule
 import ru.radiationx.anilibria.di.SearchModule
 import ru.radiationx.anilibria.di.UpdateModule
+import ru.radiationx.anilibria.screen.config.ConfigFragment
 import ru.radiationx.anilibria.screen.player.PlayerMotionHandler
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.system.LoadTiming
@@ -63,6 +64,12 @@ class MainActivity : FragmentActivity() {
         markFirstDraw()
         idleDimOverlay = findViewById(R.id.idleDimOverlay)
         lifecycle.addObserver(viewModel)
+
+        // быстрый старт: главная открывается по окончании вступительной анимации
+        supportFragmentManager.setFragmentResultListener(
+            ConfigFragment.RESULT_INTRO_FINISHED,
+            this
+        ) { _, _ -> viewModel.onIntroFinished() }
 
         subscribeTo(viewModel.appReadyState) {
             handleIntent(intent)
