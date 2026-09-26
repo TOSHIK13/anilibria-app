@@ -63,6 +63,31 @@
   - ответ: голый массив чисел.
 - Сезоны для catalog: `winter`, `spring`, `summer`, `autumn`.
 
+## Лента и видео
+
+- Последние релизы: `GET /api/v1/anime/releases/latest?limit=N`
+  - голый массив, `limit` 1..50 (>50 → 422), `page` молча игнорируется.
+  - `fresh_at` (ISO) == legacy `release.last` (unix) → `Release.torrentUpdate`.
+  - порядок совпадает с `catalog/releases?f[sorting]=FRESH_AT_DESC`, поэтому
+    дальше лента догружается из каталога (`{ data, meta }`, пагинация).
+- Видео: `GET /api/v1/media/videos?limit=N`
+  - голый массив, `limit` ≤ 50, пагинации нет.
+  - `video_id` вместо `vid`, `url` — полная ссылка, `image` — объект
+    `{preview, thumbnail, optimized{...}}` с относительными путями.
+  - `created_at` == legacy youtube `timestamp`; `updated_at` у всех одинаковый — не использовать.
+- Лента (`FeedRepository`) = слияние latest + videos по времени, 10 на страницу;
+  на фикстурах точно повторяет legacy `query=feed` (см. `FeedMergerTest`).
+- `include=` (в т.ч. вложенные `genres.name`) и `exclude=` работают на latest/catalog/videos
+  и уменьшают ответ в разы.
+- Счётчик избранного релиза: `added_in_users_favorites`.
+- Постер: `poster.optimized.preview` → fallback; пути `/storage/...` отдают
+  `www.anilibria.tv`, `anilibria.top`, `aniliberty.top`, `static.wwnd.space` (байт-в-байт одинаково).
+
+## Проверка адреса
+
+- `GET /api/v1/app/status` (~170 байт): `{request, is_alive, available_api_endpoints}` —
+  используется как health-check адреса при старте и на экране конфигурации.
+
 ## Расписание
 
 - `GET /api/v1/anime/schedule/week`
@@ -70,6 +95,7 @@
 
 ## Известные оставшиеся legacy-зоны
 
-- `CheckerApi`, `DonationApi`, `FeedApi`, `MenuApi`, `PageApi` comments, `YoutubeApi`, `TeamsApi`.
+- `CheckerApi`, `DonationApi`, `MenuApi`, `PageApi` comments, `TeamsApi`.
+- Лента (`FeedApi`) и YouTube (`YoutubeApi`) переведены на V1.
 - Legacy social auth/fallback login/logout/user/acceptOtp оставлены как совместимый fallback.
 - Torrents/franchises в V1 mapper пока не восстановлены полностью.

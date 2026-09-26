@@ -170,3 +170,5 @@ adb install -r -d D:/Ani/release-apks/<apk-name>.apk
 ```
 
 Prefer increasing `versionCode` instead of relying on `-d`.
+
+Замеры скорости загрузки (тег `LoadTiming`): см. [`docs/load-timing.md`](load-timing.md).
