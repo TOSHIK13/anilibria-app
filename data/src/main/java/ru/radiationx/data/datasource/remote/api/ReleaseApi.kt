@@ -8,6 +8,7 @@ import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.fetchResponse
 import ru.radiationx.data.entity.response.collection.CollectionReleaseResponse
 import ru.radiationx.data.entity.response.collection.CollectionReleasesResponse
+import ru.radiationx.data.entity.response.collection.V1FranchiseResponse
 import ru.radiationx.data.entity.response.release.RandomReleaseResponse
 import javax.inject.Inject
 
@@ -92,6 +93,14 @@ class ReleaseApi @Inject constructor(
         }
         return client
             .get("$animeUrl/releases/recommended", args)
+            .fetchList()
+    }
+
+    /** Франшизы релиза: голый массив, части в `franchise_releases[]` с кратким `release`. */
+    suspend fun getFranchisesByRelease(releaseId: Int): List<V1FranchiseResponse> {
+        val args = mapOf<String, String>()
+        return client
+            .get("$animeUrl/franchises/release/$releaseId", args)
             .fetchList()
     }
 

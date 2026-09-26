@@ -54,7 +54,16 @@ class DetailsViewModel @Inject constructor(
                 }
             }
             .map { release ->
-                release.getFranchisesIds().filter { it != release.id }
+                // V1 не отдаёт franchises в релизе — части берутся из franchises/release/{id}.
+                release.getFranchisesIds()
+                    .ifEmpty {
+                        releaseInteractor.loadFranchises(release.id)
+                            .firstOrNull()
+                            ?.releases
+                            ?.map { it.id }
+                            .orEmpty()
+                    }
+                    .filter { it != release.id }
             }
             .distinctUntilChanged()
             .onEach {

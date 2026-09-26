@@ -9,6 +9,8 @@ import ru.radiationx.data.entity.domain.release.FavoriteInfo
 import ru.radiationx.data.entity.domain.release.PlayerSkips
 import ru.radiationx.data.entity.domain.release.QualityInfo
 import ru.radiationx.data.entity.domain.release.Release
+import ru.radiationx.data.entity.domain.release.ReleaseFranchise
+import ru.radiationx.data.entity.domain.release.ReleaseFranchisePart
 import ru.radiationx.data.entity.domain.release.RutubeEpisode
 import ru.radiationx.data.entity.domain.release.SourceEpisode
 import ru.radiationx.data.entity.domain.types.ReleaseCode
@@ -19,6 +21,7 @@ import ru.radiationx.data.entity.response.collection.CollectionEpisodeResponse
 import ru.radiationx.data.entity.response.collection.CollectionReleaseResponse
 import ru.radiationx.data.entity.response.collection.CollectionReleasesResponse
 import ru.radiationx.data.entity.response.collection.CollectionSkipResponse
+import ru.radiationx.data.entity.response.collection.V1FranchiseResponse
 import ru.radiationx.data.system.ApiUtils
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -98,7 +101,7 @@ fun CollectionReleaseResponse.toDomain(
             null
         ),
         moonwalkLink = externalPlayer,
-        episodes = episodes?.map { it.toOnlineDomain(ReleaseId(id)) }.orEmpty(),
+        episodes = episodes?.map { it.toOnlineDomain(ReleaseId(id), imagesBaseUrl) }.orEmpty(),
         sourceEpisodes = episodes?.map { it.toSourceDomain(ReleaseId(id)) }.orEmpty(),
         externalPlaylists = emptyList(),
         rutubePlaylist = episodes?.mapNotNull { it.toRutubeDomain(ReleaseId(id)) }.orEmpty(),
@@ -106,7 +109,55 @@ fun CollectionReleaseResponse.toDomain(
         // полный релиз отдаёт episodes, лента (releases/latest) — только latest_episode
         episodesAvailable = episodes?.takeIf { it.isNotEmpty() }?.size
             ?: latestEpisode?.ordinal?.toInt()?.takeIf { it > 0 },
+        ageRating = ageRating?.label?.takeIf { it.isNotBlank() },
+        averageEpisodeDurationMin = averageDurationOfEpisode?.takeIf { it > 0 },
+        shikimoriRating = shikimori?.rating?.takeIf { it > 0.0 },
+        backgroundCover = backgroundCovers
+            ?.firstNotNullOfOrNull { it.toBackgroundUrl(imagesBaseUrl) },
     )
+}
+
+fun V1FranchiseResponse.toDomain(
+    apiUtils: IApiUtils,
+    imagesBaseUrl: String,
+    siteUrl: String,
+): ReleaseFranchise = ReleaseFranchise(
+    id = id,
+    name = name.orEmpty(),
+    nameEnglish = nameEnglish,
+    image = image?.toPosterUrl(imagesBaseUrl),
+    firstYear = firstYear,
+    lastYear = lastYear,
+    totalReleases = totalReleases,
+    totalEpisodes = totalEpisodes,
+    parts = franchiseReleases
+        .orEmpty()
+        .mapIndexedNotNull { index, part ->
+            val release = part.release ?: return@mapIndexedNotNull null
+            ReleaseFranchisePart(
+                sortOrder = part.sortOrder ?: (index + 1),
+                release = release.toDomain(apiUtils, imagesBaseUrl, siteUrl),
+            )
+        }
+        .sortedBy { it.sortOrder },
+)
+
+/** Фон 1920x1080: у `background_covers` `preview` — полный кадр, `thumbnail` — 32x18. */
+internal fun CollectionImageResponse.toBackgroundUrl(imagesBaseUrl: String): String? {
+    val path = preview
+        ?: src
+        ?: optimized?.preview
+        ?: optimized?.src
+    return path?.takeIf { it.isNotBlank() }?.toImageUrl(imagesBaseUrl)
+}
+
+/** Превью серии: `optimized.preview` (webp 720x405) → fallback на исходники. */
+internal fun CollectionImageResponse.toEpisodePreviewUrl(imagesBaseUrl: String): String? {
+    val path = optimized?.preview
+        ?: preview
+        ?: optimized?.src
+        ?: src
+    return path?.takeIf { it.isNotBlank() }?.toImageUrl(imagesBaseUrl)
 }
 
 /**
@@ -146,7 +197,10 @@ fun CollectionReleaseResponse.toSuggestionDomain(
     poster = poster?.toPosterUrl(apiConfig.baseImagesUrl)
 )
 
-private fun CollectionEpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Episode = Episode(
+private fun CollectionEpisodeResponse.toOnlineDomain(
+    releaseId: ReleaseId,
+    imagesBaseUrl: String,
+): Episode = Episode(
     id = EpisodeId((ordinal ?: 0f).toString().trimEnd('0').trimEnd('.'), releaseId),
     serverId = id,
     title = createCombinedTitle(),
@@ -159,7 +213,9 @@ private fun CollectionEpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Epis
     skips = PlayerSkips(
         opening = opening?.toDomain(),
         ending = ending?.toDomain(),
-    )
+    ),
+    previewUrl = preview?.toEpisodePreviewUrl(imagesBaseUrl),
+    durationSec = duration?.takeIf { it > 0 },
 )
 
 private fun CollectionEpisodeResponse.toSourceDomain(releaseId: ReleaseId): SourceEpisode =

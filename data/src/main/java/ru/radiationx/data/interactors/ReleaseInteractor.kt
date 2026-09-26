@@ -10,11 +10,13 @@ import kotlinx.coroutines.flow.update
 import ru.radiationx.data.entity.domain.release.EpisodeAccess
 import ru.radiationx.data.entity.domain.release.RandomRelease
 import ru.radiationx.data.entity.domain.release.Release
+import ru.radiationx.data.entity.domain.release.ReleaseFranchise
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseCode
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.repository.EpisodeProgressRepository
 import ru.radiationx.data.repository.ReleaseRepository
+import ru.radiationx.shared.ktx.coRunCatching
 import javax.inject.Inject
 
 /**
@@ -29,6 +31,9 @@ class ReleaseInteractor @Inject constructor(
     private val releases = MutableStateFlow<List<Release>>(emptyList())
 
     private val sharedRequests = SharedRequests<RequestKey, Release>()
+
+    private val franchiseRequests = SharedRequests<ReleaseId, List<ReleaseFranchise>>()
+    private val franchisesCache = MutableStateFlow<Map<ReleaseId, List<ReleaseFranchise>>>(emptyMap())
 
     suspend fun getRandomRelease(): RandomRelease = releaseRepository.getRandomRelease()
 
@@ -109,6 +114,37 @@ class ReleaseInteractor @Inject constructor(
             allReleasesMap[it.id] = it
         }
         return rootReleaseIds.mapNotNull { allReleasesMap[it] }
+    }
+
+    /**
+     * Франшизы релиза (V1 `franchises/release/{id}`), части по `sort_order`, включая сам релиз.
+     * Результат кэшируется на процесс; при ошибке — пустой список (не кэшируется).
+     * Релизы частей краткие (без серий) — для карточек, полный релиз грузить через [loadRelease].
+     */
+    suspend fun loadFranchises(releaseId: ReleaseId): List<ReleaseFranchise> {
+        franchisesCache.value[releaseId]?.also { return it }
+        val franchises = coRunCatching {
+            franchiseRequests.request(releaseId) {
+                releaseRepository.getFranchises(releaseId)
+            }
+        }.getOrElse { return emptyList() }
+        franchisesCache.update { it + (releaseId to franchises) }
+        franchises.forEach { franchise ->
+            updateItemsCache(franchise.releases)
+        }
+        return franchises
+    }
+
+    /**
+     * Части франшизы релиза для «Связанных релизов»: упорядоченные релизы первой франшизы
+     * (включая сам релиз). Если франшиз нет или запрос упал — только сам релиз, как раньше.
+     */
+    suspend fun loadFranchiseReleases(releaseId: ReleaseId): List<Release> {
+        val franchiseReleases = loadFranchises(releaseId).firstOrNull()?.releases.orEmpty()
+        if (franchiseReleases.isNotEmpty()) {
+            return franchiseReleases
+        }
+        return loadWithFranchises(releaseId)
     }
 
     /* Common */

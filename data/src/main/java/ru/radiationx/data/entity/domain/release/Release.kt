@@ -42,6 +42,14 @@ data class Release(
     val torrents: List<TorrentItem>,
     /** Сколько серий уже вышло (null — неизвестно). */
     val episodesAvailable: Int? = null,
+    /** Возрастной рейтинг, например «16+» (V1 `age_rating.label`). */
+    val ageRating: String? = null,
+    /** Средняя длительность серии в минутах (V1 `average_duration_of_episode`). */
+    val averageEpisodeDurationMin: Int? = null,
+    /** Рейтинг Shikimori (V1 `shikimori.rating`). */
+    val shikimoriRating: Double? = null,
+    /** Абсолютный URL фона 1920x1080 (V1 `background_covers[0].preview`). */
+    val backgroundCover: String? = null,
 ) : Parcelable {
 
 

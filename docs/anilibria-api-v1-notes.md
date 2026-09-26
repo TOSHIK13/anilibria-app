@@ -93,7 +93,34 @@
 ## Расписание
 
 - `GET /api/v1/anime/schedule/week`
-- Ответ: голый массив элементов, внутри каждого есть `release`.
+- Ответ: голый массив элементов `{release, next_release_episode_number, full_season_is_released,
+  published_release_episode}`.
+  - `next_release_episode_number` — номер следующей серии (int или null);
+  - `full_season_is_released` — boolean;
+  - `published_release_episode` — объект серии (как в `episodes[]`, нужен `ordinal`) или null,
+    если на этой неделе серия ещё не вышла.
+- `ScheduleRepository.getScheduleInfo()` — кэш `releaseId → ReleaseScheduleInfo` на процесс.
+
+## Доп. поля релиза (детали, latest, catalog, franchise)
+
+- `age_rating`: `{value: "R16_PLUS", label: "16+", is_adult, description}` → `Release.ageRating = label`.
+- `average_duration_of_episode`: int минут → `Release.averageEpisodeDurationMin`.
+- `shikimori`: `{id, url, votes, rating: 7.46}` → `Release.shikimoriRating`.
+- `background_covers`: массив `{preview, thumbnail}` (без `optimized`), только в деталях релиза;
+  часто пустой. `preview` — 1920x1080 jpg, `thumbnail` — 32x18 → `Release.backgroundCover`.
+- Серия (`episodes[]`, `latest_episode`): `preview` `{src, preview, thumbnail, optimized{src, preview, thumbnail}}`,
+  `optimized.preview` — webp 720x405 → `Episode.previewUrl`; `duration` — секунды → `Episode.durationSec`.
+
+## Франшизы
+
+- `GET /api/v1/anime/franchises/release/{releaseId}` — голый массив франшиз (обычно 0 или 1).
+- Франшиза: `{id (uuid), name, name_english, image{preview, thumbnail, optimized}, rating, first_year,
+  last_year, total_releases, total_episodes, total_duration, total_duration_in_seconds, franchise_releases[]}`.
+- `franchise_releases[]`: `{id, sort_order, release_id, franchise_id, release}`; `release` краткий
+  (poster, name, year, type, episodes_total, age_rating, shikimori…, без `genres`/`episodes`),
+  текущий релиз входит в список.
+- В legacy `franchises` был внутри релиза; в V1 его нет → `ReleaseInteractor.loadFranchises()`.
+  `loadWithFranchises()` для плееров оставлен как был (только сам релиз).
 
 ## История просмотра и таймкоды
 

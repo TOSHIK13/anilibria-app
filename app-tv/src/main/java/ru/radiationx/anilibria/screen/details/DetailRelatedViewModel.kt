@@ -38,7 +38,7 @@ class DetailRelatedViewModel @Inject constructor(
     }
 
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> {
-        val releases = releaseInteractor.loadWithFranchises(releaseId).filter { it.id != releaseId }
+        val releases = releaseInteractor.loadFranchiseReleases(releaseId).filter { it.id != releaseId }
         releaseInteractor.updateItemsCache(releases)
         return releases.map { converter.toCard(it) }
     }
