@@ -15,7 +15,37 @@ object ReleaseCardCacheLogic {
         series = release.series,
         torrentUpdate = release.torrentUpdate,
         episodesAvailable = release.episodesAvailable,
+        episodes = release.episodes.map {
+            ReleaseCardEpisode(
+                serverId = it.serverId,
+                ordinal = it.id.id,
+                previewUrl = it.previewUrl,
+                durationSec = it.durationSec,
+            )
+        },
     )
+
+    /**
+     * Для диска: из серий оставляет только [focusServerId] (серия из истории) и следующую —
+     * длинные сериалы иначе раздували бы кэш. Без [focusServerId] серии не хранятся.
+     */
+    fun trimEpisodes(info: ReleaseCardInfo, focusServerId: String?): ReleaseCardInfo {
+        if (info.episodes.isEmpty()) return info
+        val index = info.episodes.indexOfFirst { it.serverId == focusServerId }
+        val kept = if (index < 0) emptyList() else info.episodes.subList(
+            index,
+            minOf(index + 2, info.episodes.size)
+        ).toList()
+        return if (kept == info.episodes) info else info.copy(episodes = kept)
+    }
+
+    /** Краткий релиз без серий (например, из ленты) берёт серии из кэша. */
+    fun withEpisodesFrom(info: ReleaseCardInfo, cached: ReleaseCardInfo?): ReleaseCardInfo =
+        if (info.episodes.isEmpty() && !cached?.episodes.isNullOrEmpty()) {
+            info.copy(episodes = cached!!.episodes)
+        } else {
+            info
+        }
 
     /**
      * Новый дисковый кэш: [fresh] заменяют старые записи с тем же id, сначала идут релизы

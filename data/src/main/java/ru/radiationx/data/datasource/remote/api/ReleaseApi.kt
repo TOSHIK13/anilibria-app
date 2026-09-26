@@ -20,6 +20,13 @@ class ReleaseApi @Inject constructor(
     private val moshi: Moshi
 ) {
 
+    companion object {
+        /** Поля ленты + серии без ссылок на видео (превью `optimized.preview`, как в CollectionMapper). */
+        const val SHORT_RELEASE_FIELDS = FeedApi.RELEASE_FIELDS +
+                ",episodes.id,episodes.ordinal,episodes.name,episodes.preview.optimized.preview," +
+                "episodes.duration"
+    }
+
     private val animeUrl: String
         get() = "${apiConfig.animeBaseUrl}/api/v1/anime"
 
@@ -57,12 +64,13 @@ class ReleaseApi @Inject constructor(
 
     /**
      * Краткие релизы для карточек: только поля, которые читает CollectionMapper
-     * (как в ленте, [FeedApi.RELEASE_FIELDS]) — ответ в ~5 раз легче полного.
+     * (как в ленте, [FeedApi.RELEASE_FIELDS]) плюс номер/превью/длительность серий
+     * для «Продолжить просмотр» — ответ в разы легче полного.
      */
     suspend fun getShortReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> {
         val args = mapOf(
             "ids" to ids.joinToString(","),
-            "include" to FeedApi.RELEASE_FIELDS,
+            "include" to SHORT_RELEASE_FIELDS,
         )
         return client
             .get("$animeUrl/releases/list", args)

@@ -13,7 +13,7 @@ import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
 import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
-import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
+import ru.radiationx.anilibria.ui.presenter.cust.ContinueListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
 import ru.radiationx.quill.inject
 import ru.radiationx.shared.ktx.android.subscribeTo
@@ -21,7 +21,7 @@ import ru.radiationx.shared_app.di.quillParentViewModel
 
 class WatchingFragment : RowsSupportFragment() {
 
-    private val rowsPresenter by lazy { CustomListRowPresenter() }
+    private val rowsPresenter by lazy { ContinueListRowPresenter.rowsPresenterSelector() }
     private val rowsAdapter by lazy { ArrayObjectAdapter(rowsPresenter) }
 
     private val backgroundManager by inject<GradientBackgroundManager>()

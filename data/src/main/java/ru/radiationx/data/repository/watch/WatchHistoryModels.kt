@@ -61,6 +61,20 @@ data class ReleaseCardInfo(
     @Json(name = "torrent_update") val torrentUpdate: Int = 0,
     /** Сколько серий уже вышло, null — неизвестно. */
     @Json(name = "episodes_available") val episodesAvailable: Int? = null,
+    /**
+     * Серии для карточки «Продолжить просмотр» (превью, длительность) в порядке релиза.
+     * На диске хранится только серия из истории и следующая за ней.
+     */
+    @Json(name = "episodes") val episodes: List<ReleaseCardEpisode> = emptyList(),
+)
+
+/** Серия в [ReleaseCardInfo]: [serverId] — id из V1, [ordinal] — как в EpisodeId.id. */
+@JsonClass(generateAdapter = true)
+data class ReleaseCardEpisode(
+    @Json(name = "id") val serverId: String,
+    @Json(name = "ordinal") val ordinal: String,
+    @Json(name = "preview") val previewUrl: String? = null,
+    @Json(name = "duration") val durationSec: Int? = null,
 )
 
 /** Релиз для «Продолжить просмотр»: последняя серия, которую смотрели. */

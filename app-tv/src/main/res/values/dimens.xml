@@ -11,6 +11,10 @@
     <dimen name="card_release_width">130dp</dimen>
     <dimen name="card_youtube_width">330dp</dimen>
     <dimen name="card_corner_radius">8dp</dimen>
+    <!-- Кольцо фокуса карточки «Продолжить просмотр»: поле карточки вокруг кадра. -->
+    <dimen name="card_continue_ring">3dp</dimen>
+    <!-- 8dp между кадрами минус поля под кольцо у двух соседних карточек. -->
+    <dimen name="card_continue_row_spacing">2dp</dimen>
     <!-- Скругление карточек в рядах Leanback (клип + тень), совпадает с постером. -->
     <dimen name="lb_rounded_rect_corner_radius">8dp</dimen>
 </resources>

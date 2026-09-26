@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Отладка: true — размытие через Coil-трансформацию (как на API < 31) даже на новых API. -->
+    <bool name="force_legacy_blur">false</bool>
+</resources>

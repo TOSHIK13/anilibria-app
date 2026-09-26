@@ -128,6 +128,8 @@ dependencies {
     implementation(project(":shared-android-ktx"))
     implementation(project(":shared-app"))
     implementation(project(":quill-di"))
+    // Трансформация размытия постера (ui/util/Blur.kt) для API < 31.
+    implementation(libs.coil)
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.leanback)
