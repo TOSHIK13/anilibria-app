@@ -24,6 +24,9 @@ class CheckerApi @Inject constructor(
 ) {
 
     suspend fun checkUpdate(versionCode: Int): UpdateDataRootResponse {
+        if (!reserveSources.useLegacyApi) {
+            return getFromReserve(null)
+        }
         val args: MutableMap<String, String> = mutableMapOf(
             "query" to "app_update",
             "current" to versionCode.toString()
@@ -33,15 +36,22 @@ class CheckerApi @Inject constructor(
                 .post(apiConfig.apiUrl, args)
                 .fetchApiResponse(moshi)
         } catch (ex: Throwable) {
-            reserveSources.sources.forEach { url ->
-                coRunCatching {
-                    getReserve(url)
-                }.onSuccess {
-                    return it
-                }
-            }
-            throw ex
+            getFromReserve(ex)
         }
+    }
+
+    private suspend fun getFromReserve(legacyError: Throwable?): UpdateDataRootResponse {
+        var lastError: Throwable? = legacyError
+        reserveSources.sources.forEach { url ->
+            coRunCatching {
+                getReserve(url)
+            }.onSuccess {
+                return it
+            }.onFailure {
+                if (lastError == null) lastError = it
+            }
+        }
+        throw lastError ?: IllegalStateException("No update sources")
     }
 
     private suspend fun getReserve(url: String): UpdateDataRootResponse = mainClient

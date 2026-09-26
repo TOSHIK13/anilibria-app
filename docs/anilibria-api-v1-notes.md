@@ -95,7 +95,26 @@
 
 ## Известные оставшиеся legacy-зоны
 
-- `CheckerApi`, `DonationApi`, `MenuApi`, `PageApi` comments, `TeamsApi`.
-- Лента (`FeedApi`) и YouTube (`YoutubeApi`) переведены на V1.
-- Legacy social auth/fallback login/logout/user/acceptOtp оставлены как совместимый fallback.
+V1-эквивалентов в OpenAPI нет для: app update, config, menu, donations, comments.
+Есть только `/api/v1/app/status` (используется как health-check адреса).
+
+- `MenuApi` (`query=link_menu`), `DonationApi` (`query=donation_details`),
+  `PageApi` comments (`query=vkcomments`) — остаются legacy (TV их не использует на основных экранах).
+- `TeamsApi` уже на V1. Лента (`FeedApi`) и YouTube (`YoutubeApi`) переведены на V1.
+- Список социальных провайдеров (`AuthApi.loadSocialAuth`) захардкожен, сети не трогает.
+- `CheckerApi` (обновления): TV (`TvCheckerSources.useLegacyApi = false`) берёт обновление только
+  из reserve `check-tv.json` (GitHub/Bitbucket, JSON без `{status,data}` обёртки). Legacy
+  `query=app_update` отдаёт обновление мобильного приложения, поэтому для TV не вызывается.
+  Mobile по-прежнему: legacy → fallback на `check.json`.
+- `ConfigurationApi` bootstrap: `query=config` на `www.anilibria.tv` оставлен, т.к. reserve
+  `config.json` отличается материально (legacy: `api0`/`api2`/`api1`, reserve: только `api1`,
+  проверено 2026-09-26). Запросы идут параллельно, берётся первый непустой ответ.
+- Legacy профиль `query=user`: вызывается только при наличии cookie `PHPSESSID`
+  (mobile legacy social auth). Без V1 токена и без cookie `loadUser` локально бросает
+  `ApiError(401)` без сети. Legacy аватар-fallback для V1 профиля — тоже только при `PHPSESSID`.
+- `public/login.php` после успешного V1 логина больше не вызывается.
+- `public/logout.php` — fallback только если V1 logout упал и есть `PHPSESSID`; иначе
+  ошибка V1 logout логируется и локальная сессия всё равно очищается.
+- Legacy social auth (redirect без `state`) оставлен как fallback для mobile.
+- `SearchApi` содержит `"query" to name` — это параметр поиска, не legacy `query=`.
 - Torrents/franchises в V1 mapper пока не восстановлены полностью.

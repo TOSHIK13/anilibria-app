@@ -9,4 +9,7 @@ class TvCheckerSources @Inject constructor() : CheckerReserveSources {
         "https://github.com/anilibria/anilibria-app/raw/master/check-tv.json",
         "https://bitbucket.org/RadiationX/anilibria-app/raw/master/check-tv.json"
     )
+
+    // Legacy `query=app_update` возвращает обновление мобильного приложения, не TV.
+    override val useLegacyApi: Boolean = false
 }

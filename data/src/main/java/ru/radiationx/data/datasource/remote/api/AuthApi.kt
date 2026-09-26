@@ -90,18 +90,6 @@ class AuthApi @Inject constructor(
         }
     }
 
-    suspend fun signIn(login: String, password: String, code2fa: String): ProfileResponse {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "mail" to login,
-            "passwd" to password,
-            "fa2code" to code2fa
-        )
-        val url = "${apiConfig.baseUrl}/public/login.php"
-        return client.post(url, args)
-            .let { authParser.authResult(it) }
-            .let { loadUser() }
-    }
-
     suspend fun signInV1(login: String, password: String): V1TokenResponse {
         val args = mapOf(
             "login" to login,
@@ -146,11 +134,17 @@ class AuthApi @Inject constructor(
         return signInSocialLegacy(resultUrl, item)
     }
 
-    suspend fun signOut() {
+    /**
+     * V1 logout. Legacy `logout.php` вызывается только при [withLegacyFallback]
+     * (есть PHPSESSID от legacy social auth), иначе ошибка V1 пробрасывается,
+     * а вызывающий всё равно чистит локальную сессию.
+     */
+    suspend fun signOut(withLegacyFallback: Boolean) {
         try {
             client.post("${apiConfig.accountsBaseUrl}/api/v1/accounts/users/auth/logout", emptyMap())
             return
-        } catch (_: Throwable) {
+        } catch (ex: Throwable) {
+            if (!withLegacyFallback) throw ex
         }
         val args = mapOf<String, String>()
         client.post("${apiConfig.baseUrl}/public/logout.php", args)
