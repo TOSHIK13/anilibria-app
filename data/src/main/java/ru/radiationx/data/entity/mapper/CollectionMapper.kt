@@ -72,7 +72,8 @@ fun CollectionReleaseResponse.toDomain(
         names = names,
         series = episodesTotal?.toString(),
         poster = poster?.toPosterUrl(imagesBaseUrl),
-        torrentUpdate = 0,
+        // fresh_at == legacy release.last (unix seconds): даты обновления и бейджи новых серий
+        torrentUpdate = (freshAt ?: updatedAt)?.isoToUnixSeconds() ?: 0,
         status = null,
         statusCode = if (isOngoing == true) {
             Release.STATUS_CODE_PROGRESS
@@ -88,7 +89,7 @@ fun CollectionReleaseResponse.toDomain(
         days = listOfNotNull(publishDay?.value?.toString()),
         description = description?.trim(),
         announce = notification?.trim(),
-        favoriteInfo = FavoriteInfo(0, favoriteAdded),
+        favoriteInfo = FavoriteInfo(addedInUsersFavorites ?: 0, favoriteAdded),
         link = releaseCode.takeIf { it.isNotEmpty() }?.let { "$siteUrl/release/$it.html" },
         franchises = emptyList(),
         showDonateDialog = false,
@@ -105,17 +106,28 @@ fun CollectionReleaseResponse.toDomain(
     )
 }
 
-private fun CollectionImageResponse.toPosterUrl(imagesBaseUrl: String): String? {
+/**
+ * Один канонический вариант постера для всех v1-ответов (лента, каталог, детали),
+ * чтобы у Coil был один и тот же ключ кэша и постер в деталях не перезагружался.
+ */
+internal fun CollectionImageResponse.toPosterUrl(imagesBaseUrl: String): String? {
     val path = optimized?.preview
         ?: preview
         ?: optimized?.src
         ?: src
         ?: optimized?.thumbnail
         ?: thumbnail
-    return path?.let {
-        if (it.startsWith("http")) it else it.appendBaseUrl(imagesBaseUrl)
-    }
+    return path?.takeIf { it.isNotBlank() }?.toImageUrl(imagesBaseUrl)
 }
+
+/** Относительный путь v1 (`/storage/...`) + база картинок без двойного слэша. */
+internal fun String.toImageUrl(imagesBaseUrl: String): String {
+    if (startsWith("http://") || startsWith("https://")) return this
+    if (imagesBaseUrl.isBlank()) return this
+    return "${imagesBaseUrl.trimEnd('/')}/${trimStart('/')}"
+}
+
+internal fun String.isoToUnixSeconds(): Int? = isoToDate()?.let { (it.time / 1000L).toInt() }
 
 fun CollectionReleaseResponse.toSuggestionDomain(
     apiUtils: ApiUtils,

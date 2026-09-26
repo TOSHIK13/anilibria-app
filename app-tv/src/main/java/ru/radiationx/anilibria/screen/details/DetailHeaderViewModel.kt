@@ -128,9 +128,9 @@ class DetailHeaderViewModel @Inject constructor(
             }
             coRunCatching {
                 if (release.favoriteInfo.isAdded) {
-                    favoriteRepository.deleteFavorite(releaseId)
+                    favoriteRepository.deleteFavorite(releaseId, release.favoriteInfo)
                 } else {
-                    favoriteRepository.addFavorite(releaseId)
+                    favoriteRepository.addFavorite(releaseId, release.favoriteInfo)
                 }
             }.onSuccess { favoriteInfo ->
                 currentRelease?.also { data ->

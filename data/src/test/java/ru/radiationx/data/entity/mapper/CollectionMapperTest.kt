@@ -47,10 +47,32 @@ class CollectionMapperTest {
     fun poster_prefersOptimizedPreview() {
         val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
 
-        assertTrue(
-            release.poster.orEmpty()
-                .endsWith("/storage/releases/posters/10292/bwemBFzo9wLYMQB5vsck9WKVxYy1N57J.webp")
+        assertEquals(
+            "https://www.anilibria.tv/storage/releases/posters/10292/bwemBFzo9wLYMQB5vsck9WKVxYy1N57J.webp",
+            release.poster
         )
+    }
+
+    @Test
+    fun poster_joinsBaseWithoutDoubleSlash() {
+        assertEquals("https://a.b/storage/x.webp", "/storage/x.webp".toImageUrl("https://a.b/"))
+        assertEquals("https://a.b/storage/x.webp", "storage/x.webp".toImageUrl("https://a.b"))
+        assertEquals("https://c.d/x.webp", "https://c.d/x.webp".toImageUrl("https://a.b/"))
+    }
+
+    @Test
+    fun favoritesCount_fromAddedInUsersFavorites() {
+        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+
+        assertEquals(7680, release.favoriteInfo.rating)
+    }
+
+    @Test
+    fun torrentUpdate_fromFreshAt() {
+        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+
+        // 2026-09-26T12:50:50+00:00
+        assertEquals(1790427050, release.torrentUpdate)
     }
 
     @Test

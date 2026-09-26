@@ -474,9 +474,9 @@ class ReleaseInfoViewModel @Inject constructor(
             }
             coRunCatching {
                 if (favInfo.isAdded) {
-                    favoriteRepository.deleteFavorite(releaseId)
+                    favoriteRepository.deleteFavorite(releaseId, favInfo)
                 } else {
-                    favoriteRepository.addFavorite(releaseId)
+                    favoriteRepository.addFavorite(releaseId, favInfo)
                 }
             }.onSuccess { favoriteInfo ->
                 currentData?.also { data ->

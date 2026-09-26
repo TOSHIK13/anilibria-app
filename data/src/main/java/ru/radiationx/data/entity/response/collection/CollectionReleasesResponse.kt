@@ -39,6 +39,8 @@ data class CollectionReleaseResponse(
     @Json(name = "episodes_total") val episodesTotal: Int?,
     @Json(name = "is_ongoing") val isOngoing: Boolean?,
     @Json(name = "updated_at") val updatedAt: String?,
+    @Json(name = "fresh_at") val freshAt: String? = null,
+    @Json(name = "added_in_users_favorites") val addedInUsersFavorites: Int? = null,
     @Json(name = "external_player") val externalPlayer: String?,
     @Json(name = "is_blocked_by_geo") val isBlockedByGeo: Boolean?,
     @Json(name = "is_blocked_by_copyrights") val isBlockedByCopyrights: Boolean?,
