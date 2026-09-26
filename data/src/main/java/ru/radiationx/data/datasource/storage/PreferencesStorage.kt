@@ -9,6 +9,7 @@ import ru.radiationx.data.datasource.holders.AppPreference
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.common.PlayerTransport
+import ru.radiationx.data.player.PlayerBufferConfig
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
@@ -38,22 +39,52 @@ class PreferencesStorage @Inject constructor(
         private const val PLAYER_DISK_CACHE_ENABLED_KEY = "player_disk_cache_enabled"
         private const val PLAYER_DISK_CACHE_SIZE_MB_KEY = "player_disk_cache_size_mb"
         private const val PLAYER_PRELOAD_NEXT_EPISODE_KEY = "player_preload_next_episode"
+        private const val PLAYER_BUFFER_DEFAULTS_V2_KEY = "player_buffer_defaults_v2_migrated"
         private const val NOTIFICATIONS_ALL_KEY = "notifications.all"
         private const val NOTIFICATIONS_SERVICE_KEY = "notifications.service"
 
         private val DONATION_THRESHOLD = TimeUnit.DAYS.toMillis(7)
-        private const val DEFAULT_FORWARD_BUFFER_SECONDS = 50
+        private const val OLD_DEFAULT_FORWARD_BUFFER_SECONDS = 50
+        private const val DEFAULT_FORWARD_BUFFER_SECONDS = PlayerBufferConfig.DEFAULT_FORWARD_BUFFER_SECONDS
         private const val MAX_FORWARD_BUFFER_SECONDS = 600
         private const val DEFAULT_BACK_BUFFER_SECONDS = 0
         private const val MAX_BACK_BUFFER_SECONDS = 600
-        private const val DEFAULT_BUFFER_MEMORY_LIMIT_MB = 32
-        private const val MAX_BUFFER_MEMORY_LIMIT_MB = 256
-        private const val DEFAULT_DISK_CACHE_SIZE_MB = 1024
-        private const val MAX_DISK_CACHE_SIZE_MB = 8 * 1024
+        private const val OLD_DEFAULT_BUFFER_MEMORY_LIMIT_MB = 32
+        private const val DEFAULT_BUFFER_MEMORY_LIMIT_MB = PlayerBufferConfig.DEFAULT_BUFFER_MEMORY_LIMIT_MB
+        private const val MAX_BUFFER_MEMORY_LIMIT_MB = 64
+        private const val OLD_DEFAULT_DISK_CACHE_SIZE_MB = 1024
+        private const val DEFAULT_DISK_CACHE_SIZE_MB = PlayerBufferConfig.DEFAULT_DISK_CACHE_SIZE_MB
+        private const val MAX_DISK_CACHE_SIZE_MB = 4 * 1024
     }
 
     private val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
     private val speedsState = MutableStateFlow(speeds)
+
+    init {
+        migratePlayerBufferDefaults()
+    }
+
+    /**
+     * Одноразово переводит сохранённые старые значения по умолчанию на новые.
+     * Значения, отличные от старых дефолтов, считаются пользовательскими и не трогаются
+     * (выход за новые диапазоны всё равно ограничивается при чтении).
+     */
+    private fun migratePlayerBufferDefaults() {
+        if (sharedPreferences.getBoolean(PLAYER_BUFFER_DEFAULTS_V2_KEY, false)) {
+            return
+        }
+        val editor = sharedPreferences.edit()
+        if (sharedPreferences.getInt(PLAYER_FORWARD_BUFFER_SECONDS_KEY, -1) == OLD_DEFAULT_FORWARD_BUFFER_SECONDS) {
+            editor.putInt(PLAYER_FORWARD_BUFFER_SECONDS_KEY, DEFAULT_FORWARD_BUFFER_SECONDS)
+        }
+        if (sharedPreferences.getInt(PLAYER_BUFFER_MEMORY_LIMIT_MB_KEY, -1) == OLD_DEFAULT_BUFFER_MEMORY_LIMIT_MB) {
+            editor.putInt(PLAYER_BUFFER_MEMORY_LIMIT_MB_KEY, DEFAULT_BUFFER_MEMORY_LIMIT_MB)
+        }
+        if (sharedPreferences.getInt(PLAYER_DISK_CACHE_SIZE_MB_KEY, -1) == OLD_DEFAULT_DISK_CACHE_SIZE_MB) {
+            editor.putInt(PLAYER_DISK_CACHE_SIZE_MB_KEY, DEFAULT_DISK_CACHE_SIZE_MB)
+        }
+        editor.putBoolean(PLAYER_BUFFER_DEFAULTS_V2_KEY, true).apply()
+    }
 
     override val newDonationRemind: AppPreference<Boolean> = AppPreference(
         key = NEW_DONATION_REMIND_KEY,

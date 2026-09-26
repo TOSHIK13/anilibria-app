@@ -4,8 +4,11 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.github.terrakok.cicerone.Router
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -18,11 +21,13 @@ import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.release.Episode
+import ru.radiationx.data.entity.domain.release.PlayerSkips
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.player.EpisodePlaybackRules
+import ru.radiationx.data.player.PlayerBufferConfig
 import ru.radiationx.data.repository.HistoryRepository
 import ru.radiationx.shared.ktx.EventFlow
 import ru.radiationx.shared.ktx.coRunCatching
@@ -42,7 +47,22 @@ class PlayerViewModel @Inject constructor(
     val qualityState = MutableStateFlow<PlayerQuality?>(null)
     val speedState = MutableStateFlow<Float?>(null)
     val controlsState = MutableStateFlow(PlayerControlsState())
-    val composeMenuState = MutableStateFlow(PlayerComposeMenuState())
+    // Начальные настройки читаются из prefs сразу, чтобы до первого combine не светились старые дефолты.
+    val composeMenuState = MutableStateFlow(
+        PlayerComposeMenuState(
+            settings = PlayerComposeSettingsState(
+                skipsEnabled = preferencesHolder.playerSkips.value,
+                autoSkipEnabled = preferencesHolder.playerSkipsTimer.value,
+                autoplayEnabled = preferencesHolder.playerAutoplay.value,
+                backBufferSeconds = preferencesHolder.playerBackBufferSeconds.value,
+                forwardBufferSeconds = preferencesHolder.playerForwardBufferSeconds.value,
+                bufferMemoryLimitMb = preferencesHolder.playerBufferMemoryLimitMb.value,
+                diskCacheEnabled = preferencesHolder.playerDiskCacheEnabled.value,
+                diskCacheSizeMb = preferencesHolder.playerDiskCacheSizeMb.value,
+                preloadNextEpisode = preferencesHolder.playerPreloadNextEpisode.value,
+            ),
+        )
+    )
     val completionOverlay = MutableStateFlow<PlayerCompletionOverlay?>(null)
     val playAction = EventFlow<Boolean>()
     val settingsOverlayVisible = playerController.settingsOverlayVisible
@@ -67,6 +87,8 @@ class PlayerViewModel @Inject constructor(
     private var playedMs = 0L
     private var lastPlayTickAt = 0L
     private val playbackStartReported = mutableSetOf<ReleaseId>()
+    private var prearm: PrearmHandle? = null
+    private var queueEndReachedAt = 0L
 
     init {
         playerController.reset()
@@ -174,6 +196,8 @@ class PlayerViewModel @Inject constructor(
         super.onCleared()
         progressSyncJob?.cancel()
         episodeTransitionJob?.cancel()
+        prearm?.deferred?.cancel()
+        prearm = null
         playerController.reset()
     }
 
@@ -287,17 +311,39 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun onPlaybackProgress(position: Long, duration: Long, isPlaying: Boolean) {
+    /**
+     * @param queueAdvanceExpected следующая серия стоит в плеере следующим MediaItem и ExoPlayer
+     * перейдёт на неё сам ([onQueueAdvanced]); app-side завершение тогда только страховка.
+     */
+    fun onPlaybackProgress(
+        position: Long,
+        duration: Long,
+        isPlaying: Boolean,
+        queueAdvanceExpected: Boolean = false,
+    ) {
         if (position < 0) {
             return
         }
         updatePlaybackSnapshot(position, duration)
         markWatchedIfNeeded(reason = "progress")
         trackPlaybackStart(isPlaying)
+        maybePrearmNextEpisode()
         if (isEpisodeActuallyFinished(lastKnownPosition, lastKnownDuration)) {
+            if (queueAdvanceExpected && canAutoAdvance()) {
+                val now = SystemClock.elapsedRealtime()
+                if (queueEndReachedAt == 0L) {
+                    queueEndReachedAt = now
+                    Log.d(TAG, "end-wait-queue episode=${currentEpisode?.id} position=$lastKnownPosition duration=$lastKnownDuration")
+                }
+                if (!EpisodePlaybackRules.isQueueTransitionOverdue(queueEndReachedAt, now)) {
+                    return
+                }
+                Log.w(TAG, "queue-transition-timeout episode=${currentEpisode?.id} waitedMs=${now - queueEndReachedAt} -> fallback")
+            }
             handleEpisodeCompletion("progress")
             return
         }
+        queueEndReachedAt = 0L
         if (!isPlaying || completionHandled) {
             return
         }
@@ -324,11 +370,10 @@ class PlayerViewModel @Inject constructor(
         val nextEpisode = getNextEpisode()
         if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
             Log.d(TAG, "auto-next episode=${currentEpisode?.id} -> ${nextEpisode.id}")
-            transitionToEpisode(
+            autoAdvanceToEpisode(
                 episode = nextEpisode,
                 reason = "auto_next:$source",
-                force = true,
-                autoPlay = true,
+                reuseLoadedItem = false,
             )
         } else {
             viewModelScope.launch {
@@ -343,8 +388,59 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * ExoPlayer сам перешёл на следующий MediaItem очереди (reason AUTO): старая серия доиграна до конца.
+     * Переключаем состояние на следующую серию без повторного prepare плеера.
+     */
+    fun onQueueAdvanced(itemUrl: String): QueueAdvanceResult {
+        val current = currentEpisode ?: return QueueAdvanceResult.REJECTED
+        val quality = currentQuality ?: return QueueAdvanceResult.REJECTED
+        if (current.qualityInfo.getSafeUrlFor(quality) == itemUrl) {
+            // Страховочный путь уже переключил серию — videoData перезагрузит плеер сам.
+            Log.d(TAG, "queue-advance-ignored already-current episode=${current.id}")
+            return QueueAdvanceResult.ALREADY_CURRENT
+        }
+        if (episodeTransitionJob?.isActive == true) {
+            Log.d(TAG, "queue-advance-ignored transition-in-progress episode=${current.id}")
+            return QueueAdvanceResult.REJECTED
+        }
+        val next = getNextEpisode()
+        val urlMatches = next?.qualityInfo?.getSafeUrlFor(quality) == itemUrl
+        if (next == null || !urlMatches || !preferencesHolder.playerAutoplay.value) {
+            Log.w(TAG, "queue-advance-rejected episode=${current.id} next=${next?.id} urlMatches=$urlMatches")
+            handleEpisodeCompletion("queue_mismatch")
+            return QueueAdvanceResult.REJECTED
+        }
+        // Старый MediaItem доигран до конца: финальная позиция = длительность.
+        if (lastKnownDuration > 0L) {
+            updatePlaybackSnapshot(lastKnownDuration, lastKnownDuration)
+        }
+        completionHandled = true
+        markWatchedIfNeeded(reason = "completion:queue", force = true)
+        Log.d(TAG, "end source=queue episode=${current.id} position=$lastKnownPosition duration=$lastKnownDuration watched=$watchedReached")
+        Log.d(TAG, "auto-next episode=${current.id} -> ${next.id}")
+        val previousWatched = watchedReached
+        autoAdvanceToEpisode(
+            episode = next,
+            reason = "auto_next:queue",
+            reuseLoadedItem = true,
+        )
+        return if (previousWatched) QueueAdvanceResult.ACCEPTED_PREVIOUS_WATCHED else QueueAdvanceResult.ACCEPTED
+    }
+
+    private fun canAutoAdvance(): Boolean =
+        getNextEpisode() != null && preferencesHolder.playerAutoplay.value
+
     private fun getNextEpisode(): Episode? =
         currentEpisodes.getOrNull(getCurrentEpisodeIndex() + 1)
+
+    private fun getEpisodeAfter(episode: Episode): Episode? {
+        val index = currentEpisodes.indexOfFirst { it.id == episode.id }
+        if (index < 0) {
+            return null
+        }
+        return currentEpisodes.getOrNull(index + 1)
+    }
 
     private fun getPrevEpisode(): Episode? =
         currentEpisodes.getOrNull(getCurrentEpisodeIndex() - 1)
@@ -407,6 +503,94 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Автопереход на следующую серию без ожидания сети:
+     * 1) отметка/синк старой серии уходит в отдельную NonCancellable-корутину со снимком её состояния;
+     * 2) новая серия стартует сразу на заранее подготовленных данных ([maybePrearmNextEpisode]).
+     */
+    private fun autoAdvanceToEpisode(
+        episode: Episode,
+        reason: String,
+        reuseLoadedItem: Boolean,
+    ) {
+        if (episodeTransitionJob?.isActive == true) {
+            return
+        }
+        markWatchedIfNeeded(reason = reason)
+        // Снимок старой серии берётся здесь, до любого изменения состояния.
+        launchDetachedEpisodeSync(reason = reason)
+        val quality = currentQuality
+        val handle = prearm?.takeIf { it.episodeId == episode.id && it.quality == quality }
+        val startedAt = SystemClock.elapsedRealtime()
+        // UNDISPATCHED: если данные уже готовы, await() не приостанавливается и переключение синхронное.
+        episodeTransitionJob = viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val deferred = handle?.deferred
+            val prepared = if (deferred == null || deferred.isCancelled) null else deferred.await()
+            Log.d(
+                TAG,
+                "fast-switch reason=$reason -> ${episode.id} prearmed=${prepared != null} waitMs=${SystemClock.elapsedRealtime() - startedAt} reuse=$reuseLoadedItem"
+            )
+            playEpisode(
+                episode = episode,
+                force = true,
+                autoPlay = true,
+                prepared = prepared,
+                reuseLoadedItem = reuseLoadedItem,
+            )
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (episodeTransitionJob === job) {
+                    episodeTransitionJob = null
+                }
+            }
+        }
+    }
+
+    private fun maybePrearmNextEpisode() {
+        if (!preferencesHolder.playerAutoplay.value || completionHandled) {
+            return
+        }
+        val current = currentEpisode ?: return
+        if (!EpisodePlaybackRules.isInPrearmWindow(lastKnownPosition, lastKnownDuration)) {
+            return
+        }
+        val next = getNextEpisode() ?: return
+        val quality = currentQuality ?: return
+        val existing = prearm
+        if (existing != null && existing.episodeId == next.id && existing.quality == quality) {
+            return
+        }
+        existing?.deferred?.cancel()
+        val startedAt = SystemClock.elapsedRealtime()
+        Log.d(TAG, "prearm-start current=${current.id} next=${next.id} remainingMs=${lastKnownDuration - lastKnownPosition}")
+        val deferred = viewModelScope.async {
+            coRunCatching {
+                prepareEpisode(next, quality)
+            }.onSuccess {
+                Log.d(TAG, "prearm-ready next=${next.id} ms=${SystemClock.elapsedRealtime() - startedAt} seek=${it?.initialSeek} viewed=${it?.isViewed}")
+            }.onFailure {
+                Log.w(TAG, "prearm-failed next=${next.id}", it)
+            }.getOrNull()
+        }
+        prearm = PrearmHandle(episodeId = next.id, quality = quality, deferred = deferred)
+    }
+
+    /**
+     * Синк серии, с которой уходим, не блокирует переключение. Состояние (id, позиция, флаги)
+     * фиксируется синхронно до переключения, поэтому отправляются данные именно старой серии.
+     */
+    private fun launchDetachedEpisodeSync(reason: String) {
+        val state = captureSyncState() ?: return
+        val pendingProgressJob = progressSyncJob
+        progressSyncJob = null
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            withContext(NonCancellable) {
+                pendingProgressJob?.cancelAndJoin()
+                sendEpisodeSync(state, force = true, reason = reason)
+            }
+        }
+    }
+
     // NonCancellable: при выходе из плеера viewModelScope отменяется,
     // а последняя позиция всё равно должна дойти до сервера.
     private suspend fun syncCurrentEpisodeNow(force: Boolean, reason: String) = withContext(NonCancellable) {
@@ -415,31 +599,57 @@ class PlayerViewModel @Inject constructor(
         sendCurrentEpisodeSync(force = force, reason = reason)
     }
 
+    private fun captureSyncState(): EpisodeSyncState? {
+        val episode = currentEpisode ?: return null
+        return EpisodeSyncState(
+            episode = episode,
+            position = lastKnownPosition,
+            duration = lastKnownDuration,
+            watchedReached = watchedReached,
+            watchedSynced = watchedSynced,
+            progressDirty = progressDirty,
+            lastSyncedPosition = lastSyncedPosition,
+            lastSyncedDuration = lastSyncedDuration,
+            lastSyncedAt = lastSyncedAt,
+        )
+    }
+
     private suspend fun sendCurrentEpisodeSync(force: Boolean, reason: String) {
-        val episode = currentEpisode ?: return
-        val position = lastKnownPosition
+        val state = captureSyncState() ?: return
+        sendEpisodeSync(state, force = force, reason = reason)
+    }
+
+    private fun isCurrentEpisode(episode: Episode): Boolean = currentEpisode?.id == episode.id
+
+    private suspend fun sendEpisodeSync(state: EpisodeSyncState, force: Boolean, reason: String) {
+        val episode = state.episode
+        val position = state.position
         if (position < 0L) {
             return
         }
-        val duration = lastKnownDuration
-        val sendWatched = watchedReached && !watchedSynced
-        val sendProgress = !watchedReached
-        if (!force && !progressDirty && !sendWatched) {
+        val duration = state.duration
+        val sendWatched = state.watchedReached && !state.watchedSynced
+        val sendProgress = !state.watchedReached
+        if (!force && !state.progressDirty && !sendWatched) {
             return
         }
         if (!sendProgress && !sendWatched) {
-            progressDirty = false
+            if (isCurrentEpisode(episode)) {
+                progressDirty = false
+            }
             return
         }
         val now = System.currentTimeMillis()
         if (!force &&
             !sendWatched &&
-            position == lastSyncedPosition &&
-            duration == lastSyncedDuration &&
-            now - lastSyncedAt < DUPLICATE_GUARD_MS
+            position == state.lastSyncedPosition &&
+            duration == state.lastSyncedDuration &&
+            now - state.lastSyncedAt < DUPLICATE_GUARD_MS
         ) {
-            progressDirty = false
-            lastPeriodicSyncAt = now
+            if (isCurrentEpisode(episode)) {
+                progressDirty = false
+                lastPeriodicSyncAt = now
+            }
             return
         }
         Log.d(
@@ -461,7 +671,7 @@ class PlayerViewModel @Inject constructor(
         if (!synced) {
             return
         }
-        if (currentEpisode?.id == episode.id) {
+        if (isCurrentEpisode(episode)) {
             lastSyncedPosition = position
             lastSyncedDuration = duration
             lastSyncedAt = System.currentTimeMillis()
@@ -538,8 +748,17 @@ class PlayerViewModel @Inject constructor(
         return EpisodePlaybackRules.isAtEpisodeEnd(position, duration)
     }
 
-    private fun playEpisode(episode: Episode, force: Boolean = false, autoPlay: Boolean = false) {
+    private fun playEpisode(
+        episode: Episode,
+        force: Boolean = false,
+        autoPlay: Boolean = false,
+        prepared: PreparedEpisode? = null,
+        reuseLoadedItem: Boolean = false,
+    ) {
         progressSyncJob?.cancel()
+        prearm?.deferred?.cancel()
+        prearm = null
+        queueEndReachedAt = 0L
         completionOverlay.value = null
         currentEpisode = episode
         watchedReached = false
@@ -556,7 +775,7 @@ class PlayerViewModel @Inject constructor(
         lastSyncedAt = 0
         lastPeriodicSyncAt = System.currentTimeMillis()
         updateQuality()
-        updateEpisode(force)
+        updateEpisode(force, prepared, reuseLoadedItem)
         updateControlsState()
         refreshComposeMenuState()
         viewModelScope.launch {
@@ -569,40 +788,76 @@ class PlayerViewModel @Inject constructor(
         qualityState.value = currentEpisode?.qualityInfo?.getActualFor(quality) ?: quality
     }
 
-    private fun updateEpisode(force: Boolean = false) {
-        val release = getCurrentRelease() ?: return
+    private fun updateEpisode(
+        force: Boolean = false,
+        prepared: PreparedEpisode? = null,
+        reuseLoadedItem: Boolean = false,
+    ) {
         val episode = currentEpisode ?: return
         val quality = currentQuality ?: return
+        if (prepared != null && prepared.episodeId == episode.id && prepared.quality == quality) {
+            applyPreparedEpisode(prepared, force, reuseLoadedItem)
+            return
+        }
+        getCurrentRelease() ?: return
         viewModelScope.launch {
-            val newUrl = episode.qualityInfo.getSafeUrlFor(quality)
-            val nextUrl = getNextEpisode()?.qualityInfo?.getSafeUrlFor(quality)
-            val access = releaseInteractor.getAccess(episode.id)
-            val initialSeek = if (access?.isViewed == true) 0L else access?.seek ?: 0L
-            watchedReached = access?.isViewed == true
-            watchedSynced = access?.isViewed == true
-            completionHandled = false
-            lastKnownPosition = initialSeek
-            lastKnownDuration = 0
-            progressDirty = false
-            lastSyncedPosition = lastKnownPosition
-            lastSyncedDuration = 0
-            lastSyncedAt = System.currentTimeMillis()
-            lastPeriodicSyncAt = lastSyncedAt
-            Log.d(
-                TAG,
-                "episode-load episode=${episode.id} seek=$initialSeek watched=$watchedReached autoPlay=$pendingAutoPlay"
-            )
-            val newVideo = Video(
-                url = newUrl,
-                nextUrl = nextUrl,
-                seek = initialSeek,
-                title = release.title.orEmpty(),
-                subtitle = episode.title.orEmpty(),
-                episode.skips
-            )
-            if (force || videoData.value?.url != newVideo.url) {
-                videoData.value = newVideo
-            }
+            val loaded = prepareEpisode(episode, quality) ?: return@launch
+            applyPreparedEpisode(loaded, force, reuseLoadedItem)
+        }
+    }
+
+    /** Всё, что нужно для старта серии: URL, URL следующей и начальная позиция из access. */
+    private suspend fun prepareEpisode(episode: Episode, quality: PlayerQuality): PreparedEpisode? {
+        val release = currentReleases?.find { it.id == episode.id.releaseId } ?: return null
+        val newUrl = episode.qualityInfo.getSafeUrlFor(quality)
+        val nextUrl = getEpisodeAfter(episode)?.qualityInfo?.getSafeUrlFor(quality)
+        val access = releaseInteractor.getAccess(episode.id)
+        val isViewed = access?.isViewed == true
+        val initialSeek = if (isViewed) 0L else access?.seek ?: 0L
+        return PreparedEpisode(
+            episodeId = episode.id,
+            quality = quality,
+            url = newUrl,
+            nextUrl = nextUrl,
+            isViewed = isViewed,
+            initialSeek = initialSeek,
+            title = release.title.orEmpty(),
+            subtitle = episode.title.orEmpty(),
+            skips = episode.skips,
+        )
+    }
+
+    private fun applyPreparedEpisode(prepared: PreparedEpisode, force: Boolean, reuseLoadedItem: Boolean) {
+        if (currentEpisode?.id != prepared.episodeId) {
+            Log.d(TAG, "episode-load-stale episode=${prepared.episodeId} current=${currentEpisode?.id}")
+            return
+        }
+        val initialSeek = prepared.initialSeek
+        watchedReached = prepared.isViewed
+        watchedSynced = prepared.isViewed
+        completionHandled = false
+        lastKnownPosition = initialSeek
+        lastKnownDuration = 0
+        progressDirty = false
+        lastSyncedPosition = lastKnownPosition
+        lastSyncedDuration = 0
+        lastSyncedAt = System.currentTimeMillis()
+        lastPeriodicSyncAt = lastSyncedAt
+        Log.d(
+            TAG,
+            "episode-load episode=${prepared.episodeId} seek=$initialSeek watched=$watchedReached autoPlay=$pendingAutoPlay reuse=$reuseLoadedItem"
+        )
+        val newVideo = Video(
+            url = prepared.url,
+            nextUrl = prepared.nextUrl,
+            seek = initialSeek,
+            title = prepared.title,
+            subtitle = prepared.subtitle,
+            skips = prepared.skips,
+            reuseLoadedItem = reuseLoadedItem,
+        )
+        if (force || videoData.value?.url != newVideo.url) {
+            videoData.value = newVideo
         }
     }
 
@@ -684,6 +939,46 @@ class PlayerViewModel @Inject constructor(
     }
 }
 
+enum class QueueAdvanceResult(val accepted: Boolean, val previousEpisodeWatched: Boolean) {
+    /** Переход не принят: VM всё ещё на старой серии, плеер надо вернуть/остановить. */
+    REJECTED(accepted = false, previousEpisodeWatched = false),
+    /** VM уже переключилась на эту серию другим путём (страховка) и сама перезагрузит плеер. */
+    ALREADY_CURRENT(accepted = false, previousEpisodeWatched = false),
+    ACCEPTED(accepted = true, previousEpisodeWatched = false),
+    ACCEPTED_PREVIOUS_WATCHED(accepted = true, previousEpisodeWatched = true),
+}
+
+private class PrearmHandle(
+    val episodeId: EpisodeId,
+    val quality: PlayerQuality,
+    val deferred: Deferred<PreparedEpisode?>,
+)
+
+private data class PreparedEpisode(
+    val episodeId: EpisodeId,
+    val quality: PlayerQuality,
+    val url: String,
+    val nextUrl: String?,
+    val isViewed: Boolean,
+    val initialSeek: Long,
+    val title: String,
+    val subtitle: String,
+    val skips: PlayerSkips?,
+)
+
+/** Снимок состояния серии для синка: отправляются данные именно этой серии даже после переключения. */
+private data class EpisodeSyncState(
+    val episode: Episode,
+    val position: Long,
+    val duration: Long,
+    val watchedReached: Boolean,
+    val watchedSynced: Boolean,
+    val progressDirty: Boolean,
+    val lastSyncedPosition: Long,
+    val lastSyncedDuration: Long,
+    val lastSyncedAt: Long,
+)
+
 private data class NormalizedPlaybackSnapshot(
     val positionMs: Long,
     val durationMs: Long,
@@ -728,10 +1023,10 @@ data class PlayerComposeSettingsState(
     val autoSkipEnabled: Boolean = true,
     val autoplayEnabled: Boolean = true,
     val backBufferSeconds: Int = 0,
-    val forwardBufferSeconds: Int = 50,
-    val bufferMemoryLimitMb: Int = 32,
+    val forwardBufferSeconds: Int = PlayerBufferConfig.DEFAULT_FORWARD_BUFFER_SECONDS,
+    val bufferMemoryLimitMb: Int = PlayerBufferConfig.DEFAULT_BUFFER_MEMORY_LIMIT_MB,
     val diskCacheEnabled: Boolean = false,
-    val diskCacheSizeMb: Int = 512,
+    val diskCacheSizeMb: Int = PlayerBufferConfig.DEFAULT_DISK_CACHE_SIZE_MB,
     val preloadNextEpisode: Boolean = true,
 )
 

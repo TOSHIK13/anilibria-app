@@ -8,9 +8,14 @@ import ru.radiationx.data.analytics.features.SslCompatAnalytics
 import ru.radiationx.data.sslcompat.SslCompat
 import ru.radiationx.data.sslcompat.appendSslCompat
 import ru.radiationx.data.system.appendSslCompatAnalytics
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Provider
 
+/**
+ * Провайдер зарегистрирован в DI как single, поэтому клиент (и его connection pool)
+ * общий для плеера, prefetch-а и загрузки плейлистов.
+ */
 class PlayerOkHttpProvider @Inject constructor(
     private val context: Context,
     private val sharedBuildConfig: SharedBuildConfig,
@@ -18,13 +23,27 @@ class PlayerOkHttpProvider @Inject constructor(
     private val sslCompatAnalytics: SslCompatAnalytics
 ) : Provider<OkHttpClient> {
 
-    override fun get(): OkHttpClient = OkHttpClient.Builder()
-        .appendSslCompatAnalytics(sslCompat, sslCompatAnalytics)
-        .appendSslCompat(sslCompat)
-        .apply {
-            if (sharedBuildConfig.debug) {
-                addNetworkInterceptor(ChuckerInterceptor.Builder(context).build())
+    private val client: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .appendSslCompatAnalytics(sslCompat, sslCompatAnalytics)
+            .appendSslCompat(sslCompat)
+            .apply {
+                if (sharedBuildConfig.debug) {
+                    addNetworkInterceptor(ChuckerInterceptor.Builder(context).build())
+                }
             }
-        }
-        .build()
+            .build()
+    }
+
+    override fun get(): OkHttpClient = client
+
+    private companion object {
+        private const val CONNECT_TIMEOUT_SECONDS = 10L
+        private const val READ_TIMEOUT_SECONDS = 20L
+        private const val WRITE_TIMEOUT_SECONDS = 10L
+    }
 }

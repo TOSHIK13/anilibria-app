@@ -1,5 +1,7 @@
 ﻿package ru.radiationx.anilibria.screen.player
 
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
@@ -79,7 +81,6 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -90,11 +91,14 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.compose.foundation.gestures.detectTapGestures
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import ru.radiationx.anilibria.R
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
@@ -102,6 +106,7 @@ import ru.radiationx.data.entity.domain.release.PlayerSkips
 import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.player.EpisodePlaybackRules
+import ru.radiationx.data.player.PlayerBufferConfig
 import ru.radiationx.data.player.PlayerCacheDataSourceProvider
 import ru.radiationx.data.player.PlayerDataSourceProvider
 import ru.radiationx.quill.get
@@ -195,6 +200,10 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var nextPlaylistCacheDescriptor: HlsPlaylistCacheDescriptor? = null
     private var cacheInspection by mutableStateOf(HlsCacheInspection())
     private var lastCacheInspectionAt = 0L
+    private val cacheInspectionTracker = HlsCacheInspectionTracker()
+    private var cacheInspectionJob: Job? = null
+    private var memoryTrimActive by mutableStateOf(false)
+    private var memoryTrimJob: Job? = null
 
     private var progressJob: Job? = null
     private var playPauseHudJob: Job? = null
@@ -202,6 +211,14 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var skipTimerJob: Job? = null
     private var completionTimerJob: Job? = null
     private var playlistCacheJob: Job? = null
+    private var cacheEvictionJob: Job? = null
+    /** URL видео, для которого загружен [currentPlaylistCacheDescriptor]. */
+    private var currentPlaylistDescriptorVideoUrl: String? = null
+    /** Дескриптор предыдущей (досмотренной) серии, сегменты которой удаляются после перехода очереди. */
+    private var pendingEvictionDescriptor: HlsPlaylistCacheDescriptor? = null
+    private val playerDiagnostics = PlayerDiagnostics()
+    /** Позиция конца старого MediaItem при автопереходе (из onPositionDiscontinuity). */
+    private var autoTransitionOldPositionMs = 0L
     private var touchGestureDetector: GestureDetector? = null
     private var touchSeekAccumulatorPx = 0f
     private var genericMotionAccumulator = 0f
@@ -214,6 +231,17 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var hlsRollingPrefetchState by mutableStateOf(HlsRollingPrefetchState())
     private var hlsRollingPrefetchStateJob: Job? = null
     private var lastPrefetchUpdateAt = 0L
+    private val memoryCallbacks = object : ComponentCallbacks2 {
+        override fun onTrimMemory(level: Int) {
+            handleMemoryPressure(level)
+        }
+
+        override fun onLowMemory() {
+            handleMemoryPressure(ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
+        }
+
+        override fun onConfigurationChanged(newConfig: Configuration) = Unit
+    }
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -246,11 +274,22 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             updatePlaybackSnapshot()
         }
 
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                return
+            }
+            val itemUrl = mediaItem?.localConfiguration?.uri?.toString() ?: return
+            handleQueueAutoAdvance(itemUrl)
+        }
+
         override fun onPositionDiscontinuity(
             oldPosition: Player.PositionInfo,
             newPosition: Player.PositionInfo,
             reason: Int,
         ) {
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                autoTransitionOldPositionMs = oldPosition.positionMs
+            }
             updatePlaybackSnapshot()
             if (reason == Player.DISCONTINUITY_REASON_SEEK ||
                 reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT
@@ -324,6 +363,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
         player.addListener(playerListener)
         player.addAnalyticsListener(analyticsListener)
+        player.addAnalyticsListener(playerDiagnostics)
+        requireContext().applicationContext.registerComponentCallbacks(memoryCallbacks)
         initializeTouchpadControls(view)
         startProgressUpdates()
 
@@ -332,7 +373,11 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             skipHud = null
             skipTimerJob?.cancel()
             suppressedSkip = null
-            preparePlayer(it)
+            if (it.reuseLoadedItem && isPlayerOnItem(it.url)) {
+                adoptQueuedItem(it)
+            } else {
+                preparePlayer(it)
+            }
         }
 
         subscribeTo(viewModel.playAction.filterNotNull()) {
@@ -392,6 +437,10 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         skipTimerJob?.cancel()
         completionTimerJob?.cancel()
         playlistCacheJob?.cancel()
+        cacheEvictionJob?.cancel()
+        cacheInspectionJob?.cancel()
+        memoryTrimJob?.cancel()
+        requireContext().applicationContext.unregisterComponentCallbacks(memoryCallbacks)
         hlsRollingPrefetcher?.stop()
         hlsRollingPrefetcher = null
         hlsRollingPrefetchStateJob?.cancel()
@@ -401,6 +450,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         genericMotionAccumulator = 0f
         player.removeListener(playerListener)
         player.removeAnalyticsListener(analyticsListener)
+        player.removeAnalyticsListener(playerDiagnostics)
         playerHolder.detach()
         requireActivity().window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onDestroyView()
@@ -481,7 +531,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         val controlsState by viewModel.controlsState.collectAsState()
         val qualityState by viewModel.qualityState.collectAsState()
         val composeMenuState by viewModel.composeMenuState.collectAsState()
-        val allowNextEpisodePreload = shouldAllowNextEpisodePreload(
+        val allowNextEpisodePreload = !memoryTrimActive && shouldAllowNextEpisodePreload(
             composeMenuState.settings,
             playbackSnapshot,
         )
@@ -550,16 +600,28 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             }
         }
 
+        LaunchedEffect(composeMenuState.settings.autoplayEnabled) {
+            applyPauseAtEndOfMediaItems()
+        }
+
         LaunchedEffect(
             composeMenuState.settings.preloadNextEpisode,
             composeMenuState.settings.forwardBufferSeconds,
+            composeMenuState.settings.diskCacheEnabled,
+        ) {
+            updatePreloadGuard(composeMenuState.settings, playbackSnapshot)
+            updateHlsRollingPrefetch(force = true)
+        }
+
+        LaunchedEffect(
             playbackSnapshot.positionMs,
             playbackSnapshot.durationMs,
             playbackSnapshot.bufferedPositionMs,
             playbackSnapshot.cachedPositionMs,
         ) {
+            // Каждый тик прогресса: только троттлинг, без force (force — seek/серия/качество/настройки).
             updatePreloadGuard(composeMenuState.settings, playbackSnapshot)
-            updateHlsRollingPrefetch(force = true)
+            updateHlsRollingPrefetch(force = false)
         }
 
         Box(
@@ -1474,23 +1536,17 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun preparePlayer(video: Video) {
         val seek = video.seek.coerceAtLeast(0L)
-        hlsRollingPrefetcher?.stop()
-        hlsRollingPrefetchState = HlsRollingPrefetchState()
-        lastPrefetchUpdateAt = 0L
-        currentPlaylistCacheDescriptor = null
-        nextPlaylistCacheDescriptor = null
-        cacheInspection = HlsCacheInspection()
-        lastCacheInspectionAt = 0L
-        playbackSnapshot = ComposePlaybackSnapshot(
-            positionMs = seek,
-            durationMs = 0L,
-            bufferedPositionMs = 0L,
-            cachedPositionMs = 0L,
-            isPlaying = false,
-            isBuffering = true,
+        pendingEvictionDescriptor = null
+        resetPerItemState(
+            ComposePlaybackSnapshot(
+                positionMs = seek,
+                durationMs = 0L,
+                bufferedPositionMs = 0L,
+                cachedPositionMs = 0L,
+                isPlaying = false,
+                isBuffering = true,
+            )
         )
-        updatePlayerStats()
-        updateSkipHud()
         val mediaItems = buildList {
             add(MediaItem.fromUri(Uri.parse(video.url)))
             if (preferencesHolder.playerPreloadNextEpisode.value) {
@@ -1505,23 +1561,205 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             player = player,
             allowNextEpisodePreload = allowNextEpisodePreload,
         )
-        player.setPauseAtEndOfMediaItems(true)
+        applyPauseAtEndOfMediaItems()
+        playerDiagnostics.markLoadStart("prepare")
         player.setMediaItems(mediaItems, 0, seek)
         player.prepare()
         loadPlaylistCacheDescriptors(video)
         updatePlaybackSnapshot()
     }
 
-    private fun loadPlaylistCacheDescriptors(video: Video) {
+    /** Сброс состояния, привязанного к конкретной серии: prefetch, дескрипторы, инспекция кэша. */
+    private fun resetPerItemState(snapshot: ComposePlaybackSnapshot) {
+        cacheEvictionJob?.cancel()
+        cacheEvictionJob = null
+        hlsRollingPrefetcher?.stop()
+        hlsRollingPrefetchState = HlsRollingPrefetchState()
+        lastPrefetchUpdateAt = 0L
         playlistCacheJob?.cancel()
+        currentPlaylistCacheDescriptor = null
+        currentPlaylistDescriptorVideoUrl = null
+        nextPlaylistCacheDescriptor = null
+        cacheInspectionJob?.cancel()
+        cacheInspectionJob = null
+        cacheInspectionTracker.reset()
+        cacheInspection = HlsCacheInspection()
+        lastCacheInspectionAt = 0L
+        playbackSnapshot = snapshot
+        updatePlayerStats()
+        updateSkipHud()
+    }
+
+    /**
+     * С автопереходом ExoPlayer сам переходит на следующий MediaItem (без паузы и повторного prepare).
+     * Без автоперехода — пауза в конце серии, как раньше.
+     */
+    private fun applyPauseAtEndOfMediaItems() {
+        val pauseAtEnd = !preferencesHolder.playerAutoplay.value
+        if (player.pauseAtEndOfMediaItems != pauseAtEnd) {
+            player.setPauseAtEndOfMediaItems(pauseAtEnd)
+        }
+    }
+
+    private fun isPlayerOnItem(url: String): Boolean {
+        return player.currentMediaItem?.localConfiguration?.uri?.toString() == url
+    }
+
+    /** ExoPlayer перешёл на следующий MediaItem очереди (reason AUTO). */
+    private fun handleQueueAutoAdvance(itemUrl: String) {
+        val previousVideo = currentVideo
+        val previousEndMs = autoTransitionOldPositionMs
+        val previousDescriptor = currentPlaylistCacheDescriptor
+            ?.takeIf { previousVideo != null && currentPlaylistDescriptorVideoUrl == previousVideo.url }
+        // Длительность старой серии больше не актуальна: не даём ей попасть в тики новой.
+        playbackSnapshot = playbackSnapshot.copy(
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+            bufferedPositionMs = 0L,
+            cachedPositionMs = 0L,
+        )
+        // Выставляется до вызова VM: videoData может быть обработан синхронно внутри onQueueAdvanced.
+        pendingEvictionDescriptor = previousDescriptor
+        val result = viewModel.onQueueAdvanced(itemUrl)
+        Log.d(TAG, "queue-advance result=$result index=${player.currentMediaItemIndex} count=${player.mediaItemCount}")
+        if (!result.previousEpisodeWatched) {
+            pendingEvictionDescriptor = null
+        }
+        when (result) {
+            QueueAdvanceResult.REJECTED -> {
+                // VM осталась на старой серии: не даём плееру играть серию, о которой VM не знает.
+                player.pause()
+                val previousIndex = player.currentMediaItemIndex - 1
+                if (previousIndex >= 0 && previousEndMs > 0L) {
+                    player.seekTo(previousIndex, previousEndMs)
+                }
+            }
+
+            QueueAdvanceResult.ALREADY_CURRENT,
+            QueueAdvanceResult.ACCEPTED,
+            QueueAdvanceResult.ACCEPTED_PREVIOUS_WATCHED -> Unit
+        }
+    }
+
+    /**
+     * Серия уже играет как следующий MediaItem: без setMediaItems/prepare убираем старый элемент,
+     * докладываем следующую серию в очередь и перенацеливаем prefetch/инспекцию кэша.
+     */
+    private fun adoptQueuedItem(video: Video) {
+        val evictDescriptor = pendingEvictionDescriptor
+        pendingEvictionDescriptor = null
+        resetPerItemState(
+            ComposePlaybackSnapshot(
+                positionMs = player.currentPosition.coerceAtLeast(0L),
+                durationMs = player.duration.takeIf { it > 0L } ?: 0L,
+                bufferedPositionMs = 0L,
+                cachedPositionMs = 0L,
+                isPlaying = player.isPlaying,
+                isBuffering = player.playbackState == Player.STATE_BUFFERING,
+            )
+        )
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex > 0) {
+            player.removeMediaItems(0, currentIndex)
+        }
+        if (player.mediaItemCount > 1) {
+            player.removeMediaItems(1, player.mediaItemCount)
+        }
+        if (preferencesHolder.playerPreloadNextEpisode.value) {
+            video.nextUrl?.takeIf { it.isNotBlank() }?.let { nextUrl ->
+                player.addMediaItem(MediaItem.fromUri(Uri.parse(nextUrl)))
+            }
+        }
+        val seek = video.seek.coerceAtLeast(0L)
+        if (seek > 0L) {
+            player.seekTo(0, seek)
+        }
+        val settings = viewModel.composeMenuState.value.settings
+        val allowNextEpisodePreload = updatePreloadGuard(settings, playbackSnapshot)
+        playerHolder.applyRuntimeSettings(
+            player = player,
+            allowNextEpisodePreload = allowNextEpisodePreload,
+        )
+        applyPauseAtEndOfMediaItems()
+        Log.d(TAG, "queue-adopt seek=$seek items=${player.mediaItemCount} evict=${evictDescriptor != null}")
+        loadPlaylistCacheDescriptors(video, evictDescriptor)
+        updatePlaybackSnapshot()
+    }
+
+    private fun loadPlaylistCacheDescriptors(video: Video, evictDescriptor: HlsPlaylistCacheDescriptor? = null) {
+        playlistCacheJob?.cancel()
+        val playlistDataSourceFactory = playerHolder.cacheDataSourceFactory ?: return
         playlistCacheJob = viewLifecycleOwner.lifecycleScope.launch {
-            currentPlaylistCacheDescriptor = HlsPlaylistCacheInspector.loadDescriptor(video.url)
+            val preloadNext = preferencesHolder.playerPreloadNextEpisode.value
+            currentPlaylistCacheDescriptor = HlsPlaylistCacheInspector.loadDescriptor(video.url, playlistDataSourceFactory)
+            currentPlaylistDescriptorVideoUrl = video.url.takeIf { currentPlaylistCacheDescriptor != null }
             nextPlaylistCacheDescriptor = video.nextUrl
-                ?.takeIf { preferencesHolder.playerPreloadNextEpisode.value }
-                ?.let { HlsPlaylistCacheInspector.loadDescriptor(it) }
-            updateCacheInspection()
+                ?.takeIf { preloadNext }
+                ?.let { HlsPlaylistCacheInspector.loadDescriptor(it, playlistDataSourceFactory) }
+            refreshCacheInspection()
             updatePlaybackSnapshot()
             startHlsRollingPrefetch()
+            if (evictDescriptor != null) {
+                val nextExpected = preloadNext && !video.nextUrl.isNullOrBlank()
+                evictWatchedEpisodeCache(
+                    evictDescriptor = evictDescriptor,
+                    keepCurrent = currentPlaylistCacheDescriptor,
+                    keepNext = nextPlaylistCacheDescriptor,
+                    nextExpected = nextExpected,
+                )
+            }
+        }
+    }
+
+    /**
+     * Удаляет из дискового кэша сегменты досмотренной серии. Пропускается при любой неясности:
+     * не загрузился дескриптор текущей/следующей серии или плейлисты совпадают.
+     */
+    private fun evictWatchedEpisodeCache(
+        evictDescriptor: HlsPlaylistCacheDescriptor,
+        keepCurrent: HlsPlaylistCacheDescriptor?,
+        keepNext: HlsPlaylistCacheDescriptor?,
+        nextExpected: Boolean,
+    ) {
+        if (!cacheDataSourceProvider.isEnabled()) {
+            return
+        }
+        if (keepCurrent == null || (nextExpected && keepNext == null)) {
+            Log.d(TAG, "cache-evict skipped: keep descriptors not loaded")
+            return
+        }
+        if (evictDescriptor.playlistUrl == keepCurrent.playlistUrl || evictDescriptor.playlistUrl == keepNext?.playlistUrl) {
+            Log.d(TAG, "cache-evict skipped: same playlist")
+            return
+        }
+        val keepKeys = HashSet<String>()
+        keepCurrent.segments.mapTo(keepKeys) { it.key }
+        keepNext?.segments?.mapTo(keepKeys) { it.key }
+        val keys = evictDescriptor.segments
+            .asSequence()
+            .map { it.key }
+            .filter { it !in keepKeys }
+            .distinct()
+            .toList()
+        if (keys.isEmpty()) {
+            return
+        }
+        cacheEvictionJob?.cancel()
+        cacheEvictionJob = viewLifecycleOwner.lifecycleScope.launch {
+            val startedAt = System.currentTimeMillis()
+            val freedBytes = withContext(Dispatchers.IO) {
+                var freed = 0L
+                keys.chunked(CACHE_EVICTION_BATCH).forEach { batch ->
+                    yield()
+                    freed += cacheDataSourceProvider.removeCachedResources(batch)
+                }
+                freed
+            }
+            Log.d(
+                TAG,
+                "cache-evict segments=${keys.size} freed=${formatMemory(freedBytes)} ms=${System.currentTimeMillis() - startedAt}"
+            )
+            refreshCacheInspection()
         }
     }
 
@@ -1574,7 +1812,9 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                     position = snapshot.positionMs,
                     duration = snapshot.durationMs,
                     isPlaying = snapshot.isPlaying,
+                    queueAdvanceExpected = player.hasNextMediaItem() && !player.pauseAtEndOfMediaItems,
                 )
+                playerDiagnostics.maybeLogMemory(snapshot.isPlaying) { buildMemoryDiagnostics() }
                 delay(PROGRESS_TICK_MS)
             }
         }
@@ -1624,7 +1864,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         val settings = viewModel.composeMenuState.value.settings
         val videoFormat = currentVideoFormat ?: player.videoFormat
         val audioFormat = currentAudioFormat ?: player.audioFormat
-        val diskCacheUsedBytes = cacheDataSourceProvider.getCacheSpaceBytes()
+        val diskCacheUsedBytes = cacheInspection.totalBytes
         val diskCacheMaxBytes = cacheDataSourceProvider.getConfiguredMaxBytes()
         val runtime = Runtime.getRuntime()
         val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
@@ -1720,11 +1960,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         if (!settings.preloadNextEpisode) {
             return false
         }
-        val runtime = Runtime.getRuntime()
-        val maxMemoryBytes = runtime.maxMemory().coerceAtLeast(1L)
-        val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
-        val usageRatio = usedMemoryBytes.toFloat() / maxMemoryBytes.toFloat()
-        if (usageRatio >= HEAP_PRELOAD_DISABLE_RATIO) {
+        if (PlayerBufferConfig.isHeapHeadroomLow(settings.bufferMemoryLimitMb)) {
             return false
         }
 
@@ -1755,13 +1991,13 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         val runtime = Runtime.getRuntime()
         val maxMemoryBytes = runtime.maxMemory().coerceAtLeast(1L)
         val usedMemoryBytes = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
-        val usageRatio = usedMemoryBytes.toFloat() / maxMemoryBytes.toFloat()
         val readyHorizonMs = maxOf(snapshot.bufferedPositionMs, snapshot.cachedPositionMs)
         val bufferedAheadMs = (readyHorizonMs - snapshot.positionMs).coerceAtLeast(0L)
         val desiredForwardBufferMs = settings.forwardBufferSeconds.coerceAtLeast(0).toLong() * 1_000L
         val currentDuration = snapshot.durationMs
         val remainingMs = (currentDuration - snapshot.positionMs).coerceAtLeast(0L)
-        val memoryGuard = settings.preloadNextEpisode && usageRatio >= HEAP_PRELOAD_DISABLE_RATIO
+        val memoryGuard = settings.preloadNextEpisode &&
+            (memoryTrimActive || PlayerBufferConfig.isHeapHeadroomLow(settings.bufferMemoryLimitMb))
         val waitingCurrentBuffer = settings.preloadNextEpisode && !memoryGuard && desiredForwardBufferMs > 0L && currentDuration > 0L && bufferedAheadMs < desiredForwardBufferMs && remainingMs > desiredForwardBufferMs && readyHorizonMs < currentDuration
         val shouldAllow = settings.preloadNextEpisode && !memoryGuard && !waitingCurrentBuffer
         val guardActive = settings.preloadNextEpisode && !shouldAllow
@@ -1812,7 +2048,9 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             HlsPrefetchPlaybackState(
                 positionMs = snapshot.positionMs,
                 durationMs = snapshot.durationMs,
+                bufferedPositionMs = snapshot.bufferedPositionMs,
                 playbackState = player.playbackState,
+                isPlaying = snapshot.isPlaying,
                 rebufferCount = rebufferCount,
                 diskCacheEnabled = settings.diskCacheEnabled,
                 preloadNextEpisode = settings.preloadNextEpisode,
@@ -1822,11 +2060,12 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun getOrCreateHlsRollingPrefetcher(): HlsRollingPrefetcher {
         hlsRollingPrefetcher?.let { return it }
-        val dataSourceType = playerDataSourceProvider.get()
-        val upstreamFactory = DefaultDataSource.Factory(requireContext(), dataSourceType.factory)
+        player // гарантирует attach(): фабрики и PriorityTaskManager общие с плеером
         val prefetcher = HlsRollingPrefetcher(
             cacheProvider = cacheDataSourceProvider,
-            upstreamFactory = upstreamFactory,
+            upstreamFactory = requireNotNull(playerHolder.upstreamDataSourceFactory),
+            priorityTaskManager = playerHolder.priorityTaskManager,
+            bufferMemoryLimitMb = { preferencesHolder.playerBufferMemoryLimitMb.value },
         )
         hlsRollingPrefetcher = prefetcher
         hlsRollingPrefetchStateJob?.cancel()
@@ -1844,20 +2083,58 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             return
         }
         val now = System.currentTimeMillis()
-        if (now - lastCacheInspectionAt < 1_000L) {
+        if (now - lastCacheInspectionAt < CACHE_INSPECTION_INTERVAL_MS) {
             return
         }
-        updateCacheInspection(positionMs)
-        lastCacheInspectionAt = now
+        refreshCacheInspection(positionMs)
     }
 
-    private fun updateCacheInspection(positionMs: Long = playbackSnapshot.positionMs) {
-        cacheInspection = HlsPlaylistCacheInspector.inspect(
-            cacheProvider = cacheDataSourceProvider,
-            current = currentPlaylistCacheDescriptor,
-            next = nextPlaylistCacheDescriptor,
-            positionMs = positionMs,
-        )
+    /** Проверка кэша идёт в фоне; UI читает только последний готовый результат. */
+    private fun refreshCacheInspection(positionMs: Long = playbackSnapshot.positionMs) {
+        if (cacheInspectionJob?.isActive == true) {
+            return
+        }
+        lastCacheInspectionAt = System.currentTimeMillis()
+        val current = currentPlaylistCacheDescriptor
+        val next = nextPlaylistCacheDescriptor
+        cacheInspectionJob = viewLifecycleOwner.lifecycleScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                cacheInspectionTracker.inspect(
+                    cacheProvider = cacheDataSourceProvider,
+                    currentDescriptor = current,
+                    nextDescriptor = next,
+                    positionMs = positionMs,
+                )
+            }
+            cacheInspection = result
+            updatePlayerStats()
+        }
+    }
+
+    private fun buildMemoryDiagnostics(): String {
+        val allocatedMb = playerHolder.loadControl?.allocator?.totalBytesAllocated?.let { it / (1024 * 1024) }
+        val prefetch = hlsRollingPrefetchState
+        val diskMb = cacheInspection.totalBytes / (1024L * 1024L)
+        return "alloc=${allocatedMb ?: -1}MB prefetch=${prefetch.mode}(${prefetch.label}) disk=${diskMb}MB items=${player.mediaItemCount} memTrim=$memoryTrimActive"
+    }
+
+    @Suppress("DEPRECATION")
+    private fun handleMemoryPressure(level: Int) {
+        if (level < ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            return
+        }
+        val critical = level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL &&
+            level != ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN
+        Log.w(TAG, "trim-memory level=$level critical=$critical")
+        hlsRollingPrefetcher?.pauseForMemoryPressure(MEMORY_TRIM_COOLDOWN_MS, cancelActive = critical)
+        playerHolder.player?.let { playerHolder.applyRuntimeSettings(it, allowNextEpisodePreload = false) }
+        lastAppliedRuntimeSettings = null
+        memoryTrimActive = true
+        memoryTrimJob?.cancel()
+        memoryTrimJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(MEMORY_TRIM_COOLDOWN_MS)
+            memoryTrimActive = false
+        }
     }
 
 }
@@ -2956,8 +3233,10 @@ private fun formatCacheSegments(
     return "$sizeLabel ($cachedSegments/$totalSegments)"
 }
 
-private const val HEAP_PRELOAD_DISABLE_RATIO = 0.75f
-private const val PREFETCH_UPDATE_INTERVAL_MS = 10_000L
+private const val PREFETCH_UPDATE_INTERVAL_MS = 1_000L
+private const val CACHE_INSPECTION_INTERVAL_MS = 5_000L
+private const val MEMORY_TRIM_COOLDOWN_MS = 60_000L
+private const val CACHE_EVICTION_BATCH = 32
 
 private fun Int.toPlaybackStateLabel(isPlaying: Boolean): String {
     return when (this) {
