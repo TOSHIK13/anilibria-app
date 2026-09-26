@@ -97,6 +97,7 @@ import ru.radiationx.data.datasource.storage.SocialAuthStorage
 import ru.radiationx.data.datasource.storage.TeamsStorage
 import ru.radiationx.data.datasource.storage.UserStorage
 import ru.radiationx.data.datasource.storage.YearsStorage
+import ru.radiationx.data.datasource.storage.CollectionIdsStorage
 import ru.radiationx.data.datasource.storage.ReleaseCardStorage
 import ru.radiationx.data.datasource.storage.WatchHistoryStorage
 import ru.radiationx.data.di.providers.ApiClientWrapper
@@ -202,6 +203,7 @@ class DataModule(context: Context) : QuillModule() {
         single<ApiConfigStorage>()
         single<WatchHistoryStorage>()
         single<ReleaseCardStorage>()
+        single<CollectionIdsStorage>()
 
 
         single<PlayerOkHttpProvider>()
