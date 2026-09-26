@@ -24,6 +24,9 @@ class WatchingRecommendsViewModel @Inject constructor(
         onRefreshClick()
     }
 
+    // /releases/recommended не поддерживает страницы — ряд конечный, без "Загрузить еще".
+    override fun hasMoreCards(newCards: List<LibriaCard>, allCards: List<LibriaCard>): Boolean = false
+
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> = historyRepository
         .getReleases()
         .items
