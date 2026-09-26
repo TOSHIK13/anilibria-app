@@ -39,6 +39,9 @@ class DetailRecommendsViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    // /releases/recommended не поддерживает страницы — ряд конечный, без "Загрузить еще".
+    override fun hasMoreCards(newCards: List<LibriaCard>, allCards: List<LibriaCard>): Boolean = false
+
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> =
         releaseRepository
             .getRecommendedReleases(releaseId)
