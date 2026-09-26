@@ -11,6 +11,10 @@ data class LibriaCard(
     val episodesTotal: Int? = null,
     /** Сколько серий уже вышло; null — неизвестно (догружается из полного релиза). */
     val episodesAvailable: Int? = null,
+    /** Тип релиза «Фильм» — без полосы прогресса, бейдж «ФИЛЬМ». */
+    val isFilm: Boolean = false,
+    /** fresh_at (последнее обновление), unix-секунды; null — неизвестно. */
+    val freshAt: Long? = null,
 ) : CardItem {
 
     override fun getId(): Int {

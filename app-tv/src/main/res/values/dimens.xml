@@ -10,4 +10,7 @@
     <dimen name="card_height">185dp</dimen>
     <dimen name="card_release_width">130dp</dimen>
     <dimen name="card_youtube_width">330dp</dimen>
+    <dimen name="card_corner_radius">8dp</dimen>
+    <!-- Скругление карточек в рядах Leanback (клип + тень), совпадает с постером. -->
+    <dimen name="lb_rounded_rect_corner_radius">8dp</dimen>
 </resources>

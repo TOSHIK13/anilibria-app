@@ -18,6 +18,10 @@ class CardsDataConverter(
 
     fun toCard(releaseItem: Release): LibriaCard =
         toCard(ReleaseCardCacheLogic.fromRelease(releaseItem))
+            .copy(isFilm = releaseItem.types.any { isFilmType(it) })
+
+    private fun isFilmType(type: String): Boolean =
+        type.equals("Фильм", ignoreCase = true) || type.equals("MOVIE", ignoreCase = true)
 
     /** Карточка релиза из кратких данных (в т.ч. из дискового кэша «Продолжить просмотр»). */
     fun toCard(info: ReleaseCardInfo): LibriaCard = info.run {
@@ -36,6 +40,7 @@ class CardsDataConverter(
             LibriaCard.Type.Release(ReleaseId(id)),
             episodesTotal = series?.trim()?.toIntOrNull()?.takeIf { it > 0 },
             episodesAvailable = episodesAvailable,
+            freshAt = torrentUpdate.takeIf { it != 0 }?.toLong(),
         )
     }
 
