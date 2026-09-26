@@ -40,6 +40,13 @@ class DetailDataConverter @Inject constructor() {
         )
     }
 
+    /** Когда выходят серии онгоинга: анонс релиза или день из расписания. */
+    fun scheduleAnnounce(release: Release): String? {
+        if (release.statusCode == Release.STATUS_CODE_COMPLETE) return null
+        val originalAnnounce = release.announce?.trim()?.trim('.')?.capitalizeDefault()?.takeIf { it.isNotEmpty() }
+        return originalAnnounce ?: release.days.firstOrNull()?.toAnnounce2()
+    }
+
     private fun Release.getAnnounce(isFull: Boolean): String {
         if (!isFull) return ""
         val announceText = if (statusCode == Release.STATUS_CODE_COMPLETE) {

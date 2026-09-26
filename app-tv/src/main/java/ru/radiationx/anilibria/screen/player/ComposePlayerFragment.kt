@@ -436,7 +436,11 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             if (it != null) {
                 controlsVisible = false
                 activeSubmenu = null
-                completionActionSelection = CompletionOverlayAction.Next
+                completionActionSelection = if (it.type == PlayerCompletionOverlayType.END_EPISODE) {
+                    CompletionOverlayAction.Next
+                } else {
+                    CompletionOverlayAction.Close
+                }
                 completionProgress = 0f
                 completionRemainingSec = NEXT_EPISODE_TIMER_SEC
                 startCompletionTimer(it)
@@ -1090,7 +1094,10 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         return if (completionOverlayVisible) {
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    completionActionSelection = CompletionOverlayAction.Next
+                    // В конце сезона кнопки «Следующая серия» нет — остаётся только «Закрыть».
+                    if (completionOverlay?.type == PlayerCompletionOverlayType.END_EPISODE) {
+                        completionActionSelection = CompletionOverlayAction.Next
+                    }
                     true
                 }
 
@@ -2679,18 +2686,22 @@ private fun CompletionOverlay(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    AutoAdvanceButton(
-                        label = overlay.nextEpisodeLabel ?: "Следующая серия",
-                        enabled = overlay.type == PlayerCompletionOverlayType.END_EPISODE,
-                        selected = selectedAction == CompletionOverlayAction.Next,
-                        progress = progress,
-                        remainingSec = remainingSec,
-                        modifier = Modifier.focusRequester(primaryFocusRequester),
-                        onClick = onNextClick,
-                    )
+                    val hasNext = overlay.type == PlayerCompletionOverlayType.END_EPISODE
+                    if (hasNext) {
+                        AutoAdvanceButton(
+                            label = overlay.nextEpisodeLabel ?: "Следующая серия",
+                            enabled = true,
+                            selected = selectedAction == CompletionOverlayAction.Next,
+                            progress = progress,
+                            remainingSec = remainingSec,
+                            modifier = Modifier.focusRequester(primaryFocusRequester),
+                            onClick = onNextClick,
+                        )
+                    }
                     OverlayTextButton(
                         label = overlay.closeLabel,
                         selected = selectedAction == CompletionOverlayAction.Close,
+                        modifier = if (hasNext) Modifier else Modifier.focusRequester(primaryFocusRequester),
                         onClick = onCloseClick,
                     )
                 }
