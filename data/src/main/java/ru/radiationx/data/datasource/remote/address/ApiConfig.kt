@@ -32,8 +32,8 @@ class ApiConfig @Inject constructor(
     var hasSavedConfig: Boolean = false
         private set
 
-    /** Адрес, под который сейчас собраны API-клиенты (см. [updateActiveAddress]). */
-    private var appliedAddress: ApiAddress? = null
+    /** Под что сейчас собран API OkHttpClient (см. [updateActiveAddress]). */
+    private var appliedClientKey: ClientKey? = null
 
     init {
         // todo TR-274 make api config async
@@ -45,7 +45,7 @@ class ApiConfig @Inject constructor(
             setConfig(initAddresses)
             hasSavedConfig = savedActiveTag != null &&
                     savedConfig?.addresses?.any { it.tag == savedActiveTag } == true
-            appliedAddress = active
+            appliedClientKey = clientKey()
         }
     }
 
@@ -57,19 +57,36 @@ class ApiConfig @Inject constructor(
     }
 
     /**
-     * Пересоздаёт API-клиенты (и ImageLoader) только если активный адрес реально
-     * поменялся: другой тег или другие данные адреса после обновления конфига.
+     * Пересоздаёт API-клиенты (и Coil ImageLoader) только если изменилось то, из чего
+     * собирается OkHttpClient ([ClientKey]: адрес и его прокси). URL-ы (base, animeBase,
+     * картинки) читаются из конфига на каждый запрос и пересоздания не требуют.
      */
     suspend fun updateActiveAddress(address: ApiAddress) {
         activeAddressTag = address.tag
         apiConfigStorage.setActive(activeAddressTag)
-        val newActive = active
+        val newKey = clientKey()
         val changed = synchronized(this) {
-            (appliedAddress != newActive).also { appliedAddress = newActive }
+            (appliedClientKey != newKey).also { appliedClientKey = newKey }
         }
         if (changed) {
             configChanger.onChange()
         }
+    }
+
+    /** Данные, от которых зависит ApiOkHttpProvider. */
+    private data class ClientKey(
+        val tag: String,
+        val inAddresses: Boolean,
+        val proxies: List<ApiProxy>,
+    )
+
+    private fun clientKey(): ClientKey {
+        val active = active
+        return ClientKey(
+            tag = active.tag,
+            inAddresses = getAddresses().any { it.tag == active.tag },
+            proxies = active.proxies.map { it.copy() },
+        )
     }
 
     fun setProxyPing(proxy: ApiProxy, ping: Float) {
