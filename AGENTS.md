@@ -37,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-tv-app-release.ps1
 
 ### TV release APK
 
-Использовать только:
+Использовать:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build-tv-app-release.ps1
@@ -50,8 +50,10 @@ powershell -ExecutionPolicy Bypass -File scripts/build-tv-app-release.ps1
 - использует локальный `GRADLE_USER_HOME`;
 - использует локальный keystore;
 - запускает правильную Gradle task;
-- ищет итоговый APK в `D:/Ani/release-apks`;
+- кладёт итоговый APK в `D:/Ani/release-apks`;
 - печатает SHA256.
+
+Из git worktree (`.claude/worktrees/...`) скрипт работает так же: тулчейн, keystore и `local.properties` он берёт из основного checkout'а `D:/Ani`, а APK переносит в его `release-apks`.
 
 Не нужно вручную пересобирать release через случайные Gradle task, если пользователь не просил иной вариант.
 
@@ -82,20 +84,9 @@ $env:PATH="$env:JAVA_HOME\bin;$env:ANDROID_HOME\platform-tools;$env:PATH"
 
 Это дешёвая страховка от поломки общего кода.
 
-## 3. Что делать в первые 3 минуты
+## 3. С чего начинать
 
-При новом запросе не нужно анализировать весь проект. Достаточно:
-
-1. Понять, это задача про:
-   - сборку;
-   - установку на устройство;
-   - дебаг через логи;
-   - точечную правку кода;
-   - миграцию API.
-2. Прочитать только релевантные файлы.
-3. Не делать `gradle sync`, полную индексацию и глубокий обход проекта без необходимости.
-
-Если запрос про сборку TV APK, не нужно сначала копаться в коде. Сначала запускать существующий build script.
+Читать только файлы, которые относятся к задаче. `gradle sync`, полная индексация и обход всего проекта здесь дорогие и почти никогда не нужны. Если запрос про сборку TV APK, сначала запускать существующий build script, а не читать код.
 
 ## 4. Частые ложные проблемы, на которые не нужно тратить время
 
@@ -208,7 +199,7 @@ adb shell monkey -p ru.radiationx.anilibria.app.tv.mod -c android.intent.categor
 
 Для работы с новым API не нужно заново исследовать всё с нуля. Основные проверенные факты уже собраны в:
 
-[`docs/anilibria-api-v1-notes.md`](D:/Ani/docs/anilibria-api-v1-notes.md)
+[`docs/anilibria-api-v1-notes.md`](docs/anilibria-api-v1-notes.md)
 
 Ключевые выводы:
 

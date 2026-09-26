@@ -1,7 +1,16 @@
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
-$tools = Join-Path $root ".gradle\codex-tools"
+
+# In a git worktree the toolchain, keystore and local.properties live only in the
+# main checkout, so resolve it through the shared git dir.
+$mainRoot = $root
+$commonDir = git -C $root rev-parse --path-format=absolute --git-common-dir 2>$null
+if ($LASTEXITCODE -eq 0 -and $commonDir) {
+    $mainRoot = Split-Path -Parent $commonDir
+}
+
+$tools = Join-Path $mainRoot ".gradle\codex-tools"
 $jdkHomeFile = Join-Path $tools "jdk-home.txt"
 $sdk = Join-Path $tools "android-sdk"
 $keystore = Join-Path $tools "local-release.jks"
@@ -24,11 +33,21 @@ if (-not (Test-Path $keystore)) {
     throw "Missing release keystore $keystore."
 }
 
+$localProperties = Join-Path $root "local.properties"
+$mainLocalProperties = Join-Path $mainRoot "local.properties"
+if (-not (Test-Path $localProperties)) {
+    if ($mainRoot -eq $root -or -not (Test-Path $mainLocalProperties)) {
+        throw "Missing $localProperties with release signing config."
+    }
+    Copy-Item $mainLocalProperties $localProperties
+    Write-Host "Copied local.properties from $mainRoot"
+}
+
 $env:JAVA_HOME = $jdkHome
 $env:ANDROID_HOME = $sdk
 $env:ANDROID_SDK_ROOT = $sdk
-$env:ANDROID_USER_HOME = Join-Path $root ".android"
-$env:GRADLE_USER_HOME = Join-Path $root ".gradle"
+$env:ANDROID_USER_HOME = Join-Path $mainRoot ".android"
+$env:GRADLE_USER_HOME = Join-Path $mainRoot ".gradle"
 $env:PATH = "$jdkHome\bin;$sdk\platform-tools;$sdk\cmdline-tools\latest\bin;$sdk\build-tools\36.0.0;$env:PATH"
 
 Push-Location $root
@@ -44,6 +63,12 @@ try {
 
     if ($null -eq $latest) {
         throw "Build finished, but no copied APK was found in release-apks."
+    }
+
+    if ($mainRoot -ne $root) {
+        $mainApks = Join-Path $mainRoot "release-apks"
+        New-Item -ItemType Directory -Force $mainApks | Out-Null
+        $latest = Move-Item $latest.FullName $mainApks -Force -PassThru
     }
 
     Write-Host "APK: $($latest.FullName)"
