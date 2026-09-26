@@ -85,6 +85,7 @@ class WatchProgressRepository @Inject constructor(
 
     @Volatile
     private var loadedAt = 0L
+    private var failedAt = 0L
 
     @Volatile
     private var useInclude = true
@@ -146,6 +147,7 @@ class WatchProgressRepository @Inject constructor(
     /** Загружает историю, если она ещё не загружена или устарела. Не блокирует вызывающего. */
     fun requestRefresh() {
         if (System.currentTimeMillis() - loadedAt < REFRESH_TTL_MS) return
+        if (System.currentTimeMillis() - failedAt < RETRY_BACKOFF_MS) return
         if (refreshJob?.isActive == true) return
         refreshJob = scope.launch { refresh() }
     }
@@ -154,6 +156,7 @@ class WatchProgressRepository @Inject constructor(
         state.value = null
         restored = false
         loadedAt = 0L
+        failedAt = 0L
         useInclude = true
         persistJob?.cancel()
         storage.clear()
@@ -303,11 +306,14 @@ class WatchProgressRepository @Inject constructor(
                     )
                     state.value = merged
                     loadedAt = now
+                    failedAt = 0L
                     restored = true
                     storage.saveSnapshot(WatchHistorySnapshot(merged.values.toList(), now))
                     LoadTiming.span("watch", "history loaded", timingStart, "items=${server.size}")
                 }
                 .onFailure {
+                    // Не долбим сервер повтором с каждой карточки: пауза перед следующей попыткой.
+                    failedAt = System.currentTimeMillis()
                     Timber.e(it)
                     LoadTiming.span("watch", "history error", timingStart, it.javaClass.simpleName)
                 }
@@ -365,7 +371,9 @@ class WatchProgressRepository @Inject constructor(
     }
 
     private companion object {
-        const val PAGE_LIMIT = 100
+        // Сервер отвечает 422 на limit > 50.
+        const val PAGE_LIMIT = 50
+        const val RETRY_BACKOFF_MS = 60 * 1_000L
         const val MAX_PAGES = 100
         const val PARALLEL_PAGES = 4
         const val REFRESH_TTL_MS = 10 * 60 * 1_000L

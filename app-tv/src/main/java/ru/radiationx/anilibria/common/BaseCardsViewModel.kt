@@ -111,7 +111,9 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
             }.onSuccess { newCards ->
                 if (timingName != null) {
                     LoadTiming.span("main", "$timingName page=$requestPage data", timingStart, "items=${newCards.size}")
-                    LoadTiming.markOnce("startup", "first_row_data", timingName)
+                    if (newCards.isNotEmpty()) {
+                        LoadTiming.markOnce("startup", "first_row_data", timingName)
+                    }
                 }
                 val isFirstPage = requestPage <= 1
                 val needsModify = if (isFirstPage) {
