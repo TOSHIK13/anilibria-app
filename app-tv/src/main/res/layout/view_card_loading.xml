@@ -18,4 +18,33 @@
         android:src="@drawable/ic_refresh_black_24dp"
         app:tint="@color/dark_contrast_icon" />
 
+    <LinearLayout
+        android:id="@+id/loadingEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_collection_empty"
+            app:tint="@color/dark_contrast_icon" />
+
+        <TextView
+            android:id="@+id/loadingEmptyText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:textColor="@color/dark_contrast_icon"
+            android:textSize="12sp"
+            tools:text="В этой коллекции пока нет релизов" />
+
+    </LinearLayout>
+
 </merge>

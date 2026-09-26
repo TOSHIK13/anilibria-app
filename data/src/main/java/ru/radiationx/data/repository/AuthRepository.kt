@@ -11,6 +11,7 @@ import ru.radiationx.data.datasource.holders.AuthHolder
 import ru.radiationx.data.datasource.holders.CookieHolder
 import ru.radiationx.data.datasource.holders.SocialAuthHolder
 import ru.radiationx.data.datasource.holders.UserHolder
+import ru.radiationx.data.datasource.remote.ApiError
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.api.AuthApi
 import ru.radiationx.data.entity.common.AuthState
@@ -86,10 +87,11 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun loadUser(): ProfileItem = withContext(Dispatchers.IO) {
-        val profile = if (!authHolder.getSessionToken().isNullOrBlank()) {
-            loadV1UserWithLegacyAvatarFallback()
-        } else {
-            authApi.loadUser().toDomain(apiConfig)
+        val profile = when {
+            !authHolder.getSessionToken().isNullOrBlank() -> loadV1UserWithLegacyAvatarFallback()
+            hasLegacySessionCookie() -> authApi.loadUser().toDomain(apiConfig)
+            // Ни V1 токена, ни legacy PHPSESSID: сетевой `query=user` не нужен.
+            else -> throw ApiError(401, "Unauthorized", null)
         }
         profile
             .also { updateUser(it) }
@@ -116,19 +118,14 @@ class AuthRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             val tokenResponse = authApi.signInV1(login, password)
             authHolder.setSessionToken(tokenResponse.token)
-            val profile = loadV1UserWithLegacyAvatarFallback()
-            coRunCatching {
-                authApi.signIn(login, password, code2fa)
-            }.onFailure {
-                Timber.e(it)
-            }
-            profile.also { updateUser(it) }
+            loadV1UserWithLegacyAvatarFallback()
+                .also { updateUser(it) }
         }
 
     suspend fun signOut() {
         withContext(Dispatchers.IO) {
             coRunCatching {
-                authApi.signOut()
+                authApi.signOut(withLegacyFallback = hasLegacySessionCookie())
             }.onFailure {
                 Timber.e(it)
             }
@@ -186,7 +183,7 @@ class AuthRepository @Inject constructor(
 
     private suspend fun loadV1UserWithLegacyAvatarFallback(): ProfileItem {
         val v1Profile = authApi.loadV1User().toDomain(apiConfig)
-        if (!v1Profile.avatarUrl.isNullOrBlank()) {
+        if (!v1Profile.avatarUrl.isNullOrBlank() || !hasLegacySessionCookie()) {
             return v1Profile
         }
         val legacyAvatar = coRunCatching {
@@ -196,6 +193,9 @@ class AuthRepository @Inject constructor(
         }.getOrNull()?.avatarUrl
         return v1Profile.copy(avatarUrl = legacyAvatar ?: v1Profile.avatarUrl)
     }
+
+    private suspend fun hasLegacySessionCookie(): Boolean =
+        cookieHolder.getCookies()[CookieHolder.PHPSESSID] != null
 
     private fun computeAuthState(
         cookies: Map<String, Cookie>,

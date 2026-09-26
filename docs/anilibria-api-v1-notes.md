@@ -93,9 +93,66 @@
 - `GET /api/v1/anime/schedule/week`
 - Ответ: голый массив элементов, внутри каждого есть `release`.
 
+## История просмотра и таймкоды
+
+Прогресс просмотра живёт только на сервере (общий с сайтом и телефоном), локально — кэш.
+
+- `GET /api/v1/accounts/users/me/views/history?page=&limit=&include=`
+  - ответ: `{ data: [...], meta: { pagination: { total, count, per_page, current_page, total_pages } } }`;
+  - элемент — одна серия с таймкодом: `{id, time, user_id, is_watched, updated_at (ISO),
+    release_episode_id, release_episode: {id, name, ordinal, duration, release_id, ...,
+    release: {id, episodes_total, ...}}}`;
+  - `include` сужает поля, вложенные пути через точку работают. Приложение просит
+    `time,is_watched,updated_at,release_episode_id,release_episode.ordinal,release_episode.release_id,release_episode.release.episodes_total`;
+    если в ответе нет `release_episode.release_id` — повтор без `include`;
+  - порядок элементов на сервере не проверен — сортировка по `updated_at` на клиенте.
+- `GET /api/v1/anime/releases/{id}/episodes/timecodes` — голый массив
+  `{id, time, user_id, is_watched, updated_at, release_episode_id}` по сериям релиза.
+- `GET /api/v1/anime/releases/episodes/{episodeUuid}/timecode` — один объект, 404 если таймкода нет.
+- `POST /api/v1/accounts/users/me/views/timecodes` — тело `[{time, is_watched, release_episode_id}]`;
+  `DELETE` туда же — тело `[{release_episode_id}]`.
+- `GET views/timecodes?since=ISO` — массив троек `[episode_uuid, time, is_watched]` без release id
+  и даты: годится только для инкрементального обновления уже известных серий (пока не используется).
+
+Как использует приложение (`WatchProgressRepository`, `EpisodeProgressRepository`):
+
+- при старте (с авторизацией) сразу публикуется снимок истории с диска
+  (`SharedPreferences` data-prefs, ключ `data.watch_history_v1`), затем в фоне грузится
+  `views/history`: страница 1 (`limit=100`), остальные по `meta.pagination.total_pages`
+  параллельно (до 4 одновременно); не чаще раза в 10 минут за процесс;
+- из истории строятся индикаторы на постерах (досмотрено N из `episodes_total`) и ряд
+  «Продолжить просмотр» (главная и «Я смотрю»): релизы по убыванию `updated_at` последней серии,
+  полностью досмотренные пропускаются; карточки — один `releases/list?ids=` на недостающие релизы;
+- кэш таймкодов серий заполняется из истории, поэтому списки не делают запросы таймкодов по
+  каждому релизу; детали/плеер по-прежнему один раз за процесс грузят `episodes/timecodes` релиза;
+- неудачные POST/DELETE таймкодов попадают в очередь (`data.watch_pending_timecodes_v1`,
+  на серию — последнее изменение, до 200 шт., 30 дней) и дожимаются перед следующей отправкой и
+  перед загрузкой истории; 4xx (кроме 401/408/429) из очереди выбрасываются;
+- при выходе из аккаунта снимок и очередь стираются, ряд скрывается.
+
 ## Известные оставшиеся legacy-зоны
 
-- `CheckerApi`, `DonationApi`, `MenuApi`, `PageApi` comments, `TeamsApi`.
-- Лента (`FeedApi`) и YouTube (`YoutubeApi`) переведены на V1.
-- Legacy social auth/fallback login/logout/user/acceptOtp оставлены как совместимый fallback.
+V1-эквивалентов в OpenAPI нет для: app update, config, menu, donations, comments.
+Есть только `/api/v1/app/status` (используется как health-check адреса).
+
+- `MenuApi` (`query=link_menu`), `DonationApi` (`query=donation_details`),
+  `PageApi` comments (`query=vkcomments`) — остаются legacy (TV их не использует на основных экранах).
+- `TeamsApi` уже на V1. Лента (`FeedApi`) и YouTube (`YoutubeApi`) переведены на V1.
+- Список социальных провайдеров (`AuthApi.loadSocialAuth`) захардкожен, сети не трогает.
+- `CheckerApi` (обновления): TV (`TvCheckerSources.useLegacyApi = false`) берёт обновление только
+  из `check-tv.json` форка TOSHIK13/anilibria-app (ветка `develop`, JSON без `{status,data}` обёртки).
+  При новом релизе мода поднимать там `version_code` и ссылку на APK. Legacy
+  `query=app_update` отдаёт обновление мобильного приложения, поэтому для TV не вызывается.
+  Mobile по-прежнему: legacy → fallback на `check.json`.
+- `ConfigurationApi` bootstrap: `query=config` на `www.anilibria.tv` оставлен, т.к. reserve
+  `config.json` отличается материально (legacy: `api0`/`api2`/`api1`, reserve: только `api1`,
+  проверено 2026-09-26). Запросы идут параллельно, берётся первый непустой ответ.
+- Legacy профиль `query=user`: вызывается только при наличии cookie `PHPSESSID`
+  (mobile legacy social auth). Без V1 токена и без cookie `loadUser` локально бросает
+  `ApiError(401)` без сети. Legacy аватар-fallback для V1 профиля — тоже только при `PHPSESSID`.
+- `public/login.php` после успешного V1 логина больше не вызывается.
+- `public/logout.php` — fallback только если V1 logout упал и есть `PHPSESSID`; иначе
+  ошибка V1 logout логируется и локальная сессия всё равно очищается.
+- Legacy social auth (redirect без `state`) оставлен как fallback для mobile.
+- `SearchApi` содержит `"query" to name` — это параметр поиска, не legacy `query=`.
 - Torrents/franchises в V1 mapper пока не восстановлены полностью.

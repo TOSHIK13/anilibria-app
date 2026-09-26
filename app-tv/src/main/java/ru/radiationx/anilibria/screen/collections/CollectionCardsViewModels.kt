@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardItem
 import ru.radiationx.anilibria.common.CardsDataConverter
@@ -68,8 +69,11 @@ abstract class BaseCollectionCardsViewModel(
 
     override fun onResume() {
         super.onResume()
-        if (cardsData.value.isNotEmpty()) {
-            onRefreshClick()
+        // Перепроверяем и пустую коллекцию: релиз могли добавить на другом экране.
+        viewModelScope.launch {
+            if (cardsData.value.isNotEmpty() || authRepository.hasSessionToken()) {
+                onRefreshClick()
+            }
         }
     }
 
@@ -86,6 +90,7 @@ abstract class BaseCollectionCardsViewModel(
     override fun getEmptyCard(): CardItem = LoadingCard(
         "Пусто",
         "В этой коллекции пока нет релизов",
+        isEmpty = true,
     )
 
     override fun onLibriaCardClick(card: LibriaCard) {

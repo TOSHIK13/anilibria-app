@@ -30,19 +30,23 @@ This stage additionally moved these areas to V1:
 - auth login/password
 - auth otp get/login
 - auth social login/authenticate flow
-- auth logout with legacy fallback
+- auth logout (legacy `logout.php` fallback only when a `PHPSESSID` cookie exists)
 - teams data
+- feed, youtube list
+- TV app update check: only reserve `check-tv.json` (`TvCheckerSources.useLegacyApi = false`)
+- legacy `login.php` after V1 login removed
+- legacy user profile (`query=user`) called only when a `PHPSESSID` cookie exists
+  (mobile legacy social auth); otherwise unauthorized locally, no network
+- social providers list is hardcoded (no network)
 
-These areas are still on legacy/query API:
+These areas are still on legacy/query API (no V1 endpoint in OpenAPI):
 
-- feed
-- menu
+- menu (`link_menu`)
 - page comments (`vkcomments`)
 - donation details
-- app update check
-- youtube list
-- legacy user profile fallback
-- config bootstrap via `query=config`
+- mobile app update check (`app_update`, fallback `check.json`)
+- config bootstrap via `query=config` (kept: reserve `config.json` has only `api1`,
+  legacy returns `api0`/`api2`/`api1`; both raced, first non-empty wins)
 
 Detailed dependency and contract map for the remaining legacy zones:
 
@@ -85,15 +89,13 @@ Detailed dependency and contract map for the remaining legacy zones:
 
 Эти классы всё ещё используют `apiConfig.apiUrl` и `query=...` схему:
 
-- `data/.../api/YoutubeApi.kt`
-- `data/.../api/TeamsApi.kt`
 - `data/.../api/PageApi.kt`
 - `data/.../api/MenuApi.kt`
 - `data/.../api/DonationApi.kt`
 - `data/.../api/AuthApi.kt`
-  Legacy-зоны: `loadUser`, `acceptOtp`, `loadSocialAuth`
-- `data/.../api/FeedApi.kt`
+  Legacy-зона: `loadUser` (только при cookie `PHPSESSID`)
 - `data/.../api/CheckerApi.kt`
+  Только mobile; TV использует reserve `check-tv.json`
 - `data/.../api/ConfigurationApi.kt`
   Legacy-зона: загрузка config через `query=config`
 
@@ -106,7 +108,7 @@ Detailed dependency and contract map for the remaining legacy zones:
 - `data/.../api/PageApi.kt`
   Статические страницы через `apiConfig.baseUrl`
 - `data/.../api/AuthApi.kt`
-  `public/login.php`, `public/logout.php`, social redirect replace
+  `public/logout.php` (fallback при `PHPSESSID`), social redirect replace
 - `data/.../mapper/CollectionMapper.kt`
   release links через `apiConfig.siteUrl`
 - `data/.../mapper/ReleaseMapper.kt`

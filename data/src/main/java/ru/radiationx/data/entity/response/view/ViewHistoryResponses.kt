@@ -12,13 +12,16 @@ data class ViewHistoryPageResponse(
 
 @JsonClass(generateAdapter = true)
 data class ViewHistoryItemResponse(
+    @Json(name = "time") val time: Float? = null,
     @Json(name = "is_watched") val isWatched: Boolean?,
+    @Json(name = "updated_at") val updatedAt: String? = null,
     @Json(name = "release_episode_id") val releaseEpisodeId: String?,
     @Json(name = "release_episode") val releaseEpisode: ViewHistoryEpisodeResponse?,
 )
 
 @JsonClass(generateAdapter = true)
 data class ViewHistoryEpisodeResponse(
+    @Json(name = "ordinal") val ordinal: Float? = null,
     @Json(name = "release_id") val releaseId: Int?,
     @Json(name = "release") val release: ViewHistoryReleaseResponse?,
 )
@@ -36,6 +39,8 @@ data class ViewHistoryMetaResponse(
 
 @JsonClass(generateAdapter = true)
 data class ViewHistoryPaginationResponse(
+    @Json(name = "total") val total: Int? = null,
+    @Json(name = "per_page") val perPage: Int? = null,
     @Json(name = "current_page") val currentPage: Int?,
     @Json(name = "total_pages") val totalPages: Int?,
 )

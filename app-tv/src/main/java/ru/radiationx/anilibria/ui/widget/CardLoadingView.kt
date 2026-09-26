@@ -22,13 +22,16 @@ class CardLoadingView @JvmOverloads constructor(
         isFocusableInTouchMode = true
     }
 
-    fun setState(state: State) {
+    fun setState(state: State, emptyText: String = "") {
         binding.loadingProgressBar.isVisible = state == State.LOADING
         binding.loadingRefresh.isVisible = state == State.ERROR
+        binding.loadingEmpty.isVisible = state == State.EMPTY
+        binding.loadingEmptyText.text = emptyText
     }
 
     enum class State {
         LOADING,
-        ERROR
+        ERROR,
+        EMPTY
     }
 }

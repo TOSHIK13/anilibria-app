@@ -34,12 +34,14 @@ class MainFragment : RowsSupportFragment() {
 
     private val mainViewModel by quillParentViewModel<MainViewModel>()
 
+    private val continueViewModel by quillParentViewModel<MainContinueViewModel>()
     private val feedViewModel by quillParentViewModel<MainFeedViewModel>()
     private val scheduleViewModel by quillParentViewModel<MainScheduleViewModel>()
     private val favoritesViewModel by quillParentViewModel<MainFavoritesViewModel>()
     private val youtubeViewModel by quillParentViewModel<MainYouTubeViewModel>()
 
     private fun getViewModel(rowId: Long): BaseCardsViewModel? = when (rowId) {
+        MainViewModel.CONTINUE_ROW_ID -> continueViewModel
         MainViewModel.FEED_ROW_ID -> feedViewModel
         MainViewModel.SCHEDULE_ROW_ID -> scheduleViewModel
         MainViewModel.FAVORITE_ROW_ID -> favoritesViewModel
@@ -52,6 +54,7 @@ class MainFragment : RowsSupportFragment() {
         LoadTiming.markOnce("startup", "main_shown")
 
         viewLifecycleOwner.lifecycle.addObserver(mainViewModel)
+        viewLifecycleOwner.lifecycle.addObserver(continueViewModel)
         viewLifecycleOwner.lifecycle.addObserver(feedViewModel)
         viewLifecycleOwner.lifecycle.addObserver(scheduleViewModel)
         viewLifecycleOwner.lifecycle.addObserver(favoritesViewModel)
