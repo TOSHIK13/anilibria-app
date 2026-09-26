@@ -17,11 +17,11 @@
     <dimen name="main_top_logo_margin_end">56dp</dimen>
 
     <!--
-    Отступ первого ряда от верха экрана (под вкладками; позже сюда добавится hero-блок).
-    Leanback выравнивает по верху карточек (row_content), заголовок ряда (~28dp) стоит над ним:
-    92dp = верх заголовка первого ряда на 64dp.
+    Высота выбранного ряда (под hero-блоком, см. MainHeroView). Leanback держит выбранный ряд
+    всегда на этой высоте (WINDOW_ALIGN_NO_EDGE). Подобрано по скриншоту под макет:
+    заголовок ряда на 224dp, верх карточек на 258dp.
     -->
-    <dimen name="main_rows_top_offset">92dp</dimen>
+    <dimen name="main_rows_top_offset">242dp</dimen>
     <!-- Верх контента нестроковых страниц (настройки) под вкладками. -->
     <dimen name="main_page_content_top">64dp</dimen>
 

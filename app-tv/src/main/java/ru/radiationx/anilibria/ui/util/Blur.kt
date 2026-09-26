@@ -12,6 +12,7 @@ import androidx.annotation.RequiresApi
 import coil3.size.Size
 import coil3.transform.Transformation
 import ru.radiationx.anilibria.R
+import ru.radiationx.shared_app.imageloader.ImageLoaderScope
 import ru.radiationx.shared_app.imageloader.showImageUrl
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -32,11 +33,11 @@ object Blur {
                 context.resources.getBoolean(R.bool.force_legacy_blur)
 
     @RequiresApi(Build.VERSION_CODES.S)
-    internal fun renderEffect(radiusPx: Float, brightness: Float): RenderEffect {
+    internal fun renderEffect(radiusPx: Float, brightness: Float, saturation: Float = 1f): RenderEffect {
         val blur = RenderEffect.createBlurEffect(radiusPx, radiusPx, Shader.TileMode.CLAMP)
-        val darken = RenderEffect.createColorFilterEffect(
-            ColorMatrixColorFilter(ColorMatrix().apply { setScale(brightness, brightness, brightness, 1f) })
-        )
+        val matrix = ColorMatrix().apply { setSaturation(saturation) }
+        matrix.postConcat(ColorMatrix().apply { setScale(brightness, brightness, brightness, 1f) })
+        val darken = RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(matrix))
         // Сначала размытие (inner), затем затемнение (outer).
         return RenderEffect.createChainEffect(darken, blur)
     }
@@ -44,18 +45,27 @@ object Blur {
 
 /**
  * Показывает [url] размытым на [radiusDp] и затемнённым до [brightness] (0..1).
+ * [saturation] (1 — без изменений) применяется только на API ≥ 31.
+ * [block] — колбэки загрузки (onComplete и т.п.).
  * Вью должна быть отдельной (не переиспользоваться для резких картинок) либо сбрасываться [clearBlur].
  */
-fun ImageView.showBlurred(url: String?, radiusDp: Float, brightness: Float) {
+fun ImageView.showBlurred(
+    url: String?,
+    radiusDp: Float,
+    brightness: Float,
+    saturation: Float = 1f,
+    block: ImageLoaderScope.() -> Unit = {},
+) {
     val radiusPx = radiusDp * resources.displayMetrics.density
     if (Blur.isLegacy(context)) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setRenderEffect(null)
         showImageUrl(url) {
             transformations(BlurTransformation(radiusPx, brightness))
+            block()
         }
     } else {
-        setRenderEffect(Blur.renderEffect(radiusPx, brightness))
-        showImageUrl(url)
+        setRenderEffect(Blur.renderEffect(radiusPx, brightness, saturation))
+        showImageUrl(url, block)
     }
 }
 

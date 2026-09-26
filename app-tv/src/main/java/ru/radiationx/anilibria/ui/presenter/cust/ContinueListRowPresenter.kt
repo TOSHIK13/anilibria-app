@@ -32,6 +32,12 @@ class ContinueListRowPresenter : CustomListRowPresenter() {
         val grid = (holder as ListRowPresenter.ViewHolder).gridView
         // Карточка шире кадра на поле под кольцо фокуса — промежуток между кадрами остаётся 8dp.
         grid.setItemSpacing(grid.resources.getDimensionPixelSize(R.dimen.card_continue_row_spacing))
+        if (isMainPageStyle) {
+            // Под hero кадр должен стоять на той же высоте, что и постеры других рядов:
+            // сдвигаем ряд вверх на поле под кольцо фокуса (Leanback выравнивает по контенту
+            // сетки с учётом отступа, поэтому только визуальный сдвиг).
+            grid.translationY = -grid.resources.getDimension(R.dimen.card_continue_ring)
+        }
         // Здесь holder.view уже вложен в контейнер ряда (заголовок), но ещё не в список рядов.
         var view: View? = grid
         while (view is ViewGroup) {
@@ -42,9 +48,20 @@ class ContinueListRowPresenter : CustomListRowPresenter() {
     }
 
     companion object {
-        /** Презентер рядов экрана: [ContinueListRow] — отдельный, остальные [ListRow] — обычный. */
-        fun rowsPresenterSelector() = ClassPresenterSelector()
-            .addClassPresenter(ListRow::class.java, CustomListRowPresenter())
-            .addClassPresenter(ContinueListRow::class.java, ContinueListRowPresenter())
+        /**
+         * Презентер рядов экрана: [ContinueListRow] — отдельный, остальные [ListRow] — обычный.
+         * [mainPage] — страница с hero-блоком (см. [CustomListRowPresenter.applyMainPageStyle]).
+         */
+        fun rowsPresenterSelector(mainPage: Boolean = false): ClassPresenterSelector {
+            val listPresenter = CustomListRowPresenter()
+            val continuePresenter = ContinueListRowPresenter()
+            if (mainPage) {
+                listPresenter.applyMainPageStyle()
+                continuePresenter.applyMainPageStyle()
+            }
+            return ClassPresenterSelector()
+                .addClassPresenter(ListRow::class.java, listPresenter)
+                .addClassPresenter(ContinueListRow::class.java, continuePresenter)
+        }
     }
 }

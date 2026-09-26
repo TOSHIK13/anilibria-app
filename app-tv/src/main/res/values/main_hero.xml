@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Hero-блок главных страниц (MainHeroView). Макет 960x540dp. -->
+    <color name="main_hero_background">#15212A</color>
+    <color name="main_hero_accent">#FF8A80</color>
+    <color name="main_hero_title">#FFFFFF</color>
+    <color name="main_hero_meta">#D9FFFFFF</color>
+    <color name="main_hero_line">#FFFFFF</color>
+    <color name="main_hero_description">#B8FFFFFF</color>
+    <color name="main_row_header_text">#EBFFFFFF</color>
+
+    <dimen name="main_hero_margin_start">56dp</dimen>
+    <!-- Макет: 73dp; 71dp — поправка на отступы шрифта (сверено по скриншоту). -->
+    <dimen name="main_hero_title_top">71dp</dimen>
+    <dimen name="main_hero_meta_top">113dp</dimen>
+    <dimen name="main_hero_line_top">137dp</dimen>
+    <dimen name="main_hero_description_top">162dp</dimen>
+    <dimen name="main_hero_description_top_no_line">141dp</dimen>
+    <dimen name="main_hero_title_width">590dp</dimen>
+    <dimen name="main_hero_meta_width">650dp</dimen>
+    <dimen name="main_hero_description_width">550dp</dimen>
+    <dimen name="main_hero_description_line_height">20dp</dimen>
+    <dimen name="main_hero_title_text_size">28sp</dimen>
+    <dimen name="main_hero_text_size">14sp</dimen>
+
+    <!-- Широкий фон релиза: справа, 750x422dp. -->
+    <dimen name="main_hero_cover_width">750dp</dimen>
+    <dimen name="main_hero_cover_height">422dp</dimen>
+
+    <dimen name="main_row_header_text_size">16sp</dimen>
+    <dimen name="main_row_header_shift">2.5dp</dimen>
+</resources>

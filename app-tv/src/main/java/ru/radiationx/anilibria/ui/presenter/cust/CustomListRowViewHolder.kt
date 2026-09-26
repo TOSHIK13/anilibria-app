@@ -12,29 +12,36 @@ class CustomListRowViewHolder(
     rootView: ListRowView,
     gridView: HorizontalGridView,
     presenter: ListRowPresenter,
+    descriptionEnabled: Boolean = true,
 ) : ListRowPresenter.ViewHolder(rootView, gridView, presenter) {
 
-    private val cardDescriptionView =
+    /** null — блок описания под рядом отключён (страницы с hero-блоком). */
+    private val cardDescriptionView = if (descriptionEnabled) {
         CardDescriptionView(rootView.context, defStyleAttr = R.attr.rowHorizontalDescriptionStyle)
+    } else {
+        null
+    }
 
     init {
-        rootView.addView(
-            cardDescriptionView,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        cardDescriptionView?.also {
+            rootView.addView(
+                it,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
     }
 
     fun setDescription(title: CharSequence, subtitle: CharSequence) {
-        cardDescriptionView.setTitle(title)
-        cardDescriptionView.setSubtitle(subtitle)
+        cardDescriptionView?.setTitle(title)
+        cardDescriptionView?.setSubtitle(subtitle)
     }
 
     fun setExpanded(expanded: Boolean) {
-        cardDescriptionView.isVisible = expanded && isSelected
+        cardDescriptionView?.isVisible = expanded && isSelected
     }
 
     fun setSelected(selected: Boolean) {
-        cardDescriptionView.isVisible = selected && isExpanded
+        cardDescriptionView?.isVisible = selected && isExpanded
     }
 }

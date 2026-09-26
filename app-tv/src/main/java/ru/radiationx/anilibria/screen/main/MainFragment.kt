@@ -8,26 +8,22 @@ import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ListRowPresenter
 import androidx.leanback.widget.OnItemViewSelectedListener
-import androidx.leanback.widget.Presenter
-import androidx.leanback.widget.Row
-import androidx.leanback.widget.RowPresenter
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import ru.radiationx.anilibria.common.BaseCardsViewModel
-import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
+import ru.radiationx.anilibria.screen.mainpages.MainHeroViewModel
 import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
+import ru.radiationx.anilibria.screen.mainpages.hideRowsAboveSelected
 import ru.radiationx.anilibria.ui.presenter.cust.ContinueListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
-import ru.radiationx.quill.inject
 import ru.radiationx.shared.ktx.android.subscribeTo
 import ru.radiationx.shared_app.di.quillParentViewModel
 
@@ -40,10 +36,10 @@ class MainFragment : RowsSupportFragment() {
         const val INITIAL_FOCUS_TIMEOUT_MS = 1_500L
     }
 
-    private val rowsPresenter by lazy { ContinueListRowPresenter.rowsPresenterSelector() }
+    private val rowsPresenter by lazy { ContinueListRowPresenter.rowsPresenterSelector(mainPage = true) }
     private val rowsAdapter by lazy { ArrayObjectAdapter(rowsPresenter) }
 
-    private val backgroundManager by inject<GradientBackgroundManager>()
+    private val heroViewModel by quillParentViewModel<MainHeroViewModel>()
 
     private val mainViewModel by quillParentViewModel<MainViewModel>()
 
@@ -74,7 +70,10 @@ class MainFragment : RowsSupportFragment() {
         viewLifecycleOwner.lifecycle.addObserver(youtubeViewModel)
 
         adapter = rowsAdapter
-        onItemViewSelectedListener = ItemViewSelectedListener()
+        onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, _ ->
+            heroViewModel.onItemSelected(item)
+        }
+        hideRowsAboveSelected()
 
         setOnItemViewClickedListener { _, item, rowViewHolder, row ->
             if (rowViewHolder is CustomListRowViewHolder) {
@@ -148,34 +147,4 @@ class MainFragment : RowsSupportFragment() {
     private fun notifyReady() {
         mainFragmentAdapter.fragmentHost.notifyDataReady(mainFragmentAdapter)
     }
-
-    private inner class ItemViewSelectedListener : OnItemViewSelectedListener {
-        override fun onItemSelected(
-            itemViewHolder: Presenter.ViewHolder?, item: Any?,
-            rowViewHolder: RowPresenter.ViewHolder, row: Row,
-        ) {
-            if (rowViewHolder is CustomListRowViewHolder) {
-                backgroundManager.applyCard(item)
-                when (item) {
-                    is LibriaCard -> {
-                        rowViewHolder.setDescription(item.title, item.description)
-                    }
-
-                    is LinkCard -> {
-                        rowViewHolder.setDescription(item.title, "")
-                    }
-
-                    is LoadingCard -> {
-                        rowViewHolder.setDescription(item.title, item.description)
-                    }
-
-                    else -> {
-                        rowViewHolder.setDescription("", "")
-                    }
-                }
-            }
-
-        }
-    }
-
 }

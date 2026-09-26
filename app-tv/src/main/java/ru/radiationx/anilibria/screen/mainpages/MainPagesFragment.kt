@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
+import ru.radiationx.anilibria.ui.widget.MainHeroView
 import ru.radiationx.anilibria.ui.widget.TopTabsView
 import ru.radiationx.quill.viewModel
 import ru.radiationx.shared.ktx.android.getCompatColor
@@ -47,6 +48,10 @@ class MainPagesFragment : BrowseSupportFragment() {
     private val fragmentFactory by lazy { MainPagesFragmentFactory() }
 
     private val viewModel by viewModel<MainPagesViewModel>()
+
+    /** Общий hero страниц: карточки выбирают сами страницы (quillParentViewModel). */
+    private val heroViewModel by viewModel<MainHeroViewModel>()
+    private var heroView: MainHeroView? = null
 
     /** Холодный старт: «Главная» скрыта, пока курсор не встанет на «Продолжить просмотр». */
     private var revealPending = false
@@ -116,6 +121,8 @@ class MainPagesFragment : BrowseSupportFragment() {
         super.onViewCreated(view, savedInstanceState)
 
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
+        viewLifecycleOwner.lifecycle.addObserver(heroViewModel)
+        setupHero(view)
 
         if (!initialRevealHandled && savedInstanceState == null) {
             initialRevealHandled = true
@@ -160,7 +167,27 @@ class MainPagesFragment : BrowseSupportFragment() {
         tabSwitchJob?.cancel()
         contentFocusJob?.cancel()
         topTabs = null
+        heroView = null
         super.onDestroyView()
+    }
+
+    /** Hero под рядами и вкладками: первым ребёнком корня Browse, фон экрана — его цвет. */
+    private fun setupHero(view: View) {
+        val root = view as? ViewGroup ?: return
+        val hero = MainHeroView(root.context)
+        root.addView(
+            hero,
+            0,
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        heroView = hero
+        updateHeroVisibility()
+        subscribeTo(heroViewModel.heroData) { hero.bind(it) }
+    }
+
+    private fun updateHeroVisibility() {
+        val pageId = MainPagesFragmentFactory.ids.getOrNull(currentPage)
+        heroView?.setContentVisible(pageId != MainPagesFragmentFactory.ID_PROFILE)
     }
 
     /**
@@ -269,6 +296,7 @@ class MainPagesFragment : BrowseSupportFragment() {
         if (page == currentPage) return
         lastSelectedPosition = page
         setSelectedPosition(page)
+        updateHeroVisibility()
     }
 
     /** Фокус в контент страницы [page]; ждёт, пока Leanback подменит фрагмент и создаст view. */
