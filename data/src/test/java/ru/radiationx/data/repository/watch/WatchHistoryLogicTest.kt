@@ -92,7 +92,7 @@ class WatchHistoryLogicTest {
     }
 
     @Test
-    fun continueList_skipsFullyWatchedReleases() {
+    fun continueList_keepsFullyWatchedReleases() {
         val episodes = listOf(
             ep("a1", 1, 1f, 100, watched = true, total = 2),
             ep("a2", 1, 2f, 300, watched = true, total = 2),
@@ -100,7 +100,7 @@ class WatchHistoryLogicTest {
             ep("c1", 3, 1f, 50, watched = true, total = null),
         )
         val result = WatchHistoryLogic.continueList(episodes)
-        assertEquals(listOf(2, 3), result.map { it.releaseId.id })
+        assertEquals(listOf(1, 2, 3), result.map { it.releaseId.id })
     }
 
     @Test

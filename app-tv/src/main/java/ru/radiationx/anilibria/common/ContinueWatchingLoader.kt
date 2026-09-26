@@ -83,9 +83,6 @@ class ContinueWatchingLoader @Inject constructor(
         onSource(if (cards.fromNetwork) SOURCE_NETWORK else SOURCE_CACHE)
         return items.mapNotNull { item ->
             val info = cards.items[item.releaseId] ?: return@mapNotNull null
-            // Сервер не всегда присылает episodes_total в истории — досмотренное отсекаем по данным релиза.
-            val total = item.episodesTotal ?: info.series?.trim()?.toIntOrNull()?.takeIf { it > 0 }
-            if (total != null && item.watchedCount >= total) return@mapNotNull null
             val card = converter.toCard(info)
             val ordinal = item.ordinal ?: return@mapNotNull card
             card.copy(
