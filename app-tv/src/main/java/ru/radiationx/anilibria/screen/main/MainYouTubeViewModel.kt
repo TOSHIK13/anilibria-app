@@ -24,11 +24,18 @@ class MainYouTubeViewModel @Inject constructor(
         onRefreshClick()
     }
 
+    private var isEnd = false
+
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> = youtubeRepository
         .getYoutubeList(requestPage)
+        .also { isEnd = it.isEnd() }
         .let { youtubeItems ->
             youtubeItems.data.map { converter.toCard(it) }
         }
+
+    override fun hasMoreCards(newCards: List<LibriaCard>, allCards: List<LibriaCard>): Boolean {
+        return !isEnd && super.hasMoreCards(newCards, allCards)
+    }
 
     override fun onLibriaCardClick(card: LibriaCard) {
         cardRouter.navigate(card)

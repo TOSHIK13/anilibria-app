@@ -27,10 +27,19 @@ class YoutubeRepository @Inject constructor(
     private var cachedVideos: List<YoutubeItem>? = null
     private var cachedVideosAt = 0L
 
+    /**
+     * V1 `/media/videos` без пагинации: первая страница — все доступные видео (до 50),
+     * дальше пусто, а [Paginated.isEnd] сразу true, чтобы экраны не показывали "ещё".
+     */
     suspend fun getYoutubeList(page: Int): Paginated<YoutubeItem> = withContext(Dispatchers.IO) {
-        youtubeApi
-            .getYoutubeList(page)
-            .toDomain { it.toDomain(apiUtils, apiConfig) }
+        val items = if (page <= 1) getLatestVideos() else emptyList()
+        Paginated(
+            data = items,
+            page = 1,
+            allPages = 1,
+            perPage = YoutubeApi.MAX_VIDEOS_LIMIT,
+            allItems = items.size,
+        )
     }
 
     /**

@@ -5,11 +5,8 @@ import com.squareup.moshi.Types
 import ru.radiationx.data.ApiClient
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
-import ru.radiationx.data.datasource.remote.fetchPaginatedApiResponse
 import ru.radiationx.data.datasource.remote.fetchResponse
 import ru.radiationx.data.entity.response.media.V1VideoResponse
-import ru.radiationx.data.entity.response.PaginatedResponse
-import ru.radiationx.data.entity.response.youtube.YoutubeResponse
 import javax.inject.Inject
 
 class YoutubeApi @Inject constructor(
@@ -33,14 +30,5 @@ class YoutubeApi @Inject constructor(
         return client
             .get("${apiConfig.animeBaseUrl}/api/v1/media/videos", args)
             .fetchResponse(moshi, type)
-    }
-
-    suspend fun getYoutubeList(page: Int): PaginatedResponse<YoutubeResponse> {
-        val args: MutableMap<String, String> = mutableMapOf(
-            "query" to "youtube",
-            "page" to page.toString()
-        )
-        return client.post(apiConfig.apiUrl, args)
-            .fetchPaginatedApiResponse(moshi)
     }
 }
