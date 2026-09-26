@@ -74,6 +74,8 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
         allCards: List<LibriaCard>,
     ): Boolean {
         if (!preventClearOnRefresh) return true
+        // Пустой ответ должен заменить старые карточки заглушкой, а не оставить их на экране.
+        if (newCards.isEmpty()) return allCards.isNotEmpty()
         val oldFirstIds = allCards.take(newCards.size).map { it.getId() }.toSet()
         val newIds = newCards.map { it.getId() }.toSet()
         return oldFirstIds != newIds
@@ -93,7 +95,11 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
         }
         requestJob?.cancel()
         requestJob = viewModelScope.launch {
-            if (requestPage != firstPage || progressOnRefresh) {
+            val keepEmptyCard = requestPage == firstPage &&
+                    preventClearOnRefresh &&
+                    currentCards.isEmpty() &&
+                    cardsData.value.any { it is LoadingCard && it.isEmpty }
+            if ((requestPage != firstPage || progressOnRefresh) && !keepEmptyCard) {
                 cardsData.value = currentCards + loadingCard
             }
             val timingStart = LoadTiming.now()

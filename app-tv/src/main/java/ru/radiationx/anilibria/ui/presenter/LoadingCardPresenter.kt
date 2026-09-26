@@ -23,11 +23,12 @@ class LoadingCardPresenter : Presenter() {
         item as LoadingCard
         val loadingView = (viewHolder.view as CardLoadingView)
         loadingView.setState(
-            if (item.isError) {
-                CardLoadingView.State.ERROR
-            } else {
-                CardLoadingView.State.LOADING
-            }
+            when {
+                item.isEmpty -> CardLoadingView.State.EMPTY
+                item.isError -> CardLoadingView.State.ERROR
+                else -> CardLoadingView.State.LOADING
+            },
+            item.description,
         )
     }
 

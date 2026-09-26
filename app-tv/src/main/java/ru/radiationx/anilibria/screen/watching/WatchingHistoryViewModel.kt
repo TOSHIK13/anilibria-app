@@ -13,7 +13,7 @@ class WatchingHistoryViewModel @Inject constructor(
     private val cardRouter: LibriaCardRouter
 ) : BaseCardsViewModel() {
 
-    override val defaultTitle: String = "История"
+    override val defaultTitle: String = "Недавно открытые"
 
     override fun onResume() {
         super.onResume()
