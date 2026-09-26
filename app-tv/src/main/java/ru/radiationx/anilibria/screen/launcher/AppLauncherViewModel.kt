@@ -15,6 +15,7 @@ import ru.radiationx.anilibria.screen.DetailsScreen
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.screen.MainPagesScreen
 import ru.radiationx.anilibria.screen.PlayerScreen
+import ru.radiationx.anilibria.watchnext.HomeChannelPublisher
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.common.AuthState
 import ru.radiationx.data.entity.domain.types.EpisodeId
@@ -30,7 +31,8 @@ class AppLauncherViewModel @Inject constructor(
     private val apiConfig: ApiConfig,
     private val startupConfigChecker: StartupConfigChecker,
     private val router: Router,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val homeChannelPublisher: HomeChannelPublisher,
 ) : LifecycleViewModel() {
 
     private var firstLaunch = true
@@ -113,6 +115,8 @@ class AppLauncherViewModel @Inject constructor(
 
     private fun initMain(loadUser: Boolean = true) {
         firstLaunch = false
+        // Канал «Продолжить просмотр AniLibria» на главном экране TV (идемпотентно).
+        homeChannelPublisher.start()
         viewModelScope.launch {
             router.newRootScreen(MainPagesScreen())
             if (authRepository.getAuthState() == AuthState.NO_AUTH) {
