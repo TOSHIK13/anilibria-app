@@ -1,8 +1,9 @@
 package ru.radiationx.anilibria.screen.details
 
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
-import androidx.core.graphics.ColorUtils
+import android.view.ViewGroup
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.ClassPresenterSelector
@@ -10,20 +11,18 @@ import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.Row
 import androidx.lifecycle.ViewModel
 import ru.radiationx.anilibria.common.BaseCardsViewModel
-import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LibriaDetailsRow
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
 import ru.radiationx.anilibria.ui.presenter.ReleaseDetailsPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
+import ru.radiationx.anilibria.ui.presenter.cust.MainRowHeaderPresenter
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.quill.QuillExtra
-import ru.radiationx.quill.inject
 import ru.radiationx.quill.viewModel
 import ru.radiationx.shared.ktx.android.getExtraNotNull
 import ru.radiationx.shared.ktx.android.putExtra
@@ -43,7 +42,7 @@ class DetailFragment : RowsSupportFragment() {
         }
     }
 
-    private val backgroundManager by inject<GradientBackgroundManager>()
+    private var background: DetailBackgroundView? = null
 
     private val argExtra by lazy {
         DetailExtra(id = getExtraNotNull(ARG_ID))
@@ -51,7 +50,10 @@ class DetailFragment : RowsSupportFragment() {
 
     private val rowsPresenter by lazy {
         ClassPresenterSelector().apply {
-            addClassPresenter(ListRow::class.java, CustomListRowPresenter())
+            addClassPresenter(
+                ListRow::class.java,
+                CustomListRowPresenter().apply { headerPresenter = MainRowHeaderPresenter(dimUnselected = false) }
+            )
             addClassPresenter(
                 LibriaDetailsRow::class.java, ReleaseDetailsPresenter(
                     continueClickListener = headerViewModel::onContinueClick,
@@ -81,6 +83,28 @@ class DetailFragment : RowsSupportFragment() {
         else -> null
     }
 
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View {
+        // Фиксированный фон под рядами: ряды прокручиваются поверх него.
+        val rowsView = super.onCreateView(inflater, container, savedInstanceState)
+        val backgroundView = DetailBackgroundView(inflater.context)
+        background = backgroundView
+        backgroundView.addView(
+            rowsView,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        return backgroundView
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        background = null
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -101,12 +125,16 @@ class DetailFragment : RowsSupportFragment() {
             }
         }
 
-        setOnItemViewSelectedListener { _, item, rowViewHolder, row ->
-            if (row is ListRow) {
-                backgroundManager.applyCard(item)
-            } else if (row is LibriaDetailsRow) {
-                applyImage(row.details?.image.orEmpty())
-            }
+        subscribeTo(headerViewModel.releaseData) { details ->
+            details ?: return@subscribeTo
+            background?.bind(
+                cover = details.backgroundCover,
+                poster = details.image.takeIf { it.isNotEmpty() },
+                isFull = details.isFull
+            )
+        }
+
+        setOnItemViewSelectedListener { _, item, rowViewHolder, _ ->
             if (rowViewHolder is CustomListRowViewHolder) {
                 when (item) {
                     is LibriaCard -> {
@@ -170,16 +198,6 @@ class DetailFragment : RowsSupportFragment() {
             rowsAdapter.notifyArrayItemRangeChanged(position, 1)
         }
         return row
-    }
-
-    private fun applyImage(image: String) {
-        backgroundManager.applyImage(image, colorSelector = { null }) {
-            val hslColor = FloatArray(3)
-            ColorUtils.colorToHSL(it, hslColor)
-            hslColor[1] = (hslColor[1] + 0.05f).coerceAtMost(1.0f)
-            hslColor[2] = (hslColor[2] + 0.05f).coerceAtMost(1.0f)
-            ColorUtils.HSLToColor(hslColor)
-        }
     }
 
 }

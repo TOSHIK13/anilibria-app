@@ -9,8 +9,21 @@ import androidx.leanback.widget.RowHeaderPresenter
 import ru.radiationx.anilibria.R
 import ru.radiationx.shared.ktx.android.getCompatColor
 
-/** Заголовок ряда на страницах с hero-блоком: 16sp medium, белый 92%, высота по тексту. */
-class MainRowHeaderPresenter : RowHeaderPresenter() {
+/**
+ * Заголовок ряда на страницах с hero-блоком: 16sp medium, белый 92%, высота по тексту.
+ * [dimUnselected] = false — без затемнения заголовков невыбранных рядов (экран деталей).
+ */
+class MainRowHeaderPresenter(
+    private val dimUnselected: Boolean = true,
+) : RowHeaderPresenter() {
+
+    override fun onSelectLevelChanged(holder: RowHeaderPresenter.ViewHolder) {
+        if (dimUnselected) {
+            super.onSelectLevelChanged(holder)
+        } else {
+            holder.view.alpha = 1f
+        }
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup): Presenter.ViewHolder {
         val holder = super.onCreateViewHolder(parent)

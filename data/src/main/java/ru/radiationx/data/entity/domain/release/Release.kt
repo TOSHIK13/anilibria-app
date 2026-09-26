@@ -50,6 +50,8 @@ data class Release(
     val shikimoriRating: Double? = null,
     /** Абсолютный URL фона 1920x1080 (V1 `background_covers[0].preview`). */
     val backgroundCover: String? = null,
+    /** Английское название (V1 `name.english`); [titleEng] — последнее из [names], часто альтернативные. */
+    val nameEnglish: String? = null,
 ) : Parcelable {
 
 

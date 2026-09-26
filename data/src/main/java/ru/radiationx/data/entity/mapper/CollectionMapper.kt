@@ -114,6 +114,9 @@ fun CollectionReleaseResponse.toDomain(
         shikimoriRating = shikimori?.rating?.takeIf { it > 0.0 },
         backgroundCover = backgroundCovers
             ?.firstNotNullOfOrNull { it.toBackgroundUrl(imagesBaseUrl) },
+        nameEnglish = name?.english
+            ?.let { apiUtils.escapeHtml(it).toString().trim() }
+            ?.takeIf { it.isNotEmpty() },
     )
 }
 

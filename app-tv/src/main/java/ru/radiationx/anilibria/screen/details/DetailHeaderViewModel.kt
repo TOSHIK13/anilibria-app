@@ -6,6 +6,8 @@ import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -21,10 +23,14 @@ import ru.radiationx.anilibria.screen.PlayerEpisodesGuidedScreen
 import ru.radiationx.anilibria.screen.PlayerScreen
 import ru.radiationx.anilibria.screen.player.PlayerController
 import ru.radiationx.data.entity.common.AuthState
+import ru.radiationx.data.entity.domain.collection.CollectionType
+import ru.radiationx.data.entity.domain.schedule.ReleaseScheduleInfo
 import ru.radiationx.data.entity.domain.release.EpisodeAccess
 import ru.radiationx.data.entity.domain.release.Release
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.AuthRepository
+import ru.radiationx.data.repository.CollectionRepository
+import ru.radiationx.data.repository.ScheduleRepository
 import ru.radiationx.data.repository.FavoriteRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -39,6 +45,8 @@ class DetailHeaderViewModel @Inject constructor(
     private val router: Router,
     private val guidedRouter: GuidedRouter,
     private val playerController: PlayerController,
+    private val collectionRepository: CollectionRepository,
+    private val scheduleRepository: ScheduleRepository,
 ) : LifecycleViewModel() {
 
     private val releaseId = argExtra.id
@@ -47,6 +55,10 @@ class DetailHeaderViewModel @Inject constructor(
     val progressState = MutableStateFlow(DetailsState())
 
     private var currentRelease: Release? = null
+    private var currentAccesses: List<EpisodeAccess> = emptyList()
+    private var currentCollection: CollectionType? = null
+    private var scheduleInfo: ReleaseScheduleInfo? = null
+    private var scheduleRequested = false
     private var isFullLoaded = false
 
     private var selectEpisodeJob: Job? = null
@@ -71,6 +83,16 @@ class DetailHeaderViewModel @Inject constructor(
             isFullLoaded = true
             updateRelease(release, accesses)
         }.launchIn(viewModelScope)
+
+        collectionRepository
+            .observeCollectionIds()
+            .map { it?.get(releaseId) }
+            .distinctUntilChanged()
+            .onEach {
+                currentCollection = it
+                rebuildDetails()
+            }
+            .launchIn(viewModelScope)
     }
 
     override fun onResume() {
@@ -92,19 +114,11 @@ class DetailHeaderViewModel @Inject constructor(
 
     fun onContinueClick() {
         viewModelScope.launch {
-            val lastAccess = releaseInteractor
-                .getAccesses(releaseId)
-                .maxByOrNull { it.lastAccessRaw }
-                ?: return@launch
+            val release = currentRelease ?: return@launch
             // Последняя серия досмотрена — продолжаем со следующей, если она есть.
-            val episodes = currentRelease?.episodes.orEmpty()
-            val episodeId = if (lastAccess.isViewed) {
-                val index = episodes.indexOfFirst { it.id == lastAccess.id }
-                episodes.getOrNull(index + 1)?.id ?: lastAccess.id
-            } else {
-                lastAccess.id
-            }
-            router.navigateTo(PlayerScreen(releaseId, episodeId))
+            val target = converter.continueTarget(release, releaseInteractor.getAccesses(releaseId))
+                ?: return@launch
+            router.navigateTo(PlayerScreen(releaseId, target.episodeId))
         }
     }
 
@@ -175,8 +189,37 @@ class DetailHeaderViewModel @Inject constructor(
 
     private fun updateRelease(release: Release, accesses: List<EpisodeAccess>) {
         currentRelease = release
-        releaseData.value = converter.toDetail(release, isFullLoaded, accesses)
+        currentAccesses = accesses
+        rebuildDetails()
         updateProgress()
+        requestScheduleInfo(release)
+    }
+
+    private fun rebuildDetails() {
+        val release = currentRelease ?: return
+        releaseData.value = converter.toDetail(
+            release,
+            isFullLoaded,
+            currentAccesses,
+            currentCollection,
+            scheduleInfo
+        )
+    }
+
+    /** Расписание нужно только онгоингам; грузится один раз (кэш в репозитории), ошибка — без плашки. */
+    private fun requestScheduleInfo(release: Release) {
+        if (scheduleRequested || release.statusCode != Release.STATUS_CODE_PROGRESS) return
+        scheduleRequested = true
+        viewModelScope.launch {
+            coRunCatching {
+                scheduleRepository.getScheduleInfo()[releaseId]
+            }.onSuccess {
+                scheduleInfo = it
+                rebuildDetails()
+            }.onFailure {
+                Timber.e(it)
+            }
+        }
     }
 
     private fun updateProgress() {
