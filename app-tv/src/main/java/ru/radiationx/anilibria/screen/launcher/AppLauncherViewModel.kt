@@ -21,7 +21,6 @@ import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.StartupConfigChecker
 import ru.radiationx.data.repository.AuthRepository
-import ru.radiationx.data.repository.EpisodeProgressRepository
 import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -31,8 +30,7 @@ class AppLauncherViewModel @Inject constructor(
     private val apiConfig: ApiConfig,
     private val startupConfigChecker: StartupConfigChecker,
     private val router: Router,
-    private val authRepository: AuthRepository,
-    private val episodeProgressRepository: EpisodeProgressRepository,
+    private val authRepository: AuthRepository
 ) : LifecycleViewModel() {
 
     private var firstLaunch = true
@@ -115,8 +113,6 @@ class AppLauncherViewModel @Inject constructor(
 
     private fun initMain(loadUser: Boolean = true) {
         firstLaunch = false
-        // Кеш прогресса с диска + отправка неотправленных таймкодов + свежая история (идемпотентно).
-        episodeProgressRepository.warmUp()
         viewModelScope.launch {
             router.newRootScreen(MainPagesScreen())
             if (authRepository.getAuthState() == AuthState.NO_AUTH) {

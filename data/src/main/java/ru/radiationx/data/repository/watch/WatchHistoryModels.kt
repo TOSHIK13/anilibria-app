@@ -59,6 +59,8 @@ data class ReleaseCardInfo(
     @Json(name = "series") val series: String? = null,
     /** fresh_at, unix-секунды (Release.torrentUpdate). */
     @Json(name = "torrent_update") val torrentUpdate: Int = 0,
+    /** Сколько серий уже вышло, null — неизвестно. */
+    @Json(name = "episodes_available") val episodesAvailable: Int? = null,
 )
 
 /** Релиз для «Продолжить просмотр»: последняя серия, которую смотрели. */
@@ -69,4 +71,8 @@ data class ContinueWatchingItem(
     val time: Float?,
     val isWatched: Boolean,
     val updatedAt: Long,
+    /** Сколько серий релиза отмечено просмотренными. */
+    val watchedCount: Int = 0,
+    /** episodes_total из истории, null — сервер не прислал. */
+    val episodesTotal: Int? = null,
 )

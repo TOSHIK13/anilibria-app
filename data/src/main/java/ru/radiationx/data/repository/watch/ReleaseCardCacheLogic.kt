@@ -14,6 +14,7 @@ object ReleaseCardCacheLogic {
         genres = release.genres.take(1),
         series = release.series,
         torrentUpdate = release.torrentUpdate,
+        episodesAvailable = release.episodesAvailable,
     )
 
     /**

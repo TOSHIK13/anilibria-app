@@ -119,6 +119,8 @@ object WatchHistoryLogic {
                     time = last.time,
                     isWatched = last.isWatched,
                     updatedAt = last.updatedAt,
+                    watchedCount = watched,
+                    episodesTotal = total,
                 )
             }
             .sortedByDescending { it.updatedAt }
