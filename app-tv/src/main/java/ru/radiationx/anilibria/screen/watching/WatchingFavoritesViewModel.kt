@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardsDataConverter
 import ru.radiationx.anilibria.common.LibriaCard
@@ -19,7 +20,7 @@ import javax.inject.Inject
 class WatchingFavoritesViewModel @Inject constructor(
     private val favoriteRepository: FavoriteRepository,
     private val releaseInteractor: ReleaseInteractor,
-    authRepository: AuthRepository,
+    private val authRepository: AuthRepository,
     private val converter: CardsDataConverter,
     private val cardRouter: LibriaCardRouter,
 ) : BaseCardsViewModel() {
@@ -42,7 +43,12 @@ class WatchingFavoritesViewModel @Inject constructor(
 
     override fun onResume() {
         super.onResume()
-        onRefreshClick()
+        // Без авторизации строка скрыта, а V1 favorites отвечает 403.
+        viewModelScope.launch {
+            if (authRepository.getAuthState() == AuthState.AUTH) {
+                onRefreshClick()
+            }
+        }
     }
 
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> = favoriteRepository
