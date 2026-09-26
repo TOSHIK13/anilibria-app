@@ -19,7 +19,7 @@
             android:clipToPadding="false"
             android:fillViewport="true"
             android:paddingStart="48dp"
-            android:paddingTop="32dp"
+            android:paddingTop="@dimen/main_page_content_top"
             android:paddingEnd="48dp"
             android:paddingBottom="32dp">
 

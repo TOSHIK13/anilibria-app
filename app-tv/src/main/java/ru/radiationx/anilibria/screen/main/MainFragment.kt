@@ -114,8 +114,8 @@ class MainFragment : RowsSupportFragment() {
     }
 
     /**
-     * При запуске курсор сразу на первом релизе «Продолжить просмотр», а не в меню.
-     * Только если ряд есть и пользователь ещё не ушёл из меню сам.
+     * При запуске курсор сразу на первом релизе «Продолжить просмотр», а не на вкладках.
+     * Только если ряд есть и пользователь ещё не ушёл с «Главной».
      */
     private fun focusContinueRowOnStart() {
         if (initialFocusDone) return
@@ -130,12 +130,11 @@ class MainFragment : RowsSupportFragment() {
             }
             initialFocusDone = true
             val pages = parentFragment as? MainPagesFragment
-            if (ready == null || pages == null || !pages.isShowingHeaders) {
+            if (ready == null || pages == null) {
                 pages?.revealInitialScreen()
                 return@launch
             }
-            // Выбор ставим после сворачивания меню: leanback по окончании перехода сам двигает фокус.
-            pages.hideHeadersForInitialFocus {
+            pages.focusContentOnStart {
                 setSelectedPosition(0, false, ListRowPresenter.SelectItemViewHolderTask(0))
             }
         }

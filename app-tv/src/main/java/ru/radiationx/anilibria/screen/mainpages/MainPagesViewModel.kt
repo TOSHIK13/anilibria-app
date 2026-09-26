@@ -5,6 +5,7 @@ import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.screen.LifecycleViewModel
+import ru.radiationx.anilibria.screen.ScheduleScreen
 import ru.radiationx.anilibria.screen.SearchScreen
 import ru.radiationx.anilibria.screen.SuggestionsScreen
 import ru.radiationx.anilibria.screen.UpdateScreen
@@ -42,5 +43,9 @@ class MainPagesViewModel @Inject constructor(
 
     fun onSearchClick() {
         router.navigateTo(SuggestionsScreen())
+    }
+
+    fun onScheduleClick() {
+        router.navigateTo(ScheduleScreen())
     }
 }
