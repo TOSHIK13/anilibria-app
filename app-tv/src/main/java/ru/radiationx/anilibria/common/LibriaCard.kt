@@ -9,6 +9,8 @@ data class LibriaCard(
     val type: Type,
     /** Всего серий (episodes_total) — запасной знаменатель для индикатора просмотра. */
     val episodesTotal: Int? = null,
+    /** Сколько серий уже вышло; null — неизвестно (догружается из полного релиза). */
+    val episodesAvailable: Int? = null,
 ) : CardItem {
 
     override fun getId(): Int {

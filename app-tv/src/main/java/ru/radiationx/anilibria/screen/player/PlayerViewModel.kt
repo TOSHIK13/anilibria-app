@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.radiationx.anilibria.common.WatchCollectionSync
 import ru.radiationx.anilibria.screen.LifecycleViewModel
+import ru.radiationx.anilibria.watchnext.WatchNextPublisher
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.entity.common.PlayerQuality
 import ru.radiationx.data.entity.domain.release.Episode
@@ -41,6 +42,7 @@ class PlayerViewModel @Inject constructor(
     private val playerController: PlayerController,
     private val router: Router,
     private val watchCollectionSync: WatchCollectionSync,
+    private val watchNextPublisher: WatchNextPublisher,
 ) : LifecycleViewModel() {
 
     val videoData = MutableStateFlow<Video?>(null)
@@ -668,6 +670,8 @@ class PlayerViewModel @Inject constructor(
             // progressDirty остаётся true — отправка повторится на следующем триггере.
             Log.w(TAG, "progress-sync failed reason=$reason episode=${episode.id}", it)
         }.isSuccess
+        // Системный ряд «Продолжить просмотр» обновляем независимо от результата сетевой отправки.
+        publishWatchNext(episode, position, duration, isViewed = sendWatched || watchedReached)
         if (!synced) {
             return
         }
@@ -684,6 +688,21 @@ class PlayerViewModel @Inject constructor(
         if (sendWatched) {
             Log.d(TAG, "watched-sync episode=${episode.id} position=$position duration=$duration")
             launchCollectionSync { watchCollectionSync.onEpisodeWatched(episode.id.releaseId) }
+        }
+    }
+
+    private suspend fun publishWatchNext(episode: Episode, position: Long, duration: Long, isViewed: Boolean) {
+        val release = currentReleases?.find { it.id == episode.id.releaseId } ?: return
+        coRunCatching {
+            watchNextPublisher.onEpisodeProgress(
+                release = release,
+                episode = episode,
+                positionMs = position,
+                durationMs = duration,
+                isViewed = isViewed,
+            )
+        }.onFailure {
+            Log.w(TAG, "watch-next publish failed episode=${episode.id}", it)
         }
     }
 

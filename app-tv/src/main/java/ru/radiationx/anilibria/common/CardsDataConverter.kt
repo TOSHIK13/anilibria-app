@@ -35,6 +35,7 @@ class CardsDataConverter(
             poster.orEmpty(),
             LibriaCard.Type.Release(ReleaseId(id)),
             episodesTotal = series?.trim()?.toIntOrNull()?.takeIf { it > 0 },
+            episodesAvailable = episodesAvailable,
         )
     }
 

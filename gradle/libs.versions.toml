@@ -39,6 +39,7 @@ toothpick = "3.1.0"
 toothpick-compiler = "1.1.0"
 androidx-leanback = "1.2.0"
 androidx-leanback-preference = "1.2.0"
+androidx-tvprovider = "1.0.0"
 materialprogressbar = "1.6.1"
 chucker = "4.3.0"
 androidx-lifecycle = "2.9.4"
@@ -94,6 +95,7 @@ toothpick-ktp = { module = "com.github.stephanenicolas.toothpick:ktp", version.r
 toothpick-compiler = { module = "com.github.bedrockstreaming.toothpick-ksp:compiler", version.ref = "toothpick-compiler" }
 androidx-leanback-preference = { module = "androidx.leanback:leanback-preference", version.ref = "androidx-leanback-preference" }
 androidx-leanback = { module = "androidx.leanback:leanback", version.ref = "androidx-leanback" }
+androidx-tvprovider = { module = "androidx.tvprovider:tvprovider", version.ref = "androidx-tvprovider" }
 materialprogressbar = { module = "me.zhanghai.android.materialprogressbar:library", version.ref = "materialprogressbar" }
 androidx-lifecycle-livedata-ktx = { module = "androidx.lifecycle:lifecycle-livedata-ktx", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "androidx-lifecycle" }

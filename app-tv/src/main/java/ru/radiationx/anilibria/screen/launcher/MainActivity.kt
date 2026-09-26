@@ -20,6 +20,7 @@ import ru.radiationx.anilibria.di.SearchModule
 import ru.radiationx.anilibria.di.UpdateModule
 import ru.radiationx.anilibria.screen.config.ConfigFragment
 import ru.radiationx.anilibria.screen.player.PlayerMotionHandler
+import ru.radiationx.anilibria.watchnext.WatchNextPublisher
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.quill.inject
@@ -34,6 +35,7 @@ import kotlinx.coroutines.launch
 class MainActivity : FragmentActivity() {
     companion object {
         private const val IDLE_DIM_DELAY_MS = 10 * 60 * 1000L
+        private const val KEY_WATCH_NEXT_HANDLED = "watch_next_handled"
     }
 
     private val viewModel: AppLauncherViewModel by viewModel()
@@ -49,6 +51,9 @@ class MainActivity : FragmentActivity() {
     private var idleDimOverlay: View? = null
     private var idleDimJob: Job? = null
 
+    // Protects against reopening the player from the same Watch Next intent after Activity recreation.
+    private var watchNextHandled = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.AppTheme)
         installModules(
@@ -59,6 +64,7 @@ class MainActivity : FragmentActivity() {
             SearchModule(),
         )
         super.onCreate(savedInstanceState)
+        watchNextHandled = savedInstanceState?.getBoolean(KEY_WATCH_NEXT_HANDLED) ?: false
         setContentView(R.layout.activity_fragments)
         LoadTiming.mark("startup", "activity_create")
         markFirstDraw()
@@ -83,7 +89,16 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == WatchNextPublisher.ACTION_WATCH_NEXT) {
+            setIntent(intent)
+            watchNextHandled = false
+        }
         handleIntent(intent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_WATCH_NEXT_HANDLED, watchNextHandled)
     }
 
     override fun onResumeFragments() {
@@ -158,6 +173,13 @@ class MainActivity : FragmentActivity() {
             val uri = intent.data ?: return
             val id = uri.lastPathSegment?.toInt() ?: return
             viewModel.openRelease(ReleaseId(id))
+        }
+        if (intent.action == WatchNextPublisher.ACTION_WATCH_NEXT) {
+            // Before the app is ready, the appReadyState subscription handles the intent.
+            if (watchNextHandled || viewModel.appReadyState.value == null) return
+            val episodeId = WatchNextPublisher.parseIntent(intent) ?: return
+            watchNextHandled = true
+            viewModel.openPlayer(episodeId.releaseId, episodeId)
         }
     }
 

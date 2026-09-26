@@ -103,6 +103,9 @@ fun CollectionReleaseResponse.toDomain(
         externalPlaylists = emptyList(),
         rutubePlaylist = episodes?.mapNotNull { it.toRutubeDomain(ReleaseId(id)) }.orEmpty(),
         torrents = emptyList(),
+        // полный релиз отдаёт episodes, лента (releases/latest) — только latest_episode
+        episodesAvailable = episodes?.takeIf { it.isNotEmpty() }?.size
+            ?: latestEpisode?.ordinal?.toInt()?.takeIf { it > 0 },
     )
 }
 

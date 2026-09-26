@@ -132,6 +132,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.leanback)
     implementation(libs.androidx.leanback.preference)
+    implementation(libs.androidx.tvprovider)
     implementation(libs.google.material)
     implementation(libs.androidx.constraintlayout)
 
