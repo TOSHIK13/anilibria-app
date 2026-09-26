@@ -23,6 +23,9 @@ abstract class ContinueWatchingCardsViewModel(
     private var loading = false
 
     @Volatile
+    private var source: String? = null
+
+    @Volatile
     private var loadedItems: List<ContinueWatchingItem>? = null
 
     init {
@@ -31,6 +34,16 @@ abstract class ContinueWatchingCardsViewModel(
             .observeItems()
             .filterNotNull()
             .filter { it != loadedItems }
+            .onEach {
+                while (loading) delay(RELOAD_POLL_MS)
+                delay(RELOAD_POLL_MS)
+                onRefreshClick()
+            }
+            .launchIn(viewModelScope)
+
+        // Фоновое обновление постеров/названий из сети.
+        loader
+            .observeCardUpdates()
             .onEach {
                 while (loading) delay(RELOAD_POLL_MS)
                 delay(RELOAD_POLL_MS)
@@ -47,11 +60,21 @@ abstract class ContinueWatchingCardsViewModel(
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> {
         loading = true
         try {
-            return loader.loadCards { loadedItems = it }
+            return loader.loadCards(
+                onItems = { loadedItems = it },
+                onSource = { source = it },
+            )
         } finally {
             loading = false
         }
     }
+
+    override fun timingExtra(): String? = source?.let { "source=$it" }
+
+    // Перестраиваем ряд только при реальных изменениях (порядок, серия, постер):
+    // одинаковый список не трогает адаптер, фокус не прыгает.
+    override fun needsModify(newCards: List<LibriaCard>, allCards: List<LibriaCard>): Boolean =
+        newCards != allCards
 
     override fun hasMoreCards(newCards: List<LibriaCard>, allCards: List<LibriaCard>): Boolean =
         false

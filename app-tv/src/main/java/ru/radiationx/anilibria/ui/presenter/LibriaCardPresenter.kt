@@ -4,13 +4,17 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.leanback.widget.ImageCardView
 import androidx.leanback.widget.Presenter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.ui.widget.WatchBadgeDrawable
+import ru.radiationx.data.entity.domain.types.ReleaseId
+import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.WatchProgressRepository
 import ru.radiationx.quill.Quill
 import ru.radiationx.shared_app.imageloader.showImageUrl
@@ -21,9 +25,13 @@ class LibriaCardPresenter : Presenter() {
         Quill.getRootScope().get(WatchProgressRepository::class)
     }
 
+    private val releaseInteractor by lazy {
+        Quill.getRootScope().get(ReleaseInteractor::class)
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup): ViewHolder {
         val cardView = ImageCardView(parent.context)
-        return LibriaCardViewHolder(cardView, watchProgressRepository)
+        return LibriaCardViewHolder(cardView, watchProgressRepository, releaseInteractor)
     }
 
     override fun onBindViewHolder(viewHolder: ViewHolder, item: Any?) {
@@ -42,6 +50,7 @@ class LibriaCardPresenter : Presenter() {
 class LibriaCardViewHolder(
     private val containerView: ImageCardView,
     private val watchProgressRepository: WatchProgressRepository,
+    private val releaseInteractor: ReleaseInteractor,
 ) : Presenter.ViewHolder(containerView) {
 
     private val cardHeight by lazy {
@@ -101,10 +110,30 @@ class LibriaCardViewHolder(
         val item = boundItem ?: return
         val type = item.type as? LibriaCard.Type.Release ?: return
         watchProgressRepository.requestRefresh()
-        progressJob = watchProgressRepository
-            .observe(type.releaseId)
-            .onEach { watchBadge.setProgress(it, item.episodesTotal) }
-            .launchIn(scope)
+        val available = MutableStateFlow(item.episodesAvailable)
+        var availableRequested = false
+        progressJob = scope.launch {
+            combine(watchProgressRepository.observe(type.releaseId), available) { progress, count ->
+                progress to count
+            }.collect { (progress, count) ->
+                watchBadge.setProgress(progress, count, item.episodesTotal)
+                // Число вышедших серий догружаем только для карточек с прогрессом.
+                if (progress != null && count == null && !availableRequested) {
+                    availableRequested = true
+                    launch { available.value = loadAvailable(type.releaseId) }
+                }
+            }
+        }
+    }
+
+    private suspend fun loadAvailable(releaseId: ReleaseId): Int? = try {
+        releaseInteractor.getFull(releaseId)?.let { release ->
+            release.episodesAvailable ?: release.episodes.size.takeIf { it > 0 }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        null
     }
 
     private fun stopObserveProgress() {

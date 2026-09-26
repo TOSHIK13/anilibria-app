@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.radiationx.data.entity.domain.collection.CollectionType
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.response.view.ViewHistoryEpisodeResponse
 import ru.radiationx.data.entity.response.view.ViewHistoryItemResponse
@@ -100,6 +101,32 @@ class WatchHistoryLogicTest {
         )
         val result = WatchHistoryLogic.continueList(episodes)
         assertEquals(listOf(2, 3), result.map { it.releaseId.id })
+    }
+
+    @Test
+    fun filterHidden_dropsWatchedAndAbandonedCollections() {
+        val items = WatchHistoryLogic.continueList(
+            (1..7).map { ep("e$it", it, 1f, 100L - it) }
+        )
+        val collections = mapOf(
+            ReleaseId(1) to CollectionType.WATCHED,
+            ReleaseId(2) to CollectionType.ABANDONED,
+            ReleaseId(3) to CollectionType.WATCHING,
+            ReleaseId(4) to CollectionType.PLANNED,
+            ReleaseId(5) to CollectionType.POSTPONED,
+            // 6 и 7 — без коллекции; 99 — нет в истории
+            ReleaseId(99) to CollectionType.WATCHED,
+        )
+        val result = WatchHistoryLogic.filterHidden(items, collections)
+        assertEquals(listOf(3, 4, 5, 6, 7), result.map { it.releaseId.id })
+    }
+
+    @Test
+    fun filterHidden_keepsListWhenCollectionsUnknownOrEmpty() {
+        val items = WatchHistoryLogic.continueList(listOf(ep("a", 1, 1f, 2), ep("b", 2, 1f, 1)))
+        assertEquals(items, WatchHistoryLogic.filterHidden(items, null))
+        assertEquals(items, WatchHistoryLogic.filterHidden(items, emptyMap()))
+        assertEquals(emptyList<ContinueWatchingItem>(), WatchHistoryLogic.filterHidden(emptyList(), null))
     }
 
     @Test

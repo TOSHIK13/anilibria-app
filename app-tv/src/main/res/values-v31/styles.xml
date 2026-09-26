@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Android 12+: системный splash (SplashScreen API) показывается при холодном старте всегда
+        и вместо windowBackground. Фон layer-list он не берёт, поэтому задаём цвет явно, чтобы
+        между системным splash и вступительной анимацией не было светлой вспышки.
+    -->
+    <style name="AppTheme.Splash" parent="AppTheme">
+        <item name="android:windowBackground">@drawable/alib_splash</item>
+        <item name="android:windowSplashScreenBackground">@color/dark_windowBackground</item>
+    </style>
+
+</resources>

@@ -78,7 +78,9 @@
 - Лента (`FeedRepository`) = слияние latest + videos по времени, 10 на страницу;
   на фикстурах точно повторяет legacy `query=feed` (см. `FeedMergerTest`).
 - `include=` (в т.ч. вложенные `genres.name`) и `exclude=` работают на latest/catalog/videos
-  и уменьшают ответ в разы.
+  и уменьшают ответ в разы. `releases/list?ids=` тоже понимает `include` (3 релиза:
+  61 КБ → 11 КБ с полями ленты); карточки «Продолжить просмотр» берут его через
+  `ReleaseApi.getShortReleasesByIds`, полный релиз для деталей грузится отдельно.
 - Счётчик избранного релиза: `added_in_users_favorites`.
 - Постер: `poster.optimized.preview` → fallback; пути `/storage/...` отдают
   `www.anilibria.tv`, `anilibria.top`, `aniliberty.top`, `static.wwnd.space` (байт-в-байт одинаково).

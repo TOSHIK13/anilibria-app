@@ -54,6 +54,21 @@ class ReleaseApi @Inject constructor(
             .data
     }
 
+    /**
+     * Краткие релизы для карточек: только поля, которые читает CollectionMapper
+     * (как в ленте, [FeedApi.RELEASE_FIELDS]) — ответ в ~5 раз легче полного.
+     */
+    suspend fun getShortReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> {
+        val args = mapOf(
+            "ids" to ids.joinToString(","),
+            "include" to FeedApi.RELEASE_FIELDS,
+        )
+        return client
+            .get("$animeUrl/releases/list", args)
+            .fetchResponse<CollectionReleasesResponse>(moshi)
+            .data
+    }
+
     suspend fun getFullReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> {
         return getReleasesByIds(ids)
     }

@@ -1,5 +1,6 @@
 package ru.radiationx.data.repository.watch
 
+import ru.radiationx.data.entity.domain.collection.CollectionType
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.response.view.ViewHistoryItemResponse
 import ru.radiationx.data.repository.ReleaseWatchProgress
@@ -119,9 +120,31 @@ object WatchHistoryLogic {
                     time = last.time,
                     isWatched = last.isWatched,
                     updatedAt = last.updatedAt,
+                    watchedCount = watched,
+                    episodesTotal = total,
                 )
             }
             .sortedByDescending { it.updatedAt }
+
+    /** Коллекции, релизы из которых не показываются в «Продолжить просмотр». */
+    val HIDDEN_COLLECTIONS: Set<CollectionType> = setOf(CollectionType.WATCHED, CollectionType.ABANDONED)
+
+    /** Релизы, скрытые из «Продолжить просмотр» по коллекции пользователя. */
+    fun hiddenByCollection(collections: Map<ReleaseId, CollectionType>?): Set<ReleaseId> =
+        collections.orEmpty().filterValues { it in HIDDEN_COLLECTIONS }.keys
+
+    /**
+     * Убирает релизы из коллекций «Просмотрено» и «Брошено».
+     * [collections] == null (ещё не загружены) — список не меняется.
+     */
+    fun filterHidden(
+        items: List<ContinueWatchingItem>,
+        collections: Map<ReleaseId, CollectionType>?,
+    ): List<ContinueWatchingItem> {
+        val hidden = hiddenByCollection(collections)
+        if (hidden.isEmpty()) return items
+        return items.filter { it.releaseId !in hidden }
+    }
 
     /** Добавляет изменения в очередь: на серию остаётся только самое позднее. */
     fun mergePending(

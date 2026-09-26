@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">AniLiberty TV Mod</string>
+    <string name="home_channel_continue">Продолжить просмотр AniLibria</string>
     <string name="config_action_repeat">Повторить</string>
     <string name="config_action_skip">Пропустить</string>
     <string name="config_action_next">Следующий шаг</string>

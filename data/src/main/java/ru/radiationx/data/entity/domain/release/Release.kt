@@ -40,6 +40,8 @@ data class Release(
     val externalPlaylists: List<ExternalPlaylist>,
     val rutubePlaylist: List<RutubeEpisode>,
     val torrents: List<TorrentItem>,
+    /** Сколько серий уже вышло (null — неизвестно). */
+    val episodesAvailable: Int? = null,
 ) : Parcelable {
 
 

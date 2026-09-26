@@ -14,8 +14,11 @@ import ru.radiationx.anilibria.screen.ConfigScreen
 import ru.radiationx.anilibria.screen.DetailsScreen
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.screen.MainPagesScreen
+import ru.radiationx.anilibria.screen.PlayerScreen
+import ru.radiationx.anilibria.watchnext.HomeChannelPublisher
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.common.AuthState
+import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.StartupConfigChecker
 import ru.radiationx.data.repository.AuthRepository
@@ -28,16 +31,25 @@ class AppLauncherViewModel @Inject constructor(
     private val apiConfig: ApiConfig,
     private val startupConfigChecker: StartupConfigChecker,
     private val router: Router,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val homeChannelPublisher: HomeChannelPublisher,
 ) : LifecycleViewModel() {
 
     private var firstLaunch = true
     private var configShown = false
+    private var splashShown = false
 
     val appReadyState = MutableStateFlow<Unit?>(null)
 
     fun openRelease(id: ReleaseId) {
         router.navigateTo(DetailsScreen(id))
+    }
+
+    // Открытие из системного ряда «Продолжить просмотр»: детали релиза под плеером,
+    // чтобы «Назад» возвращал на карточку релиза.
+    fun openPlayer(releaseId: ReleaseId, episodeId: EpisodeId) {
+        router.navigateTo(DetailsScreen(releaseId))
+        router.navigateTo(PlayerScreen(releaseId, episodeId))
     }
 
     fun coldLaunch() {
@@ -63,9 +75,12 @@ class AppLauncherViewModel @Inject constructor(
             .launchIn(viewModelScope)
 
         if (startupConfigChecker.canStartWithoutConfig()) {
-            // сохранённый конфиг: сразу главная, проверка адреса в фоне
+            // сохранённый конфиг: экран проверки пропускаем, показываем только вступительную
+            // анимацию; главная откроется по её окончании (onIntroFinished), сеть не ждём —
+            // проверка адреса и загрузка профиля идут в фоне параллельно анимации
             LoadTiming.mark("startup", "config_skipped", "tag=${apiConfig.tag}")
-            initMain()
+            showSplash()
+            startUserLoading()
             viewModelScope.launch {
                 coRunCatching {
                     startupConfigChecker.checkInBackground()
@@ -78,14 +93,30 @@ class AppLauncherViewModel @Inject constructor(
         }
     }
 
+    /** Конец вступительной анимации в режиме splash-only. */
+    fun onIntroFinished() {
+        // экран конфигурации уже заменил splash, либо главная уже открыта
+        if (configShown || (!splashShown && !firstLaunch)) return
+        splashShown = false
+        initMain(loadUser = false)
+    }
+
+    private fun showSplash() {
+        splashShown = true
+        router.newRootScreen(ConfigScreen(splashOnly = true))
+    }
+
     private fun showConfig() {
+        // если показан splash (фоновая проверка не нашла живой адрес) — конфигурация заменяет его
+        splashShown = false
         configShown = true
         router.newRootScreen(ConfigScreen())
     }
 
-    @OptIn(DelicateCoroutinesApi::class)
-    private fun initMain() {
+    private fun initMain(loadUser: Boolean = true) {
         firstLaunch = false
+        // Канал «Продолжить просмотр AniLibria» на главном экране TV (идемпотентно).
+        homeChannelPublisher.start()
         viewModelScope.launch {
             router.newRootScreen(MainPagesScreen())
             if (authRepository.getAuthState() == AuthState.NO_AUTH) {
@@ -93,6 +124,13 @@ class AppLauncherViewModel @Inject constructor(
             }
             appReadyState.value = Unit
         }
+        if (loadUser) {
+            startUserLoading()
+        }
+    }
+
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun startUserLoading() {
         GlobalScope.launch {
             coRunCatching {
                 authRepository.loadUser()

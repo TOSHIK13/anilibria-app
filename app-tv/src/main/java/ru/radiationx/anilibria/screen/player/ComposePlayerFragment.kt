@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -77,6 +78,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Format
@@ -130,6 +132,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         private const val SEEK_STEP_MS = 10_000L
         private const val PLAY_PAUSE_HUD_DURATION_MS = 1_000L
         private const val SEEK_HUD_DURATION_MS = 2_000L
+        private const val SEEK_COMMIT_DEBOUNCE_MS = 500L
         private const val PROGRESS_TICK_MS = 250L
         private const val SKIP_TIMER_SEC = 5
         private const val NEXT_EPISODE_TIMER_SEC = 3
@@ -231,6 +234,17 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private var hlsRollingPrefetchState by mutableStateOf(HlsRollingPrefetchState())
     private var hlsRollingPrefetchStateJob: Job? = null
     private var lastPrefetchUpdateAt = 0L
+    /** Автоповторы prepare() после сетевой ошибки плеера (429/5xx и т.п.) на текущей позиции. */
+    private var playbackRecoveryAttempts = 0
+    private var playbackRecoveryJob: Job? = null
+    private var playbackRecoveryPending by mutableStateOf(false)
+    private var playbackRecoveryExhausted by mutableStateOf(false)
+    /** Отложенная перемотка: нажатия ←/→ копят цель, seekTo — один раз после паузы ввода. */
+    private var pendingSeekTargetMs: Long? = null
+    private var pendingSeekFromMs = 0L
+    private var pendingSeekPresses = 0
+    private var pendingSeekJob: Job? = null
+    private var seekKeyHeld = false
     private val memoryCallbacks = object : ComponentCallbacks2 {
         override fun onTrimMemory(level: Int) {
             handleMemoryPressure(level)
@@ -251,19 +265,30 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             val previousPlaybackState = lastPlaybackState
             lastPlaybackState = playbackState
             updatePlaybackSnapshot()
+            // Состояние плеера (BUFFERING/IDLE) сразу в prefetch: он должен уступить канал без задержки.
+            updateHlsRollingPrefetch(force = true)
             when (playbackState) {
                 Player.STATE_ENDED -> {
                     notifyEpisodeCompleted(playbackSnapshot, "state_ended")
                 }
 
                 Player.STATE_READY -> {
+                    if (playbackRecoveryPending) {
+                        // Повторный prepare() удался; счётчик попыток сбросится, когда пойдёт воспроизведение.
+                        playbackRecoveryPending = false
+                        updatePlaybackSnapshot()
+                    }
                     val snapshot = playbackSnapshot
                     viewModel.onPrepare(snapshot.durationMs)
                 }
 
                 Player.STATE_IDLE -> {
                     val snapshot = playbackSnapshot
-                    if (previousPlaybackState != Player.STATE_IDLE && isPlaybackFinished(snapshot)) {
+                    // IDLE из-за ошибки загрузки (например, 429 у конца серии) — не завершение серии.
+                    if (previousPlaybackState != Player.STATE_IDLE &&
+                        player.playerError == null &&
+                        isPlaybackFinished(snapshot)
+                    ) {
                         notifyEpisodeCompleted(snapshot, "state_idle")
                     }
                 }
@@ -271,7 +296,14 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying && player.playbackState == Player.STATE_READY) {
+                resetPlaybackRecovery()
+            }
             updatePlaybackSnapshot()
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            handlePlayerError(error)
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -418,6 +450,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     override fun onPause() {
         super.onPause()
+        commitPendingSeek("pause")
         player.pause()
         val snapshot = playbackSnapshot
         val settings = viewModel.composeMenuState.value.settings
@@ -426,6 +459,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     override fun onStop() {
         super.onStop()
+        commitPendingSeek("stop")
         val snapshot = playbackSnapshot
         viewModel.onStopClick(snapshot.positionMs, snapshot.durationMs)
     }
@@ -440,6 +474,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         cacheEvictionJob?.cancel()
         cacheInspectionJob?.cancel()
         memoryTrimJob?.cancel()
+        playbackRecoveryJob?.cancel()
+        pendingSeekJob?.cancel()
         requireContext().applicationContext.unregisterComponentCallbacks(memoryCallbacks)
         hlsRollingPrefetcher?.stop()
         hlsRollingPrefetcher = null
@@ -696,7 +732,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             )
 
             val showLoadingIndicator =
-                currentVideo != null && (
+                currentVideo != null && !playbackRecoveryExhausted && (
                     playbackSnapshot.isBuffering ||
                         lastPlaybackState == Player.STATE_IDLE ||
                         (playbackSnapshot.durationMs <= 0L && !playbackSnapshot.isPlaying)
@@ -881,6 +917,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                                 snapshot = playbackSnapshot,
                                 skips = currentVideo?.skips,
                                 onSeekTo = { target ->
+                                    dropPendingSeek()
                                     player.seekTo(target)
                                     updatePlaybackSnapshot()
                                 },
@@ -1034,10 +1071,22 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         focusPrimary: () -> Unit,
         focusSecondary: () -> Unit,
     ): Boolean {
-        if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) {
+        val nativeEvent = event.nativeKeyEvent
+        if (nativeEvent.action == KeyEvent.ACTION_UP && isSeekKey(nativeEvent.keyCode) && seekKeyHeld) {
+            // Отпустили зажатую клавишу перемотки: применяем сразу, не дожидаясь debounce.
+            seekKeyHeld = false
+            commitPendingSeek("key-up")
+        }
+        if (nativeEvent.action != KeyEvent.ACTION_DOWN) {
             return false
         }
-        val keyCode = event.nativeKeyEvent.keyCode
+        val keyCode = nativeEvent.keyCode
+        if (isSeekKey(keyCode)) {
+            seekKeyHeld = nativeEvent.repeatCount > 0
+        } else {
+            // OK/Play/Back и прочие клавиши: сначала применяем накопленную перемотку.
+            commitPendingSeek("key")
+        }
         return if (completionOverlayVisible) {
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -1269,6 +1318,15 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     }
 
     private fun togglePlayPause(showHud: Boolean) {
+        commitPendingSeek("play-pause")
+        if (player.playbackState == Player.STATE_IDLE && player.playerError != null) {
+            // OK/Play после исчерпания автоповторов: ручной повтор загрузки с той же позиции.
+            retryAfterPlayerError()
+            if (showHud) {
+                showPlayPauseHud(isPlaying = true)
+            }
+            return
+        }
         if (player.isPlaying) {
             player.pause()
             if (showHud) {
@@ -1341,19 +1399,59 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun performSeekRelative(deltaMs: Long, showHud: Boolean) {
         val duration = player.duration.takeIf { it > 0 } ?: playbackSnapshot.durationMs
-        val basePosition = seekHud
-            ?.takeIf { it.direction.deltaMs.sign == deltaMs.sign }
-            ?.targetPositionMs
+        val pendingTarget = pendingSeekTargetMs
+        val basePosition = pendingTarget
+            ?: seekHud
+                ?.takeIf { it.direction.deltaMs.sign == deltaMs.sign }
+                ?.targetPositionMs
             ?: player.currentPosition
         val maxDuration = duration.takeIf { it > 0 } ?: Long.MAX_VALUE
         val targetPosition = (basePosition + deltaMs).coerceIn(0L, maxDuration)
 
-        player.seekTo(targetPosition)
+        // Каждый seekTo запускает новую загрузку сегмента: копим цель и применяем один раз.
+        if (pendingTarget == null) {
+            pendingSeekFromMs = player.currentPosition
+            pendingSeekPresses = 0
+        }
+        pendingSeekTargetMs = targetPosition
+        pendingSeekPresses += 1
+        pendingSeekJob?.cancel()
+        pendingSeekJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(SEEK_COMMIT_DEBOUNCE_MS)
+            commitPendingSeek("debounce")
+        }
         updatePlaybackSnapshot()
 
         if (showHud) {
             showSeekHud(deltaMs, targetPosition)
         }
+    }
+
+    private fun commitPendingSeek(reason: String) {
+        val target = pendingSeekTargetMs ?: return
+        pendingSeekJob?.cancel()
+        pendingSeekJob = null
+        pendingSeekTargetMs = null
+        Log.d(
+            PLAYER_NET_TAG,
+            "seek-commit from=$pendingSeekFromMs to=$target presses=$pendingSeekPresses reason=$reason",
+        )
+        player.seekTo(target)
+        updatePlaybackSnapshot()
+    }
+
+    /** Отмена накопленной перемотки без seekTo (смена серии, пропуск опенинга, тап по таймлайну). */
+    private fun dropPendingSeek() {
+        pendingSeekJob?.cancel()
+        pendingSeekJob = null
+        pendingSeekTargetMs = null
+    }
+
+    private fun isSeekKey(keyCode: Int): Boolean {
+        return keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+            keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
     }
 
     private fun showPlayPauseHud(isPlaying: Boolean) {
@@ -1396,6 +1494,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         )
         val targetPosition = current.skip.end.coerceAtLeast(0L)
         Log.d(TAG, "skip type=${current.type} target=$targetPosition position=${playbackSnapshot.positionMs} duration=${playbackSnapshot.durationMs}")
+        dropPendingSeek()
         player.seekTo(targetPosition)
         if (current.type == SkipHudType.Ending) {
             val duration = player.duration.takeIf { it > 0L } ?: playbackSnapshot.durationMs
@@ -1571,6 +1670,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     /** Сброс состояния, привязанного к конкретной серии: prefetch, дескрипторы, инспекция кэша. */
     private fun resetPerItemState(snapshot: ComposePlaybackSnapshot) {
+        resetPlaybackRecovery()
+        dropPendingSeek()
         cacheEvictionJob?.cancel()
         cacheEvictionJob = null
         hlsRollingPrefetcher?.stop()
@@ -1823,7 +1924,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     private fun updatePlaybackSnapshot() {
         val knownDuration = playbackSnapshot.durationMs
         val currentDuration = player.duration.takeIf { it > 0 } ?: knownDuration
-        val rawPosition = player.currentPosition.coerceAtLeast(0L)
+        // Пока перемотка не применена, UI показывает её цель.
+        val rawPosition = (pendingSeekTargetMs ?: player.currentPosition).coerceAtLeast(0L)
         val normalizedPosition = EpisodePlaybackRules.clampPosition(rawPosition, currentDuration)
         maybeRefreshCacheInspection(normalizedPosition)
         val effectiveBufferedPosition = player.bufferedPosition
@@ -1840,7 +1942,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             bufferedPositionMs = effectiveBufferedPosition,
             cachedPositionMs = cachedPositionMs,
             isPlaying = player.isPlaying,
-            isBuffering = player.playbackState == Player.STATE_BUFFERING,
+            isBuffering = player.playbackState == Player.STATE_BUFFERING || playbackRecoveryPending,
         )
         updateHlsRollingPrefetch(force = false)
         updatePlayerStats()
@@ -2034,6 +2136,10 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
     private fun updateHlsRollingPrefetch(force: Boolean) {
         val prefetcher = hlsRollingPrefetcher ?: return
+        if (pendingSeekTargetMs != null) {
+            // Промежуточные цели перемотки не перепланируют prefetch: он обновится после seekTo.
+            return
+        }
         if (currentPlaylistCacheDescriptor == null) {
             return
         }
@@ -2056,6 +2162,64 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 preloadNextEpisode = settings.preloadNextEpisode,
             )
         )
+    }
+
+    private fun handlePlayerError(error: PlaybackException) {
+        val isNetworkError = error.errorCode in PlaybackException.ERROR_CODE_IO_UNSPECIFIED until
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED
+        if (!isNetworkError) {
+            Log.w(PLAYER_NET_TAG, "player error code=${error.errorCodeName}, no recovery", error)
+            return
+        }
+        playbackRecoveryJob?.cancel()
+        if (playbackRecoveryAttempts >= MAX_PLAYBACK_RECOVERY_ATTEMPTS) {
+            Log.w(PLAYER_NET_TAG, "recover exhausted attempts=$playbackRecoveryAttempts code=${error.errorCodeName}", error)
+            playbackRecoveryPending = false
+            playbackRecoveryExhausted = true
+            updatePlaybackSnapshot()
+            context?.let {
+                Toast.makeText(it, PLAYBACK_RECOVERY_FAILED_MESSAGE, Toast.LENGTH_LONG).show()
+            }
+            return
+        }
+        playbackRecoveryAttempts += 1
+        val attempt = playbackRecoveryAttempts
+        val backoffMs = (PLAYBACK_RECOVERY_BASE_DELAY_MS shl (attempt - 1))
+            .coerceAtMost(PLAYBACK_RECOVERY_MAX_DELAY_MS)
+        val delayMs = maxOf(backoffMs, CdnRateLimitGate.remainingMs())
+            .coerceAtMost(RateLimitBackoff.MAX_RETRY_AFTER_MS)
+        Log.w(
+            PLAYER_NET_TAG,
+            "recover attempt=$attempt/$MAX_PLAYBACK_RECOVERY_ATTEMPTS delay=${delayMs}ms pos=${player.currentPosition} code=${error.errorCodeName}",
+        )
+        playbackRecoveryPending = true
+        playbackRecoveryExhausted = false
+        updatePlaybackSnapshot()
+        playbackRecoveryJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(delayMs)
+            if (player.playbackState == Player.STATE_IDLE && player.playerError != null) {
+                playerDiagnostics.markLoadStart("recover")
+                player.prepare()
+            }
+        }
+    }
+
+    private fun retryAfterPlayerError() {
+        Log.w(PLAYER_NET_TAG, "recover manual pos=${player.currentPosition}")
+        resetPlaybackRecovery()
+        playbackRecoveryPending = true
+        playerDiagnostics.markLoadStart("recover-manual")
+        player.prepare()
+        player.play()
+        updatePlaybackSnapshot()
+    }
+
+    private fun resetPlaybackRecovery() {
+        playbackRecoveryJob?.cancel()
+        playbackRecoveryJob = null
+        playbackRecoveryAttempts = 0
+        playbackRecoveryPending = false
+        playbackRecoveryExhausted = false
     }
 
     private fun getOrCreateHlsRollingPrefetcher(): HlsRollingPrefetcher {
@@ -3234,6 +3398,11 @@ private fun formatCacheSegments(
 }
 
 private const val PREFETCH_UPDATE_INTERVAL_MS = 1_000L
+private const val MAX_PLAYBACK_RECOVERY_ATTEMPTS = 5
+private const val PLAYBACK_RECOVERY_BASE_DELAY_MS = 2_000L
+private const val PLAYBACK_RECOVERY_MAX_DELAY_MS = 16_000L
+private const val PLAYBACK_RECOVERY_FAILED_MESSAGE =
+    "Сервер временно ограничил загрузку. Нажмите OK, чтобы повторить"
 private const val CACHE_INSPECTION_INTERVAL_MS = 5_000L
 private const val MEMORY_TRIM_COOLDOWN_MS = 60_000L
 private const val CACHE_EVICTION_BATCH = 32

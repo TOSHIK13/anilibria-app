@@ -6,6 +6,9 @@ import ru.mintrocket.lib.mintpermissions.flows.MintPermissionsFlow
 import ru.radiationx.anilibria.AppBuildConfig
 import ru.radiationx.anilibria.AppMigrationExecutor
 import ru.radiationx.anilibria.TvCheckerSources
+import ru.radiationx.anilibria.common.CardsDataConverter
+import ru.radiationx.anilibria.watchnext.HomeChannelPublisher
+import ru.radiationx.anilibria.watchnext.WatchNextPublisher
 import ru.radiationx.data.SharedBuildConfig
 import ru.radiationx.data.analytics.AnalyticsErrorReporter
 import ru.radiationx.data.analytics.AnalyticsSender
@@ -36,6 +39,11 @@ class AppModule(context: Context) : QuillModule() {
         singleImpl<MigrationExecutor, AppMigrationExecutor>()
 
         singleImpl<LibriaImageLoader, CoilLibriaImageLoaderImpl>()
+
+        single<WatchNextPublisher>()
+        // Для канала на главном экране TV (в Activity-скоупе переопределяется контекстом Activity).
+        instance { CardsDataConverter(context) }
+        single<HomeChannelPublisher>()
 
         instance {
             MintPermissions.controller

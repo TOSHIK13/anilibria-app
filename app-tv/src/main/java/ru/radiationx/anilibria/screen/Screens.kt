@@ -38,9 +38,13 @@ import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.domain.updater.UpdateData
 import ru.radiationx.shared.ktx.android.putExtra
 
-class ConfigScreen : FragmentScreen {
+/**
+ * @param splashOnly только вступительная анимация (быстрый старт с сохранённым конфигом),
+ * без проверки адресов; по окончании фрагмент отдаёт [ConfigFragment.RESULT_INTRO_FINISHED].
+ */
+class ConfigScreen(private val splashOnly: Boolean = false) : FragmentScreen {
     override fun createFragment(factory: FragmentFactory): Fragment {
-        return ConfigFragment()
+        return ConfigFragment.newInstance(splashOnly)
     }
 }
 
