@@ -133,8 +133,6 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
         private const val PLAY_PAUSE_HUD_DURATION_MS = 1_000L
         private const val SEEK_HUD_DURATION_MS = 2_000L
         private const val SEEK_COMMIT_DEBOUNCE_MS = 500L
-        private const val SEEK_ACCEL_REPEATS = 10
-        private const val SEEK_ACCEL_FAST_REPEATS = 40
         private const val PROGRESS_TICK_MS = 250L
         private const val SKIP_TIMER_SEC = 5
         private const val NEXT_EPISODE_TIMER_SEC = 3
@@ -1089,7 +1087,6 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             // OK/Play/Back и прочие клавиши: сначала применяем накопленную перемотку.
             commitPendingSeek("key")
         }
-        val seekStepMs = acceleratedSeekStepMs(nativeEvent.repeatCount)
         return if (completionOverlayVisible) {
             when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
@@ -1156,13 +1153,13 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
 
                 KeyEvent.KEYCODE_DPAD_LEFT,
                 KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                    performSeekRelative(-seekStepMs, showHud = true)
+                    performSeekRelative(-SEEK_STEP_MS, showHud = true)
                     true
                 }
 
                 KeyEvent.KEYCODE_DPAD_RIGHT,
                 KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                    performSeekRelative(seekStepMs, showHud = true)
+                    performSeekRelative(SEEK_STEP_MS, showHud = true)
                     true
                 }
 
@@ -1208,12 +1205,12 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 }
 
                 KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                    performSeekRelative(seekStepMs, showHud = false)
+                    performSeekRelative(SEEK_STEP_MS, showHud = false)
                     true
                 }
 
                 KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                    performSeekRelative(-seekStepMs, showHud = false)
+                    performSeekRelative(-SEEK_STEP_MS, showHud = false)
                     true
                 }
 
@@ -1244,12 +1241,12 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 }
 
                 KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                    performSeekRelative(seekStepMs, showHud = false)
+                    performSeekRelative(SEEK_STEP_MS, showHud = false)
                     true
                 }
 
                 KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                    performSeekRelative(-seekStepMs, showHud = false)
+                    performSeekRelative(-SEEK_STEP_MS, showHud = false)
                     true
                 }
 
@@ -1294,9 +1291,9 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     if (currentZone == OverlayZone.TIMELINE) {
                         val delta = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                            seekStepMs
+                            SEEK_STEP_MS
                         } else {
-                            -seekStepMs
+                            -SEEK_STEP_MS
                         }
                         performSeekRelative(delta, showHud = false)
                         true
@@ -1455,15 +1452,6 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
             keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
             keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
             keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
-    }
-
-    /** Зажатая клавиша: 10 с, после ~1 с удержания 30 с, после ~2.5 с 60 с за шаг. */
-    private fun acceleratedSeekStepMs(repeatCount: Int): Long {
-        return when {
-            repeatCount >= SEEK_ACCEL_FAST_REPEATS -> SEEK_STEP_MS * 6
-            repeatCount >= SEEK_ACCEL_REPEATS -> SEEK_STEP_MS * 3
-            else -> SEEK_STEP_MS
-        }
     }
 
     private fun showPlayPauseHud(isPlaying: Boolean) {
