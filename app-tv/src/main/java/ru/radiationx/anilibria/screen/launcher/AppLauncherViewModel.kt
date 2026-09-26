@@ -17,18 +17,22 @@ import ru.radiationx.anilibria.screen.MainPagesScreen
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.common.AuthState
 import ru.radiationx.data.entity.domain.types.ReleaseId
+import ru.radiationx.data.interactors.StartupConfigChecker
 import ru.radiationx.data.repository.AuthRepository
+import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
 import javax.inject.Inject
 
 class AppLauncherViewModel @Inject constructor(
     private val apiConfig: ApiConfig,
+    private val startupConfigChecker: StartupConfigChecker,
     private val router: Router,
     private val authRepository: AuthRepository
 ) : LifecycleViewModel() {
 
     private var firstLaunch = true
+    private var configShown = false
 
     val appReadyState = MutableStateFlow<Unit?>(null)
 
@@ -47,20 +51,36 @@ class AppLauncherViewModel @Inject constructor(
             .distinctUntilChanged()
             .onEach {
                 if (it) {
-                    router.newRootScreen(ConfigScreen())
+                    showConfig()
                 } else {
-                    if (firstLaunch) {
+                    // первый запуск или возврат с экрана конфигурации после фоновой проверки
+                    if (firstLaunch || configShown) {
+                        configShown = false
                         initMain()
                     }
                 }
             }
             .launchIn(viewModelScope)
 
-        if (apiConfig.needConfig) {
-            router.newRootScreen(ConfigScreen())
-        } else {
+        if (startupConfigChecker.canStartWithoutConfig()) {
+            // сохранённый конфиг: сразу главная, проверка адреса в фоне
+            LoadTiming.mark("startup", "config_skipped", "tag=${apiConfig.tag}")
             initMain()
+            viewModelScope.launch {
+                coRunCatching {
+                    startupConfigChecker.checkInBackground()
+                }.onFailure {
+                    Timber.e(it)
+                }
+            }
+        } else {
+            showConfig()
         }
+    }
+
+    private fun showConfig() {
+        configShown = true
+        router.newRootScreen(ConfigScreen())
     }
 
     @OptIn(DelicateCoroutinesApi::class)

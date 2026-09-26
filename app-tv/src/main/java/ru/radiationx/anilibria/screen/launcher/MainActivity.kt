@@ -6,6 +6,7 @@ import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -19,6 +20,7 @@ import ru.radiationx.anilibria.di.SearchModule
 import ru.radiationx.anilibria.di.UpdateModule
 import ru.radiationx.anilibria.screen.player.PlayerMotionHandler
 import ru.radiationx.data.entity.domain.types.ReleaseId
+import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.quill.inject
 import ru.radiationx.quill.installModules
 import ru.radiationx.quill.viewModel
@@ -57,6 +59,8 @@ class MainActivity : FragmentActivity() {
         )
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_fragments)
+        LoadTiming.mark("startup", "activity_create")
+        markFirstDraw()
         idleDimOverlay = findViewById(R.id.idleDimOverlay)
         lifecycle.addObserver(viewModel)
 
@@ -123,6 +127,22 @@ class MainActivity : FragmentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         resetIdleDimTimer()
+    }
+
+    private fun markFirstDraw() {
+        if (!LoadTiming.enabled) return
+        val decorView = window.decorView
+        val listener = object : ViewTreeObserver.OnDrawListener {
+            private var drawn = false
+            override fun onDraw() {
+                if (drawn) return
+                drawn = true
+                LoadTiming.markOnce("startup", "window_drawn")
+                val listener = this
+                decorView.post { decorView.viewTreeObserver.removeOnDrawListener(listener) }
+            }
+        }
+        decorView.viewTreeObserver.addOnDrawListener(listener)
     }
 
     private fun handleIntent(intent: Intent?) {

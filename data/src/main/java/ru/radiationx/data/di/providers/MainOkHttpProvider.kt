@@ -9,6 +9,7 @@ import ru.radiationx.data.analytics.features.SslCompatAnalytics
 import ru.radiationx.data.sslcompat.SslCompat
 import ru.radiationx.data.sslcompat.appendSslCompat
 import ru.radiationx.data.system.appendSslCompatAnalytics
+import ru.radiationx.data.system.LoadTimingEventListener
 import ru.radiationx.data.system.appendTimeouts
 import javax.inject.Inject
 import javax.inject.Provider
@@ -25,6 +26,7 @@ class MainOkHttpProvider @Inject constructor(
         .appendSslCompatAnalytics(sslCompat, sslCompatAnalytics)
         .appendSslCompat(sslCompat)
         .appendTimeouts()
+        .eventListenerFactory(LoadTimingEventListener.factory("main"))
         .addNetworkInterceptor {
             val hostAddress =
                 it.connection()?.route()?.socketAddress?.address?.hostAddress.orEmpty()

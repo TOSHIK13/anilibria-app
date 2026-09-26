@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import ru.radiationx.data.di.providers.ApiClientWrapper
+import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.shared_app.R
 import ru.radiationx.shared_app.imageloader.ImageLoaderScopeConfig
 import ru.radiationx.shared_app.imageloader.LibriaImageLoader
@@ -41,6 +42,7 @@ class CoilLibriaImageLoaderImpl @Inject constructor(
                 val okHttpClient = _okHttpClient
                 val imageLoader = _imageLoader
                 if (imageLoader == null || okHttpClient != actualOkHttpClient) {
+                    LoadTiming.mark("img", if (imageLoader == null) "loader_created" else "loader_recreated")
                     _imageLoader?.shutdown()
                     val newImageLoader = createImageLoader(actualOkHttpClient)
                     _okHttpClient = actualOkHttpClient
@@ -81,6 +83,7 @@ class CoilLibriaImageLoaderImpl @Inject constructor(
                     config.onComplete?.invoke()
                 },
                 onSuccess = { _: ImageRequest, successResult: SuccessResult ->
+                    LoadTiming.markOnce("startup", "first_image", "source=${successResult.dataSource}")
                     imageView.successUrl = url
                     if (config.onSuccess != null) {
                         val bitmap = successResult.image.asBitmap(context)

@@ -5,6 +5,12 @@ import com.stealthcopter.networktools.ping.PingResult
 import com.stealthcopter.networktools.ping.PingTools
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import ru.radiationx.data.datasource.remote.address.ApiAddress
@@ -27,6 +33,19 @@ class ConfigurationRepository @Inject constructor(
     suspend fun checkAvailable(address: ApiAddress): Boolean = withContext(Dispatchers.IO) {
         configurationApi
             .checkAvailable(address)
+    }
+
+    /** Проверяет адреса параллельно и возвращает первый ответивший, либо null. */
+    suspend fun findFirstAvailable(addresses: List<ApiAddress>): ApiAddress? {
+        if (addresses.isEmpty()) return null
+        val sources = addresses.map { address ->
+            flow { emit(address to checkAvailable(address)) }
+                .catch { emit(address to false) }
+        }
+        return merge(*sources.toTypedArray())
+            .filter { it.second }
+            .map { it.first }
+            .firstOrNull()
     }
 
     suspend fun getConfiguration(): ApiConfigData = withContext(Dispatchers.IO) {

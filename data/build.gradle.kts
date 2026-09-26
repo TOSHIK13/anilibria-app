@@ -17,6 +17,7 @@ android {
     }
     testOptions {
         targetSdk = libs.versions.app.target.sdk.version.get().toInt()
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -57,5 +58,7 @@ dependencies {
     ksp(libs.toothpick.compiler)
 
     implementation(libs.androidnetworktools)
+
+    testImplementation(libs.junit)
 }
 

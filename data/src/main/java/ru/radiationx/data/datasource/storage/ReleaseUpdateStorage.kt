@@ -68,6 +68,14 @@ class ReleaseUpdateStorage @Inject constructor(
                     lastOpenTimestamp = Int.MAX_VALUE
                 )
                 putReleases.add(update)
+            } else if (updItem.timestamp == 0 && release.torrentUpdate > 0) {
+                // Записи из v1-ответов без даты обновления: тихо проставляем дату,
+                // чтобы не показать "обновлён" для всех ранее виденных релизов.
+                val update = updItem.copy(
+                    timestamp = release.torrentUpdate,
+                    lastOpenTimestamp = maxOf(updItem.lastOpenTimestamp, release.torrentUpdate)
+                )
+                putReleases.add(update)
             }
         }
         putAllRelease(putReleases)

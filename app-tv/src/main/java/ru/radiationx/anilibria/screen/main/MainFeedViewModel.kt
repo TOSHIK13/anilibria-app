@@ -17,6 +17,8 @@ class MainFeedViewModel @Inject constructor(
 
     override val defaultTitle: String = "Самое актуальное"
 
+    override val timingName: String = "feed"
+
     override val preventClearOnRefresh: Boolean = true
 
     override fun onResume() {

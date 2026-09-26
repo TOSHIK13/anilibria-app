@@ -26,6 +26,8 @@ class MainFavoritesViewModel @Inject constructor(
 
     override val defaultTitle: String = "Обновления в избранном"
 
+    override val timingName: String = "favorites"
+
     override val loadOnCreate: Boolean = false
 
     override val preventClearOnRefresh: Boolean = true

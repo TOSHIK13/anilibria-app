@@ -25,13 +25,27 @@ class ApiConfig @Inject constructor(
     private val needConfigRelay = MutableSharedFlow<Boolean>()
     var needConfig = true
 
+    /**
+     * Есть сохранённый конфиг и сохранённый активный адрес, который в нём есть:
+     * можно стартовать сразу на нём, а проверку делать в фоне.
+     */
+    var hasSavedConfig: Boolean = false
+        private set
+
+    /** Под что сейчас собран API OkHttpClient (см. [updateActiveAddress]). */
+    private var appliedClientKey: ClientKey? = null
+
     init {
         // todo TR-274 make api config async
         runBlocking {
-            activeAddressTag = apiConfigStorage.getActive() ?: Api.DEFAULT_ADDRESS.tag
-            val initAddresses =
-                apiConfigStorage.get()?.toDomain() ?: ApiConfigData(listOf(Api.DEFAULT_ADDRESS))
+            val savedActiveTag = apiConfigStorage.getActive()
+            val savedConfig = apiConfigStorage.get()?.toDomain()
+            activeAddressTag = savedActiveTag ?: Api.DEFAULT_ADDRESS.tag
+            val initAddresses = savedConfig ?: ApiConfigData(listOf(Api.DEFAULT_ADDRESS))
             setConfig(initAddresses)
+            hasSavedConfig = savedActiveTag != null &&
+                    savedConfig?.addresses?.any { it.tag == savedActiveTag } == true
+            appliedClientKey = clientKey()
         }
     }
 
@@ -42,10 +56,37 @@ class ApiConfig @Inject constructor(
         needConfigRelay.emit(needConfig)
     }
 
+    /**
+     * Пересоздаёт API-клиенты (и Coil ImageLoader) только если изменилось то, из чего
+     * собирается OkHttpClient ([ClientKey]: адрес и его прокси). URL-ы (base, animeBase,
+     * картинки) читаются из конфига на каждый запрос и пересоздания не требуют.
+     */
     suspend fun updateActiveAddress(address: ApiAddress) {
         activeAddressTag = address.tag
         apiConfigStorage.setActive(activeAddressTag)
-        configChanger.onChange()
+        val newKey = clientKey()
+        val changed = synchronized(this) {
+            (appliedClientKey != newKey).also { appliedClientKey = newKey }
+        }
+        if (changed) {
+            configChanger.onChange()
+        }
+    }
+
+    /** Данные, от которых зависит ApiOkHttpProvider. */
+    private data class ClientKey(
+        val tag: String,
+        val inAddresses: Boolean,
+        val proxies: List<ApiProxy>,
+    )
+
+    private fun clientKey(): ClientKey {
+        val active = active
+        return ClientKey(
+            tag = active.tag,
+            inAddresses = getAddresses().any { it.tag == active.tag },
+            proxies = active.proxies.map { it.copy() },
+        )
     }
 
     fun setProxyPing(proxy: ApiProxy, ping: Float) {

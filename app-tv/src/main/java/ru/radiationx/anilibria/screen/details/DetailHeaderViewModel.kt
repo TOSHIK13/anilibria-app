@@ -1,5 +1,6 @@
 package ru.radiationx.anilibria.screen.details
 
+import ru.radiationx.data.system.LoadTiming
 import androidx.lifecycle.viewModelScope
 import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.Job
@@ -54,15 +55,22 @@ class DetailHeaderViewModel @Inject constructor(
     private var selectEpisodeJob: Job? = null
     private var favoriteDisposable: Job? = null
 
+    private val timingStart = LoadTiming.now()
+
     init {
+        LoadTiming.mark("details", "open", "id=${releaseId.id}")
         updateProgress()
         releaseInteractor.getItem(releaseId)?.also {
+            LoadTiming.span("details", "release_cached", timingStart, "poster=${it.poster?.substringAfterLast('/')}")
             updateRelease(it, emptyList())
         }
         combine(
             releaseInteractor.observeFull(releaseId),
             releaseInteractor.observeAccesses(releaseId)
         ) { release, accesses ->
+            if (!isFullLoaded) {
+                LoadTiming.span("details", "release_full", timingStart, "poster=${release.poster?.substringAfterLast('/')}")
+            }
             isFullLoaded = true
             updateRelease(release, accesses)
         }.launchIn(viewModelScope)
@@ -120,9 +128,9 @@ class DetailHeaderViewModel @Inject constructor(
             }
             coRunCatching {
                 if (release.favoriteInfo.isAdded) {
-                    favoriteRepository.deleteFavorite(releaseId)
+                    favoriteRepository.deleteFavorite(releaseId, release.favoriteInfo)
                 } else {
-                    favoriteRepository.addFavorite(releaseId)
+                    favoriteRepository.addFavorite(releaseId, release.favoriteInfo)
                 }
             }.onSuccess { favoriteInfo ->
                 currentRelease?.also { data ->

@@ -27,15 +27,37 @@ class FavoriteRepository @Inject constructor(
             .also { updateMiddleware.handle(it.data) }
     }
 
-    suspend fun deleteFavorite(releaseId: ReleaseId): FavoriteInfo = withContext(Dispatchers.IO) {
+    /**
+     * V1 add/delete не возвращают счётчик, поэтому [current] нужен,
+     * чтобы не обнулять количество добавивших в избранное.
+     */
+    suspend fun deleteFavorite(
+        releaseId: ReleaseId,
+        current: FavoriteInfo? = null,
+    ): FavoriteInfo = withContext(Dispatchers.IO) {
         favoriteApi
             .deleteFavorite(releaseId.id)
             .toDomain()
+            .withRatingFrom(current)
     }
 
-    suspend fun addFavorite(releaseId: ReleaseId): FavoriteInfo = withContext(Dispatchers.IO) {
+    suspend fun addFavorite(
+        releaseId: ReleaseId,
+        current: FavoriteInfo? = null,
+    ): FavoriteInfo = withContext(Dispatchers.IO) {
         favoriteApi
             .addFavorite(releaseId.id)
             .toDomain()
+            .withRatingFrom(current)
+    }
+
+    private fun FavoriteInfo.withRatingFrom(current: FavoriteInfo?): FavoriteInfo {
+        if (current == null) return this
+        val delta = when {
+            isAdded == current.isAdded -> 0
+            isAdded -> 1
+            else -> -1
+        }
+        return copy(rating = (current.rating + delta).coerceAtLeast(0))
     }
 }

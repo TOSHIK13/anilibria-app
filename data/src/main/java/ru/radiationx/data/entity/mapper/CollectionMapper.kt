@@ -1,5 +1,6 @@
 package ru.radiationx.data.entity.mapper
 
+import ru.radiationx.data.datasource.remote.IApiUtils
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.domain.Paginated
 import ru.radiationx.data.entity.domain.release.BlockedInfo
@@ -24,11 +25,18 @@ import java.util.Locale
 import java.util.TimeZone
 
 fun CollectionReleasesResponse.toDomain(
-    apiUtils: ApiUtils,
+    apiUtils: IApiUtils,
     apiConfig: ApiConfig,
     favoriteAdded: Boolean = false,
+): Paginated<Release> = toDomain(apiUtils, apiConfig.baseImagesUrl, apiConfig.siteUrl, favoriteAdded)
+
+fun CollectionReleasesResponse.toDomain(
+    apiUtils: IApiUtils,
+    imagesBaseUrl: String,
+    siteUrl: String,
+    favoriteAdded: Boolean = false,
 ): Paginated<Release> = Paginated(
-    data = data.map { it.toDomain(apiUtils, apiConfig, favoriteAdded) },
+    data = data.map { it.toDomain(apiUtils, imagesBaseUrl, siteUrl, favoriteAdded) },
     page = meta?.pagination?.currentPage,
     allPages = meta?.pagination?.totalPages,
     perPage = meta?.pagination?.perPage,
@@ -36,8 +44,20 @@ fun CollectionReleasesResponse.toDomain(
 )
 
 fun CollectionReleaseResponse.toDomain(
-    apiUtils: ApiUtils,
+    apiUtils: IApiUtils,
     apiConfig: ApiConfig,
+    favoriteAdded: Boolean = false,
+): Release = toDomain(
+    apiUtils = apiUtils,
+    imagesBaseUrl = apiConfig.baseImagesUrl,
+    siteUrl = apiConfig.siteUrl,
+    favoriteAdded = favoriteAdded,
+)
+
+fun CollectionReleaseResponse.toDomain(
+    apiUtils: IApiUtils,
+    imagesBaseUrl: String,
+    siteUrl: String,
     favoriteAdded: Boolean = false,
 ): Release {
     val names = listOfNotNull(
@@ -51,8 +71,9 @@ fun CollectionReleaseResponse.toDomain(
         code = ReleaseCode(releaseCode),
         names = names,
         series = episodesTotal?.toString(),
-        poster = poster?.toPosterUrl(apiConfig),
-        torrentUpdate = 0,
+        poster = poster?.toPosterUrl(imagesBaseUrl),
+        // fresh_at == legacy release.last (unix seconds): даты обновления и бейджи новых серий
+        torrentUpdate = (freshAt ?: updatedAt)?.isoToUnixSeconds() ?: 0,
         status = null,
         statusCode = if (isOngoing == true) {
             Release.STATUS_CODE_PROGRESS
@@ -68,8 +89,8 @@ fun CollectionReleaseResponse.toDomain(
         days = listOfNotNull(publishDay?.value?.toString()),
         description = description?.trim(),
         announce = notification?.trim(),
-        favoriteInfo = FavoriteInfo(0, favoriteAdded),
-        link = releaseCode.takeIf { it.isNotEmpty() }?.let { "${apiConfig.siteUrl}/release/$it.html" },
+        favoriteInfo = FavoriteInfo(addedInUsersFavorites ?: 0, favoriteAdded),
+        link = releaseCode.takeIf { it.isNotEmpty() }?.let { "$siteUrl/release/$it.html" },
         franchises = emptyList(),
         showDonateDialog = false,
         blockedInfo = BlockedInfo(
@@ -85,17 +106,28 @@ fun CollectionReleaseResponse.toDomain(
     )
 }
 
-private fun CollectionImageResponse.toPosterUrl(apiConfig: ApiConfig): String? {
+/**
+ * Один канонический вариант постера для всех v1-ответов (лента, каталог, детали),
+ * чтобы у Coil был один и тот же ключ кэша и постер в деталях не перезагружался.
+ */
+internal fun CollectionImageResponse.toPosterUrl(imagesBaseUrl: String): String? {
     val path = optimized?.preview
         ?: preview
         ?: optimized?.src
         ?: src
         ?: optimized?.thumbnail
         ?: thumbnail
-    return path?.let {
-        if (it.startsWith("http")) it else it.appendBaseUrl(apiConfig.baseImagesUrl)
-    }
+    return path?.takeIf { it.isNotBlank() }?.toImageUrl(imagesBaseUrl)
 }
+
+/** Относительный путь v1 (`/storage/...`) + база картинок без двойного слэша. */
+internal fun String.toImageUrl(imagesBaseUrl: String): String {
+    if (startsWith("http://") || startsWith("https://")) return this
+    if (imagesBaseUrl.isBlank()) return this
+    return "${imagesBaseUrl.trimEnd('/')}/${trimStart('/')}"
+}
+
+internal fun String.isoToUnixSeconds(): Int? = isoToDate()?.let { (it.time / 1000L).toInt() }
 
 fun CollectionReleaseResponse.toSuggestionDomain(
     apiUtils: ApiUtils,
@@ -108,7 +140,7 @@ fun CollectionReleaseResponse.toSuggestionDomain(
         name?.english,
         name?.alternative,
     ).map { apiUtils.escapeHtml(it).toString() },
-    poster = poster?.toPosterUrl(apiConfig)
+    poster = poster?.toPosterUrl(apiConfig.baseImagesUrl)
 )
 
 private fun CollectionEpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Episode = Episode(
