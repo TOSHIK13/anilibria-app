@@ -6,6 +6,7 @@ import ru.radiationx.data.ApiClient
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.fetchResponse
+import ru.radiationx.data.entity.response.view.ViewHistoryPageResponse
 import ru.radiationx.data.entity.response.view.ViewTimecodeDeleteRequest
 import ru.radiationx.data.entity.response.view.ViewTimecodeResponse
 import ru.radiationx.data.entity.response.view.ViewTimecodeUpdateRequest
@@ -23,6 +24,9 @@ class ViewsApi @Inject constructor(
     private val accountUrl: String
         get() = "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/views/timecodes"
 
+    private val historyUrl: String
+        get() = "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/views/history"
+
     suspend fun getReleaseTimecodes(releaseId: Int): List<ViewTimecodeResponse> {
         return client
             .get("$animeUrl/releases/$releaseId/episodes/timecodes", emptyMap())
@@ -32,6 +36,17 @@ class ViewsApi @Inject constructor(
     suspend fun getEpisodeTimecode(releaseEpisodeId: String): ViewTimecodeResponse {
         return client
             .get("$animeUrl/releases/episodes/$releaseEpisodeId/timecode", emptyMap())
+            .fetchResponse(moshi)
+    }
+
+    suspend fun getHistory(page: Int, limit: Int, include: String?): ViewHistoryPageResponse {
+        val args = buildMap {
+            put("page", page.toString())
+            put("limit", limit.toString())
+            include?.also { put("include", it) }
+        }
+        return client
+            .get(historyUrl, args)
             .fetchResponse(moshi)
     }
 
