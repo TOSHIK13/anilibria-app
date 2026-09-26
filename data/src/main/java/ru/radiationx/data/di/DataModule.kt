@@ -97,6 +97,7 @@ import ru.radiationx.data.datasource.storage.SocialAuthStorage
 import ru.radiationx.data.datasource.storage.TeamsStorage
 import ru.radiationx.data.datasource.storage.UserStorage
 import ru.radiationx.data.datasource.storage.YearsStorage
+import ru.radiationx.data.datasource.storage.WatchHistoryStorage
 import ru.radiationx.data.di.providers.ApiClientWrapper
 import ru.radiationx.data.di.providers.ApiNetworkClient
 import ru.radiationx.data.di.providers.ApiOkHttpProvider
@@ -197,6 +198,7 @@ class DataModule(context: Context) : QuillModule() {
         single<UnauthorizedInterceptor>()
         single<ApiConfig>()
         single<ApiConfigStorage>()
+        single<WatchHistoryStorage>()
 
 
         single<PlayerOkHttpProvider>()

@@ -52,7 +52,9 @@ adb logcat -d -s LoadTiming ActivityTaskManager
   `address_switched`, `address_none`.
 - `[config] check <tag>` — проверка адреса через `/api/v1/app/status`.
 - `[main] <row> page=N data|rendered|error` — ряды главной
-  (`feed`, `youtube`, `schedule`, `favorites`).
+  (`continue`, `feed`, `youtube`, `schedule`, `favorites`).
+- `[watch] history restored|loaded|error <ms> items=N` — история просмотра:
+  снимок с диска и загрузка `views/history` (все страницы).
 - `[details]` — `open`, `release_cached` (из кэша ленты), `release_full`,
   `poster_start` / `poster_loaded` с именем файла: два разных файла подряд
   означают перезагрузку постера.
