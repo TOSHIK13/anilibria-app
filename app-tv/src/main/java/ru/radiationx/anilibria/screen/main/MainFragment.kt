@@ -1,5 +1,6 @@
 package ru.radiationx.anilibria.screen.main
 
+import ru.radiationx.data.system.LoadTiming
 import android.os.Bundle
 import android.view.View
 import androidx.leanback.app.RowsSupportFragment
@@ -48,6 +49,7 @@ class MainFragment : RowsSupportFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        LoadTiming.markOnce("startup", "main_shown")
 
         viewLifecycleOwner.lifecycle.addObserver(mainViewModel)
         viewLifecycleOwner.lifecycle.addObserver(feedViewModel)

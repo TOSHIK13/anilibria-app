@@ -1,5 +1,6 @@
 package ru.radiationx.anilibria.ui.presenter
 
+import ru.radiationx.data.system.LoadTiming
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
@@ -159,6 +160,11 @@ class LibriaReleaseViewHolder(
             binding.rowReleaseActionPlay.requestFocus()
         }
 
-        binding.rowReleaseImageCard.showImageUrl(details.image)
+        binding.rowReleaseImageCard.showImageUrl(details.image) {
+            if (LoadTiming.enabled) {
+                onStart { LoadTiming.mark("details", "poster_start", "file=${details.image.substringAfterLast('/')}") }
+                onSuccess { LoadTiming.mark("details", "poster_loaded", "file=${details.image.substringAfterLast('/')}") }
+            }
+        }
     }
 }

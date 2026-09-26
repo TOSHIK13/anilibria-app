@@ -10,6 +10,7 @@ import ru.mintrocket.lib.mintpermissions.ext.initMintPermissions
 import ru.mintrocket.lib.mintpermissions.flows.ext.initMintPermissionsFlow
 import ru.radiationx.anilibria.di.AppModule
 import ru.radiationx.data.di.DataModule
+import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.quill.Quill
 import timber.log.Timber
 
@@ -28,6 +29,8 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        LoadTiming.init(BuildConfig.DEBUG)
+        LoadTiming.mark("startup", "app_create")
 
 
 
@@ -40,6 +43,7 @@ class App : Application() {
             initInMainProcess()
         }
         appCreateAction.value = true
+        LoadTiming.mark("startup", "app_created")
     }
 
     private fun initYandexAppMetrica() {

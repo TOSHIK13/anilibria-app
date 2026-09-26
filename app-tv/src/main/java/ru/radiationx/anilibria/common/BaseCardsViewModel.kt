@@ -1,5 +1,6 @@
 package ru.radiationx.anilibria.common
 
+import android.view.Choreographer
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -7,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.radiationx.anilibria.screen.LifecycleViewModel
+import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
 
@@ -20,6 +22,9 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
     protected open val progressOnRefresh = true
     protected open val preventClearOnRefresh = false
     open val defaultTitle = "Cards"
+
+    /** Имя ряда для LoadTiming (`[main] feed page=1 data ...`), null — не логировать. */
+    protected open val timingName: String? = null
 
     protected open val loadMoreCard = LinkCard("Загрузить еще")
     protected open val loadingCard = LoadingCard("Загрузка данных")
@@ -91,11 +96,17 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
             if (requestPage != firstPage || progressOnRefresh) {
                 cardsData.value = currentCards + loadingCard
             }
+            val timingStart = LoadTiming.now()
+            val timingName = timingName
             coRunCatching {
                 withContext(Dispatchers.IO) {
                     getLoader(requestPage)
                 }
             }.onSuccess { newCards ->
+                if (timingName != null) {
+                    LoadTiming.span("main", "$timingName page=$requestPage data", timingStart, "items=${newCards.size}")
+                    LoadTiming.markOnce("startup", "first_row_data", timingName)
+                }
                 val isFirstPage = requestPage <= 1
                 val needsModify = if (isFirstPage) {
                     needsModify(newCards, currentCards)
@@ -119,8 +130,16 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
                         currentCards
                     }
                 }
+                if (timingName != null && LoadTiming.enabled) {
+                    Choreographer.getInstance().postFrameCallback {
+                        LoadTiming.span("main", "$timingName page=$requestPage rendered", timingStart)
+                    }
+                }
             }.onFailure {
                 Timber.e(it)
+                if (timingName != null) {
+                    LoadTiming.span("main", "$timingName page=$requestPage error", timingStart, it.javaClass.simpleName)
+                }
                 cardsData.value = currentCards + getErrorCard(it)
             }
         }

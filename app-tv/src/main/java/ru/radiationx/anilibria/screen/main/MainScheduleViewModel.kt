@@ -28,6 +28,8 @@ class MainScheduleViewModel @Inject constructor(
 
     override val defaultTitle: String = "Ожидается сегодня"
 
+    override val timingName: String = "schedule"
+
     override val loadMoreCard: LinkCard = LinkCard("Открыть полное расписание")
 
     override val preventClearOnRefresh: Boolean = true

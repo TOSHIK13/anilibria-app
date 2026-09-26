@@ -16,6 +16,7 @@ import ru.radiationx.data.sslcompat.appendSslCompat
 import ru.radiationx.data.system.AppCookieJar
 import ru.radiationx.data.system.Client
 import ru.radiationx.data.system.appendSslCompatAnalytics
+import ru.radiationx.data.system.LoadTimingEventListener
 import ru.radiationx.data.system.appendTimeouts
 import java.net.InetSocketAddress
 import java.net.Proxy
@@ -37,6 +38,7 @@ class ApiOkHttpProvider @Inject constructor(
         .appendSslCompatAnalytics(sslCompat, sslCompatAnalytics)
         .appendSslCompat(sslCompat)
         .appendTimeouts()
+        .eventListenerFactory(LoadTimingEventListener.factory("api"))
         .apply {
             val availableAddress =
                 apiConfig.getAddresses().map { it.tag }.contains(apiConfig.active.tag)

@@ -15,6 +15,8 @@ class MainYouTubeViewModel @Inject constructor(
 
     override val defaultTitle: String = "Обновления на YouTube"
 
+    override val timingName: String = "youtube"
+
     override val preventClearOnRefresh: Boolean = true
 
     override fun onResume() {

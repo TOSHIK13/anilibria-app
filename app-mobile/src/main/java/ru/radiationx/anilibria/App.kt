@@ -16,6 +16,7 @@ import ru.radiationx.anilibria.di.AppModule
 import ru.radiationx.data.datasource.holders.PreferencesHolder
 import ru.radiationx.data.di.DataModule
 import ru.radiationx.data.migration.MigrationDataSource
+import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.quill.Quill
 import ru.radiationx.quill.get
 import timber.log.Timber
@@ -25,6 +26,7 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        LoadTiming.init(BuildConfig.DEBUG)
         initYandexAppMetrica()
 
         if (isMainProcess()) {
