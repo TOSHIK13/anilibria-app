@@ -9,6 +9,8 @@ data class LibriaDetails(
     val titleEn: String,
     /** Плашки под названием: первая — статус релиза. */
     val chips: List<DetailChip>,
+    /** «2023 · ТВ · 23 эп.» для компактной шапки (ряды в фокусе); неизвестное опускается. */
+    val compactMeta: String,
     /** «Жанр · Жанр · 1 234 в избранном», пусто — строки нет. */
     val infoLine: String,
     val description: String,

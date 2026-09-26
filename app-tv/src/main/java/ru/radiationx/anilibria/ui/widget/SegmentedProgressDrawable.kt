@@ -20,7 +20,11 @@ import android.graphics.drawable.Drawable
  * Если сегменты слишком узкие (длинные сериалы) — сплошная полоса в тех же пропорциях.
  * Бейдж (по приоритету): «НОВАЯ» > «✓» > «ФИЛЬМ».
  */
-class SegmentedProgressDrawable(context: Context) : Drawable() {
+class SegmentedProgressDrawable @JvmOverloads constructor(
+    context: Context,
+    /** Только полоса во всю ширину [getBounds] (без затенения, отступов и бейджа) — карточки франшизы. */
+    private val barOnly: Boolean = false,
+) : Drawable() {
 
     enum class Badge { NEW, COMPLETED, FILM }
 
@@ -28,7 +32,7 @@ class SegmentedProgressDrawable(context: Context) : Drawable() {
     private val scaledDensity = context.resources.displayMetrics.scaledDensity
 
     private val shadeHeight = 36 * density
-    private val barInset = 6 * density
+    private val barInset = if (barOnly) 0f else 6 * density
     private val barHeight = 4 * density
     private val segmentGap = 1.5f * density
     private val segmentCorner = 1 * density
@@ -111,7 +115,7 @@ class SegmentedProgressDrawable(context: Context) : Drawable() {
 
     override fun draw(canvas: Canvas) {
         if (showProgress) {
-            drawShade(canvas)
+            if (!barOnly) drawShade(canvas)
             drawBar(canvas)
         }
         badge?.let { drawBadge(canvas, it) }

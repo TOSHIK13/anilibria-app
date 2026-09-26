@@ -20,7 +20,7 @@ class ContinueListRow(id: Long, header: HeaderItem, adapter: ObjectAdapter) : Li
  * рисует в своём поле 3dp вокруг кадра, поэтому промежуток ряда уменьшен на 2×3dp.
  * Зум и затемнение — как у остальных рядов.
  */
-class ContinueListRowPresenter : CustomListRowPresenter() {
+open class ContinueListRowPresenter : CustomListRowPresenter() {
 
     init {
         shadowEnabled = false

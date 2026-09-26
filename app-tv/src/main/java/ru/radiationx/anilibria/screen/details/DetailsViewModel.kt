@@ -33,8 +33,9 @@ class DetailsViewModel @Inject constructor(
 
     override val rowIds: List<Long> = listOf(RELEASE_ROW_ID, RELATED_ROW_ID, RECOMMENDS_ROW_ID)
 
+    // Ряд франшизы добавляется, только когда франшиза точно есть (пустого ряда не бывает).
     override val availableRows: MutableSet<Long> =
-        mutableSetOf(RELEASE_ROW_ID, RELATED_ROW_ID, RECOMMENDS_ROW_ID)
+        mutableSetOf(RELEASE_ROW_ID, RECOMMENDS_ROW_ID)
 
     init {
         loadRelease()
@@ -54,20 +55,17 @@ class DetailsViewModel @Inject constructor(
                 }
             }
             .map { release ->
-                // V1 не отдаёт franchises в релизе — части берутся из franchises/release/{id}.
-                release.getFranchisesIds()
-                    .ifEmpty {
-                        releaseInteractor.loadFranchises(release.id)
-                            .firstOrNull()
-                            ?.releases
-                            ?.map { it.id }
-                            .orEmpty()
-                    }
-                    .filter { it != release.id }
+                // Ряд франшизы — только по V1 franchises/release/{id} (в релизе V1 их нет),
+                // и только если кроме самого релиза есть другие части.
+                releaseInteractor.loadFranchises(release.id)
+                    .firstOrNull()
+                    ?.releases
+                    .orEmpty()
+                    .any { it.id != release.id }
             }
             .distinctUntilChanged()
             .onEach {
-                updateAvailableRow(RELATED_ROW_ID, it.isNotEmpty())
+                updateAvailableRow(RELATED_ROW_ID, it)
             }
             .launchIn(viewModelScope)
     }

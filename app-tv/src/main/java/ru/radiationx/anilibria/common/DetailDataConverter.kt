@@ -49,6 +49,7 @@ class DetailDataConverter @Inject constructor() {
             titleRu = title.orEmpty(),
             titleEn = nameEnglish?.takeIf { !it.equals(title, ignoreCase = true) }.orEmpty(),
             chips = chips(released, total),
+            compactMeta = compactMeta(released, total),
             infoLine = infoLine(),
             description = description.orEmpty().parseAsHtml().toString().trim()
                 .trim('"'),
@@ -122,6 +123,15 @@ class DetailDataConverter @Inject constructor() {
         } ?: return null
         val duration = averageEpisodeDurationMin?.let { " по $it мин" }.orEmpty()
         return count + duration
+    }
+
+    private fun Release.compactMeta(released: Int?, total: Int?): String {
+        val episodes = if (isFilm()) null else (total ?: released)?.let { "$it эп." }
+        return listOfNotNull(
+            year?.trim()?.takeIf { it.isNotEmpty() },
+            types.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() },
+            episodes
+        ).joinToString(" · ")
     }
 
     private fun Release.infoLine(): String {
