@@ -13,8 +13,12 @@ import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRowPresenter
 import androidx.leanback.widget.PageRow
+import androidx.lifecycle.lifecycleScope
 import androidx.transition.Fade
 import androidx.transition.TransitionManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.ui.widget.BrowseTitleView
 import ru.radiationx.quill.viewModel
@@ -24,12 +28,23 @@ import ru.radiationx.shared.ktx.android.subscribeTo
 
 class MainPagesFragment : BrowseSupportFragment() {
 
+    private companion object {
+        var initialRevealHandled = false
+        const val INITIAL_REVEAL_TIMEOUT_MS = 1_500L
+        const val INITIAL_REVEAL_FADE_MS = 150L
+    }
+
     private val menuPresenter by lazy { ListRowPresenter() }
     private val menuAdapter by lazy { ArrayObjectAdapter(menuPresenter) }
     private var lastSelectedPosition = -1
     private val fragmentFactory by lazy { MainPagesFragmentFactory() }
 
     private val viewModel by viewModel<MainPagesViewModel>()
+
+    /** Холодный старт: «Главная» скрыта, пока курсор не встанет на «Продолжить просмотр». */
+    private var revealPending = false
+    private var revealFallbackJob: Job? = null
+    private var afterHeadersHidden: (() -> Unit)? = null
 
     private var mOnAlertClickedListener: View.OnClickListener? = null
     private var mOnOtherClickedListener: View.OnClickListener? = null
@@ -74,6 +89,14 @@ class MainPagesFragment : BrowseSupportFragment() {
                 }
                 title = getSelectedTitle()
                 lastSelectedPosition = selectedPosition
+                if (!withHeaders) {
+                    afterHeadersHidden?.also { action ->
+                        afterHeadersHidden = null
+                        action()
+                    }
+                    // Показываем кадром позже, когда фокус уже на месте.
+                    view?.post { revealInitialScreen() }
+                }
             }
         })
 
@@ -110,6 +133,16 @@ class MainPagesFragment : BrowseSupportFragment() {
 
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
 
+        if (!initialRevealHandled && savedInstanceState == null) {
+            initialRevealHandled = true
+            revealPending = true
+            view.alpha = 0f
+            revealFallbackJob = viewLifecycleOwner.lifecycleScope.launch {
+                delay(INITIAL_REVEAL_TIMEOUT_MS)
+                revealInitialScreen()
+            }
+        }
+
         subscribeTo(viewModel.hasUpdatesData) {
             val alert = if (it) "Обновление" else null
             setAlert(alert)
@@ -123,6 +156,20 @@ class MainPagesFragment : BrowseSupportFragment() {
                 ColorStateList.valueOf(tview.context.getCompatColor(R.color.dark_contrast_icon))
             )
         }
+    }
+
+    /** Сворачивает меню, после чего выполняет [onHidden] (стартовый фокус на контенте). */
+    fun hideHeadersForInitialFocus(onHidden: () -> Unit) {
+        afterHeadersHidden = onHidden
+        startHeadersTransition(false)
+    }
+
+    /** Показывает «Главную» после стартовой расстановки фокуса (или по таймауту). */
+    fun revealInitialScreen() {
+        if (!revealPending) return
+        revealPending = false
+        revealFallbackJob?.cancel()
+        view?.animate()?.alpha(1f)?.setDuration(INITIAL_REVEAL_FADE_MS)?.start()
     }
 
     override fun onStart() {

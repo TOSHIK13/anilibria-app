@@ -6,10 +6,16 @@ import android.view.View
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.ListRow
+import androidx.leanback.widget.ListRowPresenter
 import androidx.leanback.widget.OnItemViewSelectedListener
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
@@ -18,6 +24,7 @@ import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
 import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
+import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
 import ru.radiationx.quill.inject
@@ -26,6 +33,12 @@ import ru.radiationx.shared_app.di.quillParentViewModel
 
 
 class MainFragment : RowsSupportFragment() {
+
+    private companion object {
+        /** Стартовый фокус на «Продолжить просмотр» ставится один раз за процесс. */
+        var initialFocusDone = false
+        const val INITIAL_FOCUS_TIMEOUT_MS = 1_500L
+    }
 
     private val rowsPresenter by lazy { CustomListRowPresenter() }
     private val rowsAdapter by lazy { ArrayObjectAdapter(rowsPresenter) }
@@ -95,6 +108,36 @@ class MainFragment : RowsSupportFragment() {
                 row
             }
             rowsAdapter.setItems(rows, RowDiffCallback)
+        }
+
+        focusContinueRowOnStart()
+    }
+
+    /**
+     * При запуске курсор сразу на первом релизе «Продолжить просмотр», а не в меню.
+     * Только если ряд есть и пользователь ещё не ушёл из меню сам.
+     */
+    private fun focusContinueRowOnStart() {
+        if (initialFocusDone) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val ready = withTimeoutOrNull(INITIAL_FOCUS_TIMEOUT_MS) {
+                mainViewModel.rowListData.first { it.firstOrNull() == MainViewModel.CONTINUE_ROW_ID }
+                continueViewModel.cardsData.first { cards -> cards.any { it is LibriaCard } }
+                // Ряд должен уже стоять первым в адаптере, иначе фокус уйдёт на соседний ряд.
+                while ((rowsAdapter.takeIf { it.size() > 0 }?.get(0) as? ListRow)?.id != MainViewModel.CONTINUE_ROW_ID) {
+                    delay(16)
+                }
+            }
+            initialFocusDone = true
+            val pages = parentFragment as? MainPagesFragment
+            if (ready == null || pages == null || !pages.isShowingHeaders) {
+                pages?.revealInitialScreen()
+                return@launch
+            }
+            // Выбор ставим после сворачивания меню: leanback по окончании перехода сам двигает фокус.
+            pages.hideHeadersForInitialFocus {
+                setSelectedPosition(0, false, ListRowPresenter.SelectItemViewHolderTask(0))
+            }
         }
     }
 
