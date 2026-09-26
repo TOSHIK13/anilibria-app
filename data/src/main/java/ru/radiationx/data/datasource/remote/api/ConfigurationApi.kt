@@ -1,6 +1,7 @@
 package ru.radiationx.data.datasource.remote.api
 
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -8,32 +9,47 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEmpty
 import kotlinx.coroutines.withTimeout
+import ru.radiationx.data.ApiClient
 import ru.radiationx.data.MainClient
 import ru.radiationx.data.datasource.remote.Api
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiAddress
 import ru.radiationx.data.datasource.remote.fetchApiResponse
 import ru.radiationx.data.datasource.remote.fetchResponse
+import ru.radiationx.data.entity.response.app.V1AppStatusResponse
 import ru.radiationx.data.entity.response.config.ApiConfigResponse
+import ru.radiationx.data.system.LoadTiming
 import javax.inject.Inject
 
 class ConfigurationApi @Inject constructor(
     @MainClient private val mainClient: IClient,
+    @ApiClient private val apiClient: IClient,
     private val moshi: Moshi,
 ) {
 
+    /**
+     * Одна лёгкая v1-проверка `/api/v1/app/status` вместо двух последовательных
+     * (legacy `query=empty` + v1 years). Идёт через API-клиент, чтобы прогретое
+     * соединение к v1-хосту переиспользовалось следующими запросами.
+     */
     suspend fun checkAvailable(address: ApiAddress): Boolean {
-        val checks = mutableListOf<suspend () -> Boolean>()
-        if (address.api.isNotBlank()) {
-            checks += suspend { checkLegacyAvailable(address.api) }
+        val v1Base = address.resolvePublicV1Base()
+        val startedAt = LoadTiming.now()
+        return try {
+            val status = withTimeout(10_000) {
+                apiClient
+                    .get("$v1Base/api/v1/app/status", emptyMap())
+                    .fetchResponse<V1AppStatusResponse>(moshi)
+            }
+            (status.isAlive != false).also {
+                LoadTiming.span("config", "check ${address.tag}", startedAt, "alive=$it")
+            }
+        } catch (ex: CancellationException) {
+            throw ex
+        } catch (ex: Throwable) {
+            LoadTiming.span("config", "check ${address.tag}", startedAt, "error=${ex.javaClass.simpleName}")
+            throw ex
         }
-        address.resolvePublicV1Base()?.also { v1Base ->
-            checks += suspend { checkV1Available(v1Base) }
-        }
-        if (checks.isEmpty()) {
-            return false
-        }
-        return checks.all { check -> check() }
     }
 
     suspend fun getConfiguration(): ApiConfigResponse {
@@ -84,32 +100,11 @@ class ConfigurationApi @Inject constructor(
         .get(url, emptyMap())
         .fetchResponse(moshi)
 
-    private suspend fun checkLegacyAvailable(apiUrl: String): Boolean {
-        return withTimeout(15_000) {
-            mainClient
-                .postFull(apiUrl, mapOf("query" to "empty"))
-                .let { true }
-        }
-    }
-
-    private suspend fun checkV1Available(baseUrl: String): Boolean {
-        val normalizedBaseUrl = baseUrl.trimEnd('/')
-        return withTimeout(15_000) {
-            mainClient
-                .getRaw("$normalizedBaseUrl/api/v1/anime/catalog/references/years", emptyMap())
-                .use { true }
-        }
-    }
-
-    private fun ApiAddress.resolvePublicV1Base(): String? {
-        return animeBase
-            ?.trim()
-            ?.trimEnd('/')
-            ?.takeIf { it.isNotEmpty() }
-            ?: accountsBase
-                ?.trim()
-                ?.trimEnd('/')
-                ?.takeIf { it.isNotEmpty() }
+    /** Как в [ru.radiationx.data.datasource.remote.address.ApiConfig.animeBaseUrl]: без animeBase — дефолтный v1-хост. */
+    private fun ApiAddress.resolvePublicV1Base(): String {
+        return listOf(animeBase, Api.DEFAULT_ADDRESS.animeBase)
+            .firstNotNullOfOrNull { base -> base?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() } }
+            .orEmpty()
     }
 
 }

@@ -25,13 +25,27 @@ class ApiConfig @Inject constructor(
     private val needConfigRelay = MutableSharedFlow<Boolean>()
     var needConfig = true
 
+    /**
+     * Есть сохранённый конфиг и сохранённый активный адрес, который в нём есть:
+     * можно стартовать сразу на нём, а проверку делать в фоне.
+     */
+    var hasSavedConfig: Boolean = false
+        private set
+
+    /** Адрес, под который сейчас собраны API-клиенты (см. [updateActiveAddress]). */
+    private var appliedAddress: ApiAddress? = null
+
     init {
         // todo TR-274 make api config async
         runBlocking {
-            activeAddressTag = apiConfigStorage.getActive() ?: Api.DEFAULT_ADDRESS.tag
-            val initAddresses =
-                apiConfigStorage.get()?.toDomain() ?: ApiConfigData(listOf(Api.DEFAULT_ADDRESS))
+            val savedActiveTag = apiConfigStorage.getActive()
+            val savedConfig = apiConfigStorage.get()?.toDomain()
+            activeAddressTag = savedActiveTag ?: Api.DEFAULT_ADDRESS.tag
+            val initAddresses = savedConfig ?: ApiConfigData(listOf(Api.DEFAULT_ADDRESS))
             setConfig(initAddresses)
+            hasSavedConfig = savedActiveTag != null &&
+                    savedConfig?.addresses?.any { it.tag == savedActiveTag } == true
+            appliedAddress = active
         }
     }
 
@@ -42,10 +56,20 @@ class ApiConfig @Inject constructor(
         needConfigRelay.emit(needConfig)
     }
 
+    /**
+     * Пересоздаёт API-клиенты (и ImageLoader) только если активный адрес реально
+     * поменялся: другой тег или другие данные адреса после обновления конфига.
+     */
     suspend fun updateActiveAddress(address: ApiAddress) {
         activeAddressTag = address.tag
         apiConfigStorage.setActive(activeAddressTag)
-        configChanger.onChange()
+        val newActive = active
+        val changed = synchronized(this) {
+            (appliedAddress != newActive).also { appliedAddress = newActive }
+        }
+        if (changed) {
+            configChanger.onChange()
+        }
     }
 
     fun setProxyPing(proxy: ApiProxy, ping: Float) {

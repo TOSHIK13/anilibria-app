@@ -27,6 +27,7 @@ import ru.radiationx.data.datasource.remote.address.ApiAddress
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.common.ConfigScreenState
 import ru.radiationx.data.repository.ConfigurationRepository
+import ru.radiationx.data.system.LoadTiming
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -49,9 +50,26 @@ class ConfiguringInteractor @Inject constructor(
     private var isFullSuccess = false
     private var startAddressTag = apiConfig.tag
 
+    /**
+     * Вызывается перед успешным завершением (переходом на главную).
+     * TV: ждёт окончания вступительной анимации, чтобы переход был max(анимация, проверка).
+     */
+    private var completionGate: (suspend () -> Unit)? = null
+
     fun observeScreenState(): Flow<ConfigScreenState> = screenState
 
+    fun setCompletionGate(gate: suspend () -> Unit) {
+        completionGate = gate
+    }
+
+    private suspend fun completeConfig() {
+        completionGate?.invoke()
+        LoadTiming.mark("startup", "config_done", "tag=${apiConfig.tag}")
+        apiConfig.updateNeedConfig(false)
+    }
+
     fun initCheck() {
+        LoadTiming.mark("startup", "config_start")
         startAddressTag = apiConfig.tag
         fullTimeCounter.start()
         updateState(initialState)
@@ -123,6 +141,7 @@ class ConfiguringInteractor @Inject constructor(
             runCatching {
                 configurationRepository.getConfiguration()
             }.onSuccess {
+                LoadTiming.mark("startup", "config_loaded")
                 analytics.loadConfig(timeCounter.elapsed(), true, null)
                 val addresses = apiConfig.getAddresses()
                 val proxies = addresses.sumOf { it.proxies.size }
@@ -159,13 +178,14 @@ class ConfiguringInteractor @Inject constructor(
             runCatching {
                 mergeAvailCheck(addresses)
             }.onSuccess { activeAddress ->
+                LoadTiming.mark("startup", "address_ok", "tag=${activeAddress.tag}")
                 isFullSuccess = true
                 analytics.checkAvail(activeAddress.tag, timeCounter.elapsed(), true, null)
                 screenState.update {
                     it.copy(status = "Найден доступный адрес")
                 }
                 apiConfig.updateActiveAddress(activeAddress)
-                apiConfig.updateNeedConfig(false)
+                completeConfig()
             }.onFailure { error ->
                 analytics.checkAvail(null, timeCounter.elapsed(), false, error)
                 Timber.e(error)
@@ -237,7 +257,7 @@ class ConfiguringInteractor @Inject constructor(
                             status = "Доступнные прокси: ${proxies.size}; будет использован ${bestProxy.first.tag} адреса ${addressByProxy.tag}"
                         )
                     }
-                    apiConfig.updateNeedConfig(false)
+                    completeConfig()
                 } else {
                     screenState.update {
                         it.copy(
@@ -261,15 +281,9 @@ class ConfiguringInteractor @Inject constructor(
     }
 
     private suspend fun mergeAvailCheck(addresses: List<ApiAddress>): ApiAddress {
-        val adressesSources = addresses.map { address ->
-            flow { emit(configurationRepository.checkAvailable(address)) }
-                .catch { emit(false) }
-                .map { Pair(address, it) }
-        }
-        return merge(*adressesSources.toTypedArray())
-            .filter { it.second }
-            .map { it.first }
-            .first()
+        // NoSuchElementException -> переход к проверке прокси
+        return configurationRepository.findFirstAvailable(addresses)
+            ?: throw NoSuchElementException("No available addresses")
     }
 
     private fun State.toAnalyticsState(): AnalyticsConfigState = when (this) {

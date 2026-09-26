@@ -21,11 +21,13 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
 
     private val viewModel: ConfiguringViewModel by viewModel()
 
+    private var introFinished = false
+
     private val startTransitionListener = object : MotionLayoutListener() {
         override fun onTransitionCompleted(motionLayout: MotionLayout, currentId: Int) {
             when (currentId) {
                 R.id.logo_end -> motionLayout.transitionToState(R.id.logo_end_progress)
-                R.id.logo_end_progress -> viewModel.startConfiguring()
+                R.id.logo_end_progress -> onIntroFinished()
             }
         }
     }
@@ -47,6 +49,9 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
         binding.configActionSkip.setOnClickListener { viewModel.skipCheck() }
         binding.configActionNext.setOnClickListener { viewModel.nextCheck() }
 
+        // проверка идёт параллельно анимации, а не после неё
+        viewModel.startConfiguring()
+
         binding.mainConstraint.post {
             binding.mainConstraint.transitionToEnd()
             binding.mainConstraint.setTransitionListener(startTransitionListener)
@@ -55,7 +60,16 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
         subscribeTo(viewModel.completeEvent) { startCompleteTransition() }
     }
 
+    private fun onIntroFinished() {
+        if (introFinished) return
+        introFinished = true
+        viewModel.screenStateData.value?.also { updateScreen(it) }
+        viewModel.onIntroAnimationFinished()
+    }
+
     private fun updateScreen(screenState: ConfigScreenState) {
+        // не мешаем MotionLayout-анимации: состояние применится после неё
+        if (!introFinished) return
         binding.configErrorText.text = screenState.status
         binding.configActionNext.setText(
             if (screenState.hasNext) {
