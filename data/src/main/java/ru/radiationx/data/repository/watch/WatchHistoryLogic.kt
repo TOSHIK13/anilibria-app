@@ -100,7 +100,7 @@ object WatchHistoryLogic {
 
     /**
      * Релизы по убыванию времени последнего просмотра, по одной (последней) серии на релиз.
-     * Полностью досмотренные релизы (все [ReleaseWatchProgress.total] серий отмечены) пропускаются.
+     * Досмотренное не отсекается: скрытие — только по коллекциям ([filterHidden]).
      */
     fun continueList(episodes: Collection<WatchHistoryEpisode>): List<ContinueWatchingItem> =
         episodes
@@ -109,7 +109,6 @@ object WatchHistoryLogic {
             .mapNotNull { items ->
                 val total = items.mapNotNull { it.episodesTotal }.maxOrNull()
                 val watched = items.count { it.isWatched }
-                if (total != null && watched >= total) return@mapNotNull null
                 val last = items.maxWithOrNull(
                     compareBy<WatchHistoryEpisode> { it.updatedAt }.thenBy { it.ordinal ?: 0f }
                 ) ?: return@mapNotNull null

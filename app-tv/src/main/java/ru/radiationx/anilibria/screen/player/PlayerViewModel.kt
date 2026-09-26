@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import ru.radiationx.anilibria.common.DetailDataConverter
 import ru.radiationx.anilibria.common.WatchCollectionSync
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.watchnext.WatchNextPublisher
@@ -43,6 +44,7 @@ class PlayerViewModel @Inject constructor(
     private val router: Router,
     private val watchCollectionSync: WatchCollectionSync,
     private val watchNextPublisher: WatchNextPublisher,
+    private val detailDataConverter: DetailDataConverter,
 ) : LifecycleViewModel() {
 
     val videoData = MutableStateFlow<Video?>(null)
@@ -368,6 +370,13 @@ class PlayerViewModel @Inject constructor(
         }
         completionHandled = true
         markWatchedIfNeeded(reason = "completion:$source", force = true)
+        // Серия могла быть отмечена раньше — тогда отметка не отправляется и перенос
+        // в «Просмотрено» не проверялся бы. Досмотр до конца проверяет его всегда.
+        if (watchedSynced) {
+            currentEpisode?.also { episode ->
+                launchCollectionSync { watchCollectionSync.onEpisodeWatched(episode.id.releaseId) }
+            }
+        }
         Log.d(TAG, "end source=$source episode=${currentEpisode?.id} position=$lastKnownPosition duration=$lastKnownDuration watched=$watchedReached")
         val nextEpisode = getNextEpisode()
         if (nextEpisode != null && preferencesHolder.playerAutoplay.value) {
@@ -904,10 +913,25 @@ class PlayerViewModel @Inject constructor(
     }
 
     private fun showSeasonCompletionOverlay() {
+        val release = getCurrentRelease()
+        val available = release?.episodes?.size ?: 0
+        val total = release?.series?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+        // Онгоинг: вышли не все серии — это не конец сезона, а ожидание новых серий.
+        val waitingForEpisodes = release != null && (
+            (total != null && available < total) ||
+                release.statusCode == Release.STATUS_CODE_PROGRESS
+            )
+        val (title, subtitle) = if (waitingForEpisodes) {
+            val count = if (total != null) "Вышло $available из $total серий." else "Вышло серий: $available."
+            val announce = release?.let { detailDataConverter.scheduleAnnounce(it) }
+            "Новые серии ещё не вышли" to listOfNotNull(count, announce).joinToString(" ")
+        } else {
+            "Сезон закончился" to "Вы посмотрели все серии."
+        }
         completionOverlay.value = PlayerCompletionOverlay(
             type = PlayerCompletionOverlayType.END_SEASON,
-            title = "Сезон закончился",
-            subtitle = "Следующей серии нет. Можно закрыть плеер.",
+            title = title,
+            subtitle = subtitle,
             nextEpisodeLabel = null,
             closeLabel = "Закрыть",
             autoAdvanceEnabled = false,
