@@ -55,6 +55,7 @@ androidx-preference = "1.2.1"
 androidx-recyclerview = "1.4.0"
 androidx-swiperefreshlayout = "1.2.0"
 timber = "5.0.1"
+junit = "4.13.2"
 viewbindingpropertydelegate = "2.0.4"
 android-plugin = "9.0.0"
 ksp-plugin = "2.3.5"
@@ -117,6 +118,7 @@ mintpermissions = { module = "com.github.mintrocket.MintPermissions:mintpermissi
 yandex-mobileads = { module = "com.yandex.android:mobileads", version.ref = "yandex-mobileads" }
 yandex-appmetrica = { module = "io.appmetrica.analytics:analytics", version.ref = "yandex-appmetrica" }
 moshi = { module = "com.squareup.moshi:moshi", version.ref = "moshi" }
+junit = { module = "junit:junit", version.ref = "junit" }
 moshi-adapters = { module = "com.squareup.moshi:moshi-adapters", version.ref = "moshi" }
 moshi-compiler = { module = "com.squareup.moshi:moshi-kotlin-codegen", version.ref = "moshi" }
 androidx-palette = { module = "androidx.palette:palette-ktx", version.ref = "androidx-palette" }

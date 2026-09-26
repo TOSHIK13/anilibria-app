@@ -1,5 +1,6 @@
 package ru.radiationx.data.entity.mapper
 
+import ru.radiationx.data.datasource.remote.IApiUtils
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.entity.domain.Paginated
 import ru.radiationx.data.entity.domain.release.BlockedInfo
@@ -24,11 +25,18 @@ import java.util.Locale
 import java.util.TimeZone
 
 fun CollectionReleasesResponse.toDomain(
-    apiUtils: ApiUtils,
+    apiUtils: IApiUtils,
     apiConfig: ApiConfig,
     favoriteAdded: Boolean = false,
+): Paginated<Release> = toDomain(apiUtils, apiConfig.baseImagesUrl, apiConfig.siteUrl, favoriteAdded)
+
+fun CollectionReleasesResponse.toDomain(
+    apiUtils: IApiUtils,
+    imagesBaseUrl: String,
+    siteUrl: String,
+    favoriteAdded: Boolean = false,
 ): Paginated<Release> = Paginated(
-    data = data.map { it.toDomain(apiUtils, apiConfig, favoriteAdded) },
+    data = data.map { it.toDomain(apiUtils, imagesBaseUrl, siteUrl, favoriteAdded) },
     page = meta?.pagination?.currentPage,
     allPages = meta?.pagination?.totalPages,
     perPage = meta?.pagination?.perPage,
@@ -36,8 +44,20 @@ fun CollectionReleasesResponse.toDomain(
 )
 
 fun CollectionReleaseResponse.toDomain(
-    apiUtils: ApiUtils,
+    apiUtils: IApiUtils,
     apiConfig: ApiConfig,
+    favoriteAdded: Boolean = false,
+): Release = toDomain(
+    apiUtils = apiUtils,
+    imagesBaseUrl = apiConfig.baseImagesUrl,
+    siteUrl = apiConfig.siteUrl,
+    favoriteAdded = favoriteAdded,
+)
+
+fun CollectionReleaseResponse.toDomain(
+    apiUtils: IApiUtils,
+    imagesBaseUrl: String,
+    siteUrl: String,
     favoriteAdded: Boolean = false,
 ): Release {
     val names = listOfNotNull(
@@ -51,7 +71,7 @@ fun CollectionReleaseResponse.toDomain(
         code = ReleaseCode(releaseCode),
         names = names,
         series = episodesTotal?.toString(),
-        poster = poster?.toPosterUrl(apiConfig),
+        poster = poster?.toPosterUrl(imagesBaseUrl),
         torrentUpdate = 0,
         status = null,
         statusCode = if (isOngoing == true) {
@@ -69,7 +89,7 @@ fun CollectionReleaseResponse.toDomain(
         description = description?.trim(),
         announce = notification?.trim(),
         favoriteInfo = FavoriteInfo(0, favoriteAdded),
-        link = releaseCode.takeIf { it.isNotEmpty() }?.let { "${apiConfig.siteUrl}/release/$it.html" },
+        link = releaseCode.takeIf { it.isNotEmpty() }?.let { "$siteUrl/release/$it.html" },
         franchises = emptyList(),
         showDonateDialog = false,
         blockedInfo = BlockedInfo(
@@ -85,7 +105,7 @@ fun CollectionReleaseResponse.toDomain(
     )
 }
 
-private fun CollectionImageResponse.toPosterUrl(apiConfig: ApiConfig): String? {
+private fun CollectionImageResponse.toPosterUrl(imagesBaseUrl: String): String? {
     val path = optimized?.preview
         ?: preview
         ?: optimized?.src
@@ -93,7 +113,7 @@ private fun CollectionImageResponse.toPosterUrl(apiConfig: ApiConfig): String? {
         ?: optimized?.thumbnail
         ?: thumbnail
     return path?.let {
-        if (it.startsWith("http")) it else it.appendBaseUrl(apiConfig.baseImagesUrl)
+        if (it.startsWith("http")) it else it.appendBaseUrl(imagesBaseUrl)
     }
 }
 
@@ -108,7 +128,7 @@ fun CollectionReleaseResponse.toSuggestionDomain(
         name?.english,
         name?.alternative,
     ).map { apiUtils.escapeHtml(it).toString() },
-    poster = poster?.toPosterUrl(apiConfig)
+    poster = poster?.toPosterUrl(apiConfig.baseImagesUrl)
 )
 
 private fun CollectionEpisodeResponse.toOnlineDomain(releaseId: ReleaseId): Episode = Episode(
