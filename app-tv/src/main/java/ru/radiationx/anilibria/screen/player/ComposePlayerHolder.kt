@@ -59,6 +59,8 @@ class ComposePlayerHolder(
         cacheDataSourceFactory = dataSourceFactory
         val mediaSourceFactory = DefaultMediaSourceFactory(context).apply {
             setDataSourceFactory(dataSourceFactory)
+            // 429/5xx от CDN: повтор с backoff вместо фатальной ошибки через ~5 с.
+            setLoadErrorHandlingPolicy(RateLimitLoadErrorHandlingPolicy())
         }
         val loadControl = PlayerBufferConfig.createLoadControl(
             preferencesHolder.playerForwardBufferSeconds.value,

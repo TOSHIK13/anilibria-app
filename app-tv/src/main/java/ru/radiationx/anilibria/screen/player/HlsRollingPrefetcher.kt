@@ -248,7 +248,15 @@ class HlsRollingPrefetcher(
                     setState(HlsRollingPrefetchMode.Disabled)
                     delay(PAUSED_DELAY_MS)
                 }
-                playback.playbackState == Player.STATE_BUFFERING -> {
+                CdnRateLimitGate.remainingMs() > 0L -> {
+                    // CDN ограничил загрузку (429/5xx у плеера или prefetch-а): ждём с запасом, плеер первым.
+                    setState(HlsRollingPrefetchMode.Backoff)
+                    delay(CdnRateLimitGate.remainingMs().coerceIn(PAUSED_DELAY_MS, RATE_LIMIT_POLL_MAX_MS))
+                    backoffUntilMs = maxOf(backoffUntilMs, System.currentTimeMillis() + RATE_LIMIT_GRACE_MS)
+                }
+                // BUFFERING (в т.ч. после перемотки) и IDLE (ошибка, плеер восстанавливается): не мешаем плееру.
+                playback.playbackState == Player.STATE_BUFFERING ||
+                    playback.playbackState == Player.STATE_IDLE -> {
                     activeWriter.get()?.cancel()
                     setState(HlsRollingPrefetchMode.PausedPlayback)
                     delay(PAUSED_DELAY_MS)
@@ -372,6 +380,13 @@ class HlsRollingPrefetcher(
         consecutiveErrors = (consecutiveErrors + 1).coerceAtMost(BACKOFF_DELAYS_MS.size)
         val delayMs = BACKOFF_DELAYS_MS[consecutiveErrors - 1]
         backoffUntilMs = System.currentTimeMillis() + delayMs
+        error.findInvalidResponseCode()
+            ?.takeIf { RateLimitBackoff.isRateLimitStatus(it.responseCode) }
+            ?.let {
+                // Свой backoff prefetch-а (15+ с) не навязываем плееру: в общий gate — как первый повтор плеера.
+                val gateMs = RateLimitBackoff.retryDelayMs(1, RateLimitBackoff.retryAfterHeader(it.headerFields))
+                CdnRateLimitGate.report(gateMs, source = "prefetch", responseCode = it.responseCode)
+            }
         Log.w(PLAYER_NET_TAG, "hls rolling prefetch failed, backoff=${delayMs}ms", error)
         setState(HlsRollingPrefetchMode.Backoff)
     }
@@ -400,6 +415,9 @@ class HlsRollingPrefetcher(
         private const val PAUSED_DELAY_MS = 1_000L
         private const val PRIORITY_RETRY_DELAY_MS = 750L
         private const val MAX_CAUSE_DEPTH = 5
+        private const val RATE_LIMIT_POLL_MAX_MS = 5_000L
+        /** После снятия ограничения CDN даём плееру фору перед возобновлением prefetch-а. */
+        private const val RATE_LIMIT_GRACE_MS = 5_000L
         private val BACKOFF_DELAYS_MS = longArrayOf(15_000L, 30_000L, 60_000L, 120_000L)
     }
 }
