@@ -88,6 +88,12 @@ class PlayerViewModel @Inject constructor(
     private var lastSyncedAt = 0L
     private var lastPeriodicSyncAt = 0L
     private var pendingAutoPlay = false
+
+    /**
+     * Автостарт только на первом READY загруженной серии. Повторные READY (перемотка на паузе,
+     * rebuffer, восстановление после сетевой ошибки во сне) не должны снимать паузу пользователя.
+     */
+    private var awaitingInitialPlay = false
     private var playedMs = 0L
     private var lastPlayTickAt = 0L
     private val playbackStartReported = mutableSetOf<ReleaseId>()
@@ -307,6 +313,10 @@ class PlayerViewModel @Inject constructor(
         if (currentEpisode == null) {
             return
         }
+        if (!awaitingInitialPlay) {
+            return
+        }
+        awaitingInitialPlay = false
         viewModelScope.launch {
             val autoPlay = pendingAutoPlay
             pendingAutoPlay = false
@@ -793,6 +803,8 @@ class PlayerViewModel @Inject constructor(
         watchedSynced = false
         completionHandled = false
         pendingAutoPlay = autoPlay
+        // Серия из очереди плеера уже играет — её READY не должен ничего запускать.
+        awaitingInitialPlay = !reuseLoadedItem
         playedMs = 0L
         lastPlayTickAt = 0L
         lastKnownPosition = 0
