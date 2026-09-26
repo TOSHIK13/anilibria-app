@@ -18,8 +18,8 @@ object Fixtures {
     }
 
     fun read(name: String): String {
-        val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream("v1/$name")) {
-            "Fixture v1/$name not found"
+        val stream = requireNotNull(javaClass.classLoader?.getResourceAsStream(name)) {
+            "Fixture $name not found"
         }
         return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
     }

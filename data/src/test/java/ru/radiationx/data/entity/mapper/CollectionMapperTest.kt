@@ -18,7 +18,7 @@ class CollectionMapperTest {
 
     @Test
     fun fullRelease_mapsMainFields() {
-        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
 
         assertEquals(ReleaseId(10292), release.id)
         assertEquals(ReleaseCode("super-no-ura-de-yani-suu-futari"), release.code)
@@ -33,7 +33,7 @@ class CollectionMapperTest {
 
     @Test
     fun fullRelease_mapsEpisodes() {
-        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
 
         assertEquals(12, release.episodes.size)
         assertEquals(12, release.sourceEpisodes.size)
@@ -45,7 +45,7 @@ class CollectionMapperTest {
 
     @Test
     fun poster_prefersOptimizedPreview() {
-        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
 
         assertEquals(
             "https://www.anilibria.tv/storage/releases/posters/10292/bwemBFzo9wLYMQB5vsck9WKVxYy1N57J.webp",
@@ -62,14 +62,14 @@ class CollectionMapperTest {
 
     @Test
     fun favoritesCount_fromAddedInUsersFavorites() {
-        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
 
         assertEquals(7680, release.favoriteInfo.rating)
     }
 
     @Test
     fun torrentUpdate_fromFreshAt() {
-        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
 
         // 2026-09-26T12:50:50+00:00
         assertEquals(1790427050, release.torrentUpdate)
@@ -77,17 +77,17 @@ class CollectionMapperTest {
 
     @Test
     fun latestList_andFullRelease_haveSamePoster() {
-        val fromList = Fixtures.parseList<CollectionReleaseResponse>("releases_latest_limit_10.json")
+        val fromList = Fixtures.parseList<CollectionReleaseResponse>("v1/releases_latest_limit_10.json")
             .first { it.id == 10292 }
             .map()
-        val full = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map()
+        val full = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
 
         assertEquals(full.poster, fromList.poster)
     }
 
     @Test
     fun catalogPage_mapsPagination() {
-        val page = Fixtures.parse<CollectionReleasesResponse>("catalog_fresh_page_2.json")
+        val page = Fixtures.parse<CollectionReleasesResponse>("v1/catalog_fresh_page_2.json")
             .toDomain(Fixtures.apiUtils, Fixtures.IMAGES_BASE, Fixtures.SITE)
 
         assertEquals(10, page.data.size)
@@ -97,7 +97,7 @@ class CollectionMapperTest {
 
     @Test
     fun favoriteAdded_isPassedThrough() {
-        val release = Fixtures.parse<CollectionReleaseResponse>("release_10292.json").map(favoriteAdded = true)
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map(favoriteAdded = true)
 
         assertTrue(release.favoriteInfo.isAdded)
     }
