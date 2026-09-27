@@ -8,26 +8,25 @@ import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ListRowPresenter
 import androidx.leanback.widget.OnItemViewSelectedListener
-import androidx.leanback.widget.Presenter
-import androidx.leanback.widget.Row
-import androidx.leanback.widget.RowPresenter
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import ru.radiationx.anilibria.common.BaseCardsViewModel
-import ru.radiationx.anilibria.common.GradientBackgroundManager
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
+import ru.radiationx.anilibria.screen.mainpages.MainHeroViewModel
 import ru.radiationx.anilibria.screen.mainpages.MainPagesFragment
-import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
+import ru.radiationx.anilibria.screen.mainpages.hideRowsAboveSelected
+import ru.radiationx.anilibria.ui.presenter.cust.ContinueListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
-import ru.radiationx.quill.inject
 import ru.radiationx.shared.ktx.android.subscribeTo
 import ru.radiationx.shared_app.di.quillParentViewModel
 
@@ -37,13 +36,12 @@ class MainFragment : RowsSupportFragment() {
     private companion object {
         /** Стартовый фокус на «Продолжить просмотр» ставится один раз за процесс. */
         var initialFocusDone = false
-        const val INITIAL_FOCUS_TIMEOUT_MS = 1_500L
     }
 
-    private val rowsPresenter by lazy { CustomListRowPresenter() }
+    private val rowsPresenter by lazy { ContinueListRowPresenter.rowsPresenterSelector(mainPage = true) }
     private val rowsAdapter by lazy { ArrayObjectAdapter(rowsPresenter) }
 
-    private val backgroundManager by inject<GradientBackgroundManager>()
+    private val heroViewModel by quillParentViewModel<MainHeroViewModel>()
 
     private val mainViewModel by quillParentViewModel<MainViewModel>()
 
@@ -74,7 +72,14 @@ class MainFragment : RowsSupportFragment() {
         viewLifecycleOwner.lifecycle.addObserver(youtubeViewModel)
 
         adapter = rowsAdapter
-        onItemViewSelectedListener = ItemViewSelectedListener()
+        onItemViewSelectedListener = OnItemViewSelectedListener { _, item, _, _ ->
+            heroViewModel.onItemSelected(item)
+        }
+        hideRowsAboveSelected()
+        verticalGridView?.setOnKeyInterceptListener { event ->
+            (parentFragment as? MainPagesFragment)?.onUserKey(event)
+            false
+        }
 
         setOnItemViewClickedListener { _, item, rowViewHolder, row ->
             if (rowViewHolder is CustomListRowViewHolder) {
@@ -107,35 +112,60 @@ class MainFragment : RowsSupportFragment() {
                 rowMap[rowId] = row
                 row
             }
+            val continueWasFirst = (rowsAdapter.takeIf { it.size() > 0 }?.get(0) as? ListRow)?.id ==
+                    MainViewModel.CONTINUE_ROW_ID
             rowsAdapter.setItems(rows, RowDiffCallback)
+            if (!continueWasFirst && rowList.firstOrNull() == MainViewModel.CONTINUE_ROW_ID) {
+                onContinueRowInserted()
+            }
         }
 
         focusContinueRowOnStart()
     }
 
+    private fun isUserNavigated(): Boolean =
+        (parentFragment as? MainPagesFragment)?.userNavigated?.value ?: true
+
     /**
-     * При запуске курсор сразу на первом релизе «Продолжить просмотр», а не в меню.
-     * Только если ряд есть и пользователь ещё не ушёл из меню сам.
+     * «Продолжить просмотр» вставился над выбранным рядом. Пока пользователь ничего не нажимал,
+     * в том же кадре выбираем его, чтобы он встал на место под hero, а не выше него.
+     * Иначе выбор остаётся на ряде пользователя, а вставленный ряд скрыт (он выше выбранного).
+     */
+    private fun onContinueRowInserted() {
+        if (initialFocusDone || isUserNavigated()) return
+        setSelectedPosition(0, false)
+    }
+
+    /**
+     * При запуске курсор на первом релизе «Продолжить просмотр», а не на вкладках — даже если ряд
+     * загрузился поздно. Ждём, пока пользователь сам не нажал кнопку пульта.
      */
     private fun focusContinueRowOnStart() {
         if (initialFocusDone) return
+        val pages = parentFragment as? MainPagesFragment ?: return
         viewLifecycleOwner.lifecycleScope.launch {
-            val ready = withTimeoutOrNull(INITIAL_FOCUS_TIMEOUT_MS) {
-                mainViewModel.rowListData.first { it.firstOrNull() == MainViewModel.CONTINUE_ROW_ID }
-                continueViewModel.cardsData.first { cards -> cards.any { it is LibriaCard } }
+            val continueReady = combine(
+                mainViewModel.rowListData,
+                continueViewModel.cardsData,
+            ) { rows, cards ->
+                rows.firstOrNull() == MainViewModel.CONTINUE_ROW_ID && cards.any { it is LibriaCard }
+            }.filter { it }
+            val ready = merge(
+                continueReady,
+                pages.userNavigated.filter { it }.map { false },
+            ).first()
+            if (ready) {
                 // Ряд должен уже стоять первым в адаптере, иначе фокус уйдёт на соседний ряд.
                 while ((rowsAdapter.takeIf { it.size() > 0 }?.get(0) as? ListRow)?.id != MainViewModel.CONTINUE_ROW_ID) {
                     delay(16)
                 }
             }
             initialFocusDone = true
-            val pages = parentFragment as? MainPagesFragment
-            if (ready == null || pages == null || !pages.isShowingHeaders) {
-                pages?.revealInitialScreen()
+            if (!ready || isUserNavigated()) {
+                pages.revealInitialScreen()
                 return@launch
             }
-            // Выбор ставим после сворачивания меню: leanback по окончании перехода сам двигает фокус.
-            pages.hideHeadersForInitialFocus {
+            pages.focusContentOnStart {
                 setSelectedPosition(0, false, ListRowPresenter.SelectItemViewHolderTask(0))
             }
         }
@@ -149,34 +179,4 @@ class MainFragment : RowsSupportFragment() {
     private fun notifyReady() {
         mainFragmentAdapter.fragmentHost.notifyDataReady(mainFragmentAdapter)
     }
-
-    private inner class ItemViewSelectedListener : OnItemViewSelectedListener {
-        override fun onItemSelected(
-            itemViewHolder: Presenter.ViewHolder?, item: Any?,
-            rowViewHolder: RowPresenter.ViewHolder, row: Row,
-        ) {
-            if (rowViewHolder is CustomListRowViewHolder) {
-                backgroundManager.applyCard(item)
-                when (item) {
-                    is LibriaCard -> {
-                        rowViewHolder.setDescription(item.title, item.description)
-                    }
-
-                    is LinkCard -> {
-                        rowViewHolder.setDescription(item.title, "")
-                    }
-
-                    is LoadingCard -> {
-                        rowViewHolder.setDescription(item.title, item.description)
-                    }
-
-                    else -> {
-                        rowViewHolder.setDescription("", "")
-                    }
-                }
-            }
-
-        }
-    }
-
 }

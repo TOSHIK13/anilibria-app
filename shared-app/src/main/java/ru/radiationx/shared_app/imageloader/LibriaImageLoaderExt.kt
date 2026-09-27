@@ -3,6 +3,7 @@ package ru.radiationx.shared_app.imageloader
 import android.content.Context
 import android.graphics.Bitmap
 import android.widget.ImageView
+import coil3.transform.Transformation
 
 class ImageLoaderScope {
 
@@ -28,6 +29,11 @@ class ImageLoaderScope {
         config = config.copy(onComplete = listener)
     }
 
+    /** Преобразования картинки (Coil); результат кэшируется в памяти отдельно от оригинала. */
+    fun transformations(vararg items: Transformation) {
+        config = config.copy(transformations = items.toList())
+    }
+
     fun build() = config.copy()
 }
 
@@ -37,6 +43,7 @@ data class ImageLoaderScopeConfig(
     val onError: ((Throwable) -> Unit)? = null,
     val onCancel: (() -> Unit)? = null,
     val onComplete: (() -> Unit)? = null,
+    val transformations: List<Transformation> = emptyList(),
 )
 
 fun ImageView.showImageUrl(url: String?, block: ImageLoaderScope.() -> Unit = {}) {

@@ -20,6 +20,9 @@ val localProperties = Properties().apply {
         ?.use { load(it) }
 }
 val releaseSigningProperties = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+// Бета ставится рядом с основным модом: свой applicationId и название (-PtvBeta=true).
+val isTvBeta = (findProperty("tvBeta") as String?).toBoolean()
+
 val hasReleaseSigningConfig = releaseSigningProperties.all {
     !localProperties.getProperty(it).isNullOrBlank()
 }
@@ -36,6 +39,14 @@ android {
         versionCode = libs.versions.tv.version.code.get().toInt()
         versionName = libs.versions.tv.version.name.get()
         buildConfigField("String", "BUILD_DATE", "\"${getDateTime()}\"")
+        buildConfigField("boolean", "IS_BETA", "$isTvBeta")
+        if (isTvBeta) {
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            manifestPlaceholders["appLabel"] = "AniLiberty TV Beta"
+        } else {
+            manifestPlaceholders["appLabel"] = "@string/app_name"
+        }
     }
 
     buildFeatures {
@@ -99,7 +110,7 @@ androidComponents {
         }
         val inputPath = project.layout.buildDirectory.file(inputApkPath).get().asFile
 
-        val appName = "AniLiberty_TV_Mod"
+        val appName = if (isTvBeta) "AniLiberty_TV_Beta" else "AniLiberty_TV_Mod"
         val versionName = variant.outputs[0].versionName.get()
         val buildDateTime = SimpleDateFormat("yyyy-MM-dd_HH-mm").format(Date())
         val outputApkName = "${appName}_v${versionName}_${buildDateTime}.apk"
@@ -128,6 +139,8 @@ dependencies {
     implementation(project(":shared-android-ktx"))
     implementation(project(":shared-app"))
     implementation(project(":quill-di"))
+    // Трансформация размытия постера (ui/util/Blur.kt) для API < 31.
+    implementation(libs.coil)
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.leanback)

@@ -12,6 +12,23 @@ open class CustomListRowPresenter @JvmOverloads constructor(
     useFocusDimmer: Boolean = false,
 ) : ListRowPresenter(focusZoomFactor, useFocusDimmer) {
 
+    /** Блок с названием и описанием карточки под выбранным рядом. */
+    var descriptionEnabled: Boolean = true
+
+    /** Ряд страницы с hero-блоком, см. [applyMainPageStyle]. */
+    var isMainPageStyle: Boolean = false
+        private set
+
+    /**
+     * Стиль главных страниц с hero-блоком: сведения о карточке показывает hero,
+     * поэтому блок под рядом отключён, заголовки рядов — [MainRowHeaderPresenter].
+     */
+    fun applyMainPageStyle(): CustomListRowPresenter = apply {
+        isMainPageStyle = true
+        descriptionEnabled = false
+        headerPresenter = MainRowHeaderPresenter()
+    }
+
     override fun onRowViewExpanded(holder: RowPresenter.ViewHolder, expanded: Boolean) {
         super.onRowViewExpanded(holder, expanded)
         (holder as CustomListRowViewHolder).isExpanded = expanded
@@ -29,7 +46,7 @@ open class CustomListRowPresenter @JvmOverloads constructor(
         if (rowHeight != 0) {
             rowView.gridView.setRowHeight(rowHeight)
         }
-        return CustomListRowViewHolder(rowView, rowView.gridView, this)
+        return CustomListRowViewHolder(rowView, rowView.gridView, this, descriptionEnabled)
     }
 
     private fun setupFadingEffect(listRowView: ListRowView) {

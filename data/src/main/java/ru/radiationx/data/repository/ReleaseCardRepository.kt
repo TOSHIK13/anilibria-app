@@ -52,6 +52,9 @@ class ReleaseCardRepository @Inject constructor(
     /** Релизы, данные которых в этом процессе уже пришли с сервера. */
     private val refreshed: MutableSet<Int> = ConcurrentHashMap.newKeySet()
 
+    /** releaseId → serverId серии из истории (какие серии хранить на диске). */
+    private val focus = ConcurrentHashMap<Int, String>()
+
     @Volatile
     private var refreshJob: Job? = null
 
@@ -63,14 +66,26 @@ class ReleaseCardRepository @Inject constructor(
     /** Фоновое обновление изменило данные карточек. */
     fun observeUpdates(): Flow<Unit> = updates
 
-    suspend fun getCards(ids: List<ReleaseId>): ReleaseCards {
+    /**
+     * @param focusEpisodes серия из истории по релизу (serverId): на диске у релиза
+     * сохраняются только она и следующая (превью/длительность для карточки).
+     */
+    suspend fun getCards(
+        ids: List<ReleaseId>,
+        focusEpisodes: Map<ReleaseId, String> = emptyMap(),
+    ): ReleaseCards {
+        focusEpisodes.forEach { (id, episodeId) -> focus[id.id] = episodeId }
         val result = LinkedHashMap<ReleaseId, ReleaseCardInfo>()
+        val cached = getDisk().associateBy { it.id }
         val fromMemory = ids.mapNotNull { releaseInteractor.getItem(releaseId = it) }
         fromMemory.forEach {
-            result[it.id] = ReleaseCardCacheLogic.fromRelease(it)
-            refreshed.add(it.id.id)
+            result[it.id] = ReleaseCardCacheLogic.withEpisodesFrom(
+                ReleaseCardCacheLogic.fromRelease(it),
+                cached[it.id.id]
+            )
+            // Релиз из ленты приходит без серий — их (превью, длительность) догрузит фоновое обновление.
+            if (it.episodes.isNotEmpty()) refreshed.add(it.id.id)
         }
-        val cached = getDisk().associateBy { it.id }
         ids.forEach { id ->
             if (id !in result) cached[id.id]?.also { result[id] = it }
         }
@@ -108,7 +123,7 @@ class ReleaseCardRepository @Inject constructor(
             coRunCatching { load(toRefresh.map { ReleaseId(it) }) }
                 .onSuccess { releases ->
                     val before = getDisk().associateBy { it.id }
-                    val fresh = releases.map { ReleaseCardCacheLogic.fromRelease(it) }
+                    val fresh = releases.map { toDisk(ReleaseCardCacheLogic.fromRelease(it), before) }
                     val changed = fresh.any { before[it.id] != it }
                     persist(releases, ids)
                     LoadTiming.span(
@@ -131,6 +146,12 @@ class ReleaseCardRepository @Inject constructor(
         return releases
     }
 
+    private fun toDisk(info: ReleaseCardInfo, old: Map<Int, ReleaseCardInfo>): ReleaseCardInfo =
+        ReleaseCardCacheLogic.trimEpisodes(
+            ReleaseCardCacheLogic.withEpisodesFrom(info, old[info.id]),
+            focus[info.id]
+        )
+
     private suspend fun getDisk(): List<ReleaseCardInfo> {
         disk?.also { return it }
         return diskMutex.withLock {
@@ -147,9 +168,10 @@ class ReleaseCardRepository @Inject constructor(
     private suspend fun persist(releases: List<Release>, priority: List<ReleaseId>) {
         diskMutex.withLock {
             val old = disk ?: storage.get()
+            val oldById = old.associateBy { it.id }
             val merged = ReleaseCardCacheLogic.merge(
                 old = old,
-                fresh = releases.map { ReleaseCardCacheLogic.fromRelease(it) },
+                fresh = releases.map { toDisk(ReleaseCardCacheLogic.fromRelease(it), oldById) },
                 priority = priority.map { it.id },
                 max = MAX_CACHED,
             )

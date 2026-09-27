@@ -1,29 +1,39 @@
 package ru.radiationx.anilibria.screen.details
 
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
-import androidx.core.graphics.ColorUtils
+import android.view.ViewGroup
 import androidx.leanback.app.RowsSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
+import androidx.leanback.widget.BaseGridView
 import androidx.leanback.widget.ClassPresenterSelector
+import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRow
+import androidx.leanback.widget.OnChildViewHolderSelectedListener
 import androidx.leanback.widget.Row
 import androidx.lifecycle.ViewModel
+import androidx.recyclerview.widget.RecyclerView
+import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.BaseCardsViewModel
-import ru.radiationx.anilibria.common.GradientBackgroundManager
+import ru.radiationx.anilibria.common.CardDiffCallback
+import ru.radiationx.anilibria.common.FranchiseCard
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LibriaDetailsRow
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
+import ru.radiationx.anilibria.screen.mainpages.hideRowsAboveSelected
+import ru.radiationx.anilibria.ui.presenter.FranchiseCardPresenter
 import ru.radiationx.anilibria.ui.presenter.ReleaseDetailsPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowPresenter
 import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
+import ru.radiationx.anilibria.ui.presenter.cust.FranchiseListRow
+import ru.radiationx.anilibria.ui.presenter.cust.FranchiseListRowPresenter
+import ru.radiationx.anilibria.ui.presenter.cust.MainRowHeaderPresenter
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.quill.QuillExtra
-import ru.radiationx.quill.inject
 import ru.radiationx.quill.viewModel
 import ru.radiationx.shared.ktx.android.getExtraNotNull
 import ru.radiationx.shared.ktx.android.putExtra
@@ -43,7 +53,8 @@ class DetailFragment : RowsSupportFragment() {
         }
     }
 
-    private val backgroundManager by inject<GradientBackgroundManager>()
+    private var background: DetailBackgroundView? = null
+    private var compactHeader: DetailCompactHeaderView? = null
 
     private val argExtra by lazy {
         DetailExtra(id = getExtraNotNull(ARG_ID))
@@ -51,7 +62,14 @@ class DetailFragment : RowsSupportFragment() {
 
     private val rowsPresenter by lazy {
         ClassPresenterSelector().apply {
-            addClassPresenter(ListRow::class.java, CustomListRowPresenter())
+            addClassPresenter(
+                ListRow::class.java,
+                CustomListRowPresenter().apply { headerPresenter = MainRowHeaderPresenter(dimUnselected = false) }
+            )
+            addClassPresenter(
+                FranchiseListRow::class.java,
+                FranchiseListRowPresenter().apply { headerPresenter = MainRowHeaderPresenter(dimUnselected = false) }
+            )
             addClassPresenter(
                 LibriaDetailsRow::class.java, ReleaseDetailsPresenter(
                     continueClickListener = headerViewModel::onContinueClick,
@@ -59,6 +77,7 @@ class DetailFragment : RowsSupportFragment() {
                     favoriteClickListener = headerViewModel::onFavoriteClick,
                     descriptionClickListener = headerViewModel::onDescriptionClick,
                     collectionClickListener = headerViewModel::onCollectionClick,
+                    ratingsClickListener = headerViewModel::onRatingsClick,
                     otherClickListener = headerViewModel::onOtherClick
                 )
             )
@@ -81,6 +100,37 @@ class DetailFragment : RowsSupportFragment() {
         else -> null
     }
 
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?,
+    ): View {
+        // Фиксированный фон под рядами: ряды прокручиваются поверх него.
+        val rowsView = super.onCreateView(inflater, container, savedInstanceState)
+        val backgroundView = DetailBackgroundView(inflater.context)
+        background = backgroundView
+        backgroundView.addView(
+            rowsView,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        // Компактная шапка поверх рядов — пока фокус ниже кнопок.
+        val compactView = DetailCompactHeaderView(inflater.context)
+        compactHeader = compactView
+        backgroundView.addView(
+            compactView,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        return backgroundView
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        background = null
+        compactHeader = null
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -90,23 +140,47 @@ class DetailFragment : RowsSupportFragment() {
         viewLifecycleOwner.lifecycle.addObserver(recommendsViewModel)
 
         adapter = rowsAdapter
+        setupCollapsingHeader()
 
         setOnItemViewClickedListener { _, item, _, row ->
             val viewMode: BaseCardsViewModel? =
                 getViewModel((row as ListRow).id) as? BaseCardsViewModel
             when (item) {
+                is FranchiseCard -> relatedViewModel.onFranchiseCardClick(item)
                 is LinkCard -> viewMode?.onLinkCardClick()
                 is LoadingCard -> viewMode?.onLoadingCardClick()
                 is LibriaCard -> viewMode?.onLibriaCardClick(item)
             }
         }
 
-        setOnItemViewSelectedListener { _, item, rowViewHolder, row ->
-            if (row is ListRow) {
-                backgroundManager.applyCard(item)
-            } else if (row is LibriaDetailsRow) {
-                applyImage(row.details?.image.orEmpty())
+        subscribeTo(headerViewModel.releaseData) { details ->
+            details ?: return@subscribeTo
+            background?.bind(
+                cover = details.backgroundCover,
+                poster = details.image.takeIf { it.isNotEmpty() },
+                isFull = details.isFull
+            )
+            bindCompactHeader()
+        }
+        subscribeTo(relatedViewModel.franchiseData) { bindCompactHeader() }
+        subscribeTo(headerViewModel.ratingsEvent) { (title, ratings) ->
+            if (childFragmentManager.findFragmentByTag(DetailRatingsDialogFragment.TAG) != null) {
+                return@subscribeTo
             }
+            DetailRatingsDialogFragment
+                .newInstance(title, ratings)
+                .show(childFragmentManager, DetailRatingsDialogFragment.TAG)
+        }
+        subscribeTo(headerViewModel.descriptionEvent) { description ->
+            if (childFragmentManager.findFragmentByTag(DetailDescriptionDialogFragment.TAG) != null) {
+                return@subscribeTo
+            }
+            DetailDescriptionDialogFragment
+                .newInstance(description.title, description.text)
+                .show(childFragmentManager, DetailDescriptionDialogFragment.TAG)
+        }
+
+        setOnItemViewSelectedListener { _, item, rowViewHolder, _ ->
             if (rowViewHolder is CustomListRowViewHolder) {
                 when (item) {
                     is LibriaCard -> {
@@ -150,6 +224,12 @@ class DetailFragment : RowsSupportFragment() {
             viewModel as DetailHeaderViewModel
         )
 
+        DetailsViewModel.RELATED_ROW_ID -> createFranchiseRowBy(
+            rowId,
+            rowsAdapter,
+            viewModel as DetailRelatedViewModel
+        )
+
         else -> createCardsRowBy(rowId, rowsAdapter, viewModel as BaseCardsViewModel)
     }
 
@@ -172,14 +252,72 @@ class DetailFragment : RowsSupportFragment() {
         return row
     }
 
-    private fun applyImage(image: String) {
-        backgroundManager.applyImage(image, colorSelector = { null }) {
-            val hslColor = FloatArray(3)
-            ColorUtils.colorToHSL(it, hslColor)
-            hslColor[1] = (hslColor[1] + 0.05f).coerceAtMost(1.0f)
-            hslColor[2] = (hslColor[2] + 0.05f).coerceAtMost(1.0f)
-            ColorUtils.HSLToColor(hslColor)
+    private fun createFranchiseRowBy(
+        rowId: Long,
+        rowsAdapter: ArrayObjectAdapter,
+        viewModel: DetailRelatedViewModel,
+    ): Row {
+        val cardsAdapter = ArrayObjectAdapter(
+            ClassPresenterSelector().addClassPresenter(FranchiseCard::class.java, FranchiseCardPresenter())
+        )
+        val row = FranchiseListRow(rowId, HeaderItem(""), cardsAdapter)
+        var selectionRequested = false
+        subscribeTo(viewModel.franchiseData) { data ->
+            data ?: return@subscribeTo
+            cardsAdapter.setItems(data.cards, CardDiffCallback)
+            if (row.headerItem?.name != data.title) {
+                row.headerItem = HeaderItem(data.title)
+                val position = rowsAdapter.indexOf(row)
+                if (position >= 0) rowsAdapter.notifyArrayItemRangeChanged(position, 1)
+            }
+            // Один раз: ряд открывается на текущей части, DOWN с кнопок попадает на «ВЫ ЗДЕСЬ».
+            if (!selectionRequested && data.currentIndex >= 0) {
+                selectionRequested = true
+                row.pendingSelection = data.currentIndex
+                val position = rowsAdapter.indexOf(row)
+                val holder = if (position >= 0) getRowViewHolder(position) else null
+                if (holder != null) FranchiseListRowPresenter.applyPendingSelection(holder, row)
+            }
         }
+        return row
+    }
+
+    /**
+     * Фокус ушёл с кнопок в ряды: выбранный ряд встаёт под компактную шапку,
+     * ряды выше него (в т.ч. полная шапка) скрываются, фон темнеет. Вверх на кнопки — обратно.
+     */
+    private fun setupCollapsingHeader() {
+        val grid = verticalGridView ?: return
+        // LOW_EDGE: шапка-ряд в фокусе остаётся у верхнего края, остальные ряды — на отступе.
+        grid.windowAlignment = BaseGridView.WINDOW_ALIGN_LOW_EDGE
+        grid.windowAlignmentOffsetPercent = BaseGridView.WINDOW_ALIGN_OFFSET_PERCENT_DISABLED
+        grid.windowAlignmentOffset = resources.getDimensionPixelSize(R.dimen.detail_rows_collapsed_top)
+        grid.itemAlignmentOffset = 0
+        grid.itemAlignmentOffsetPercent = BaseGridView.ITEM_ALIGN_OFFSET_PERCENT_DISABLED
+        hideRowsAboveSelected()
+        grid.addOnChildViewHolderSelectedListener(object : OnChildViewHolderSelectedListener() {
+            override fun onChildViewHolderSelected(
+                parent: RecyclerView,
+                child: RecyclerView.ViewHolder?,
+                position: Int,
+                subposition: Int,
+            ) {
+                val collapsed = position > 0
+                compactHeader?.setShown(collapsed)
+                background?.setCollapsed(collapsed)
+            }
+        })
+    }
+
+    private fun bindCompactHeader() {
+        val details = headerViewModel.releaseData.value ?: return
+        val partText = relatedViewModel.franchiseData.value?.partText
+        compactHeader?.bind(
+            titleText = details.titleRu,
+            image = details.image.takeIf { it.isNotEmpty() },
+            metaText = listOfNotNull(details.compactMeta.takeIf { it.isNotEmpty() }, partText)
+                .joinToString(" · ")
+        )
     }
 
 }

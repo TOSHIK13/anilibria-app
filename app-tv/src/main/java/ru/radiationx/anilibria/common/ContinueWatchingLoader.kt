@@ -8,11 +8,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import ru.radiationx.data.entity.common.AuthState
+import ru.radiationx.data.entity.domain.types.EpisodeId
 import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ReleaseCardRepository
 import ru.radiationx.data.repository.WatchProgressRepository
 import ru.radiationx.data.repository.watch.ContinueWatchingItem
+import ru.radiationx.data.repository.watch.ReleaseCardInfo
 import ru.radiationx.data.repository.watch.WatchHistoryLogic
 import javax.inject.Inject
 
@@ -79,16 +81,45 @@ class ContinueWatchingLoader @Inject constructor(
             onSource(SOURCE_CACHE)
             return emptyList()
         }
-        val cards = releaseCardRepository.getCards(items.map { it.releaseId })
+        val cards = releaseCardRepository.getCards(
+            ids = items.map { it.releaseId },
+            focusEpisodes = items.associate { it.releaseId to it.episodeId },
+        )
         onSource(if (cards.fromNetwork) SOURCE_NETWORK else SOURCE_CACHE)
         return items.mapNotNull { item ->
             val info = cards.items[item.releaseId] ?: return@mapNotNull null
             val card = converter.toCard(info)
-            val ordinal = item.ordinal ?: return@mapNotNull card
+            val ordinal = item.ordinal
             card.copy(
-                description = "Вы остановились на ${WatchHistoryLogic.ordinalLabel(ordinal)} серии"
+                description = ordinal
+                    ?.let { "Вы остановились на ${WatchHistoryLogic.ordinalLabel(it)} серии" }
+                    ?: card.description,
+                continueInfo = continueInfo(item, info),
             )
         }
+    }
+
+    /**
+     * Серия для карточки: из истории, а если она досмотрена — следующая с начала
+     * (как «Продолжить» в деталях). Превью и длительность — из серий релиза.
+     */
+    private fun continueInfo(item: ContinueWatchingItem, info: ReleaseCardInfo): LibriaCard.ContinueInfo {
+        val episodes = info.episodes
+        val ordinalLabel = item.ordinal?.let { WatchHistoryLogic.ordinalLabel(it) }
+        val index = episodes.indexOfFirst { it.serverId == item.episodeId }
+            .takeIf { it >= 0 }
+            ?: episodes.indexOfFirst { it.ordinal == ordinalLabel }
+        val current = episodes.getOrNull(index)
+        val next = if (item.isWatched && index >= 0) episodes.getOrNull(index + 1) else null
+        val episode = next ?: current
+        val label = episode?.ordinal ?: ordinalLabel
+        return LibriaCard.ContinueInfo(
+            episodeId = label?.let { EpisodeId(it, item.releaseId) },
+            ordinalLabel = label,
+            previewUrl = episode?.previewUrl,
+            durationSec = episode?.durationSec?.takeIf { it > 0 },
+            positionSec = if (next != null) 0 else item.time?.toInt()?.coerceAtLeast(0) ?: 0,
+        )
     }
 
     private companion object {

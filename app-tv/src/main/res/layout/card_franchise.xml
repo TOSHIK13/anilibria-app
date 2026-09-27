@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Карточка части франшизы 260x100dp; поле 3dp вокруг — под кольцо фокуса (FranchiseCardView). -->
+<ru.radiationx.anilibria.ui.widget.FranchiseCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:padding="@dimen/card_continue_ring">
+
+    <FrameLayout
+        android:id="@+id/franchiseBody"
+        android:layout_width="260dp"
+        android:layout_height="100dp"
+        android:background="@drawable/bg_franchise_card"
+        android:duplicateParentState="true">
+
+        <ImageView
+            android:id="@+id/franchisePoster"
+            android:layout_width="70dp"
+            android:layout_height="100dp"
+            android:background="#222222"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/franchiseOrder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="82dp"
+            android:layout_marginTop="7dp"
+            android:includeFontPadding="false"
+            android:letterSpacing="0.08"
+            android:maxLines="1"
+            android:textColor="#FFFF8A80"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="03 · ТВ" />
+
+        <TextView
+            android:id="@+id/franchiseTitle"
+            android:layout_width="168dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="82dp"
+            android:layout_marginTop="22dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:includeFontPadding="false"
+            android:maxLines="2"
+            android:textColor="#FFFFFFFF"
+            android:textSize="14sp"
+            tools:text="Магическая битва 2" />
+
+        <TextView
+            android:id="@+id/franchiseMeta"
+            android:layout_width="168dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="82dp"
+            android:layout_marginTop="57dp"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="#B3FFFFFF"
+            android:textSize="12sp"
+            tools:text="2023 · 23 эп." />
+
+        <TextView
+            android:id="@+id/franchiseProgress"
+            android:layout_width="168dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="82dp"
+            android:layout_marginBottom="10dp"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="#B3FFFFFF"
+            android:textSize="11sp"
+            tools:text="8 из 9 (12)" />
+
+        <TextView
+            android:id="@+id/franchiseChip"
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:layout_gravity="end|top"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/bg_franchise_chip"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:text="ВЫ ЗДЕСЬ"
+            android:textColor="#FF111111"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:visibility="visible" />
+    </FrameLayout>
+</ru.radiationx.anilibria.ui.widget.FranchiseCardView>

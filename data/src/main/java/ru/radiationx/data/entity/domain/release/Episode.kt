@@ -13,4 +13,8 @@ data class Episode(
     val qualityInfo: QualityInfo,
     val updatedAt: Date?,
     val skips: PlayerSkips?,
+    /** Абсолютный URL превью серии 720x405 (V1 `preview.optimized.preview`). */
+    val previewUrl: String? = null,
+    /** Длительность серии в секундах (V1 `duration`). */
+    val durationSec: Int? = null,
 ) : Parcelable

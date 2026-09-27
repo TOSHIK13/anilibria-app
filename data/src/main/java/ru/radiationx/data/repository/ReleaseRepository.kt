@@ -7,6 +7,7 @@ import ru.radiationx.data.datasource.remote.api.ReleaseApi
 import ru.radiationx.data.entity.domain.Paginated
 import ru.radiationx.data.entity.domain.release.RandomRelease
 import ru.radiationx.data.entity.domain.release.Release
+import ru.radiationx.data.entity.domain.release.ReleaseFranchise
 import ru.radiationx.data.entity.domain.types.ReleaseCode
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.mapper.toDomain
@@ -71,6 +72,14 @@ class ReleaseRepository @Inject constructor(
             .getReleases(page)
             .toDomain(apiUtils, apiConfig)
             .also { updateMiddleware.handle(it.data) }
+    }
+
+    suspend fun getFranchises(releaseId: ReleaseId): List<ReleaseFranchise> = withContext(Dispatchers.IO) {
+        releaseApi
+            .getFranchisesByRelease(releaseId.id)
+            .map { it.toDomain(apiUtils, apiConfig.baseImagesUrl, apiConfig.siteUrl) }
+            .filter { it.parts.isNotEmpty() }
+            .also { franchises -> updateMiddleware.handle(franchises.flatMap { it.releases }) }
     }
 
     suspend fun getRecommendedReleases(releaseId: ReleaseId? = null): List<Release> = withContext(Dispatchers.IO) {

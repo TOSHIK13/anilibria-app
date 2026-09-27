@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:parentTag="android.widget.FrameLayout">
+
+    <FrameLayout
+        android:id="@+id/mainHeroBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <FrameLayout
+        android:id="@+id/mainHeroTexts"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <TextView
+            android:id="@+id/mainHeroTitle"
+            android:layout_width="@dimen/main_hero_title_width"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/main_hero_margin_start"
+            android:layout_marginTop="@dimen/main_hero_title_top"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:textColor="@color/main_hero_title"
+            android:textSize="@dimen/main_hero_title_text_size"
+            tools:text="Класс для героев" />
+
+        <TextView
+            android:id="@+id/mainHeroMeta"
+            android:layout_width="@dimen/main_hero_meta_width"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/main_hero_margin_start"
+            android:layout_marginTop="@dimen/main_hero_meta_top"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/main_hero_meta"
+            android:textSize="@dimen/main_hero_text_size"
+            tools:text="2023 · Лето · ТВ · 12 эп. по 24 мин · 16+ · ★ 6,28 Shikimori" />
+
+        <TextView
+            android:id="@+id/mainHeroLine"
+            android:layout_width="@dimen/main_hero_meta_width"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/main_hero_margin_start"
+            android:layout_marginTop="@dimen/main_hero_line_top"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/main_hero_line"
+            android:textSize="@dimen/main_hero_text_size"
+            tools:text="Релиз завершён · 7 659 в избранном" />
+
+        <TextView
+            android:id="@+id/mainHeroDescription"
+            android:layout_width="@dimen/main_hero_description_width"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/main_hero_margin_start"
+            android:layout_marginTop="@dimen/main_hero_description_top"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="@color/main_hero_description"
+            android:textSize="@dimen/main_hero_text_size"
+            tools:text="Больше всего Блейд хочет подружиться со своими одноклассникам в Академии Роузвуд" />
+
+        <!-- Чёткий постер справа от текстов; только когда нет широкого фона (как в деталях). -->
+        <ImageView
+            android:id="@+id/mainHeroPoster"
+            android:layout_width="@dimen/main_hero_poster_width"
+            android:layout_height="@dimen/main_hero_poster_height"
+            android:layout_gravity="end|top"
+            android:layout_marginTop="@dimen/main_hero_poster_top"
+            android:layout_marginEnd="@dimen/main_hero_poster_margin_end"
+            android:background="@color/main_hero_poster_placeholder"
+            android:elevation="@dimen/main_hero_poster_elevation"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+    </FrameLayout>
+</merge>

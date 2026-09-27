@@ -57,4 +57,24 @@ class ReleaseCardCacheLogicTest {
             ReleaseCardCacheLogic.toRefresh(listOf(1, 2, 2, 3), setOf(1))
         )
     }
+
+    private fun ep(id: String) = ReleaseCardEpisode(serverId = id, ordinal = id)
+
+    @Test
+    fun trimEpisodes_keepsFocusAndNext() {
+        val info = ReleaseCardInfo(id = 1, episodes = listOf(ep("a"), ep("b"), ep("c"), ep("d")))
+        assertEquals(listOf(ep("b"), ep("c")), ReleaseCardCacheLogic.trimEpisodes(info, "b").episodes)
+        assertEquals(listOf(ep("d")), ReleaseCardCacheLogic.trimEpisodes(info, "d").episodes)
+        assertEquals(emptyList<ReleaseCardEpisode>(), ReleaseCardCacheLogic.trimEpisodes(info, null).episodes)
+    }
+
+    @Test
+    fun withEpisodesFrom_fillsOnlyEmpty() {
+        val cached = ReleaseCardInfo(id = 1, episodes = listOf(ep("a")))
+        val empty = ReleaseCardInfo(id = 1)
+        val own = ReleaseCardInfo(id = 1, episodes = listOf(ep("b")))
+        assertEquals(cached.episodes, ReleaseCardCacheLogic.withEpisodesFrom(empty, cached).episodes)
+        assertEquals(own, ReleaseCardCacheLogic.withEpisodesFrom(own, cached))
+        assertEquals(empty, ReleaseCardCacheLogic.withEpisodesFrom(empty, null))
+    }
 }

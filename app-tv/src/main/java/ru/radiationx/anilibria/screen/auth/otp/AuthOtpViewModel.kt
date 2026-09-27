@@ -10,6 +10,7 @@ import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.data.entity.domain.auth.OtpInfo
 import ru.radiationx.data.entity.domain.auth.OtpNotAcceptedException
 import ru.radiationx.data.entity.domain.auth.OtpNotFoundException
+import ru.radiationx.data.entity.domain.auth.hasValidCode
 import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -21,11 +22,18 @@ class AuthOtpViewModel @Inject constructor(
     private val guidedRouter: GuidedRouter,
 ) : LifecycleViewModel() {
 
+    companion object {
+        private const val INVALID_CODE_RELOAD_DELAY = 3000L
+        private const val MAX_INVALID_CODE_RELOADS = 3
+    }
+
     val otpInfoData = MutableStateFlow<OtpInfo?>(null)
     val state = MutableStateFlow(State())
 
     private var timerJob: Job? = null
     private var signInJob: Job? = null
+    private var invalidCodeReloadJob: Job? = null
+    private var invalidCodeReloads = 0
 
     init {
         loadOtpInfo()
@@ -72,11 +80,36 @@ class AuthOtpViewModel @Inject constructor(
                 authRepository.getOtpInfo()
             }.onSuccess {
                 otpInfoData.value = it
-                updateState(ButtonState.COMPLETE, false, remainingSeconds = it.remainingSeconds())
-                startTimer(it)
+                if (it.hasValidCode()) {
+                    invalidCodeReloads = 0
+                    updateState(ButtonState.COMPLETE, false, remainingSeconds = it.remainingSeconds())
+                    startTimer(it)
+                } else {
+                    handleInvalidCode(it)
+                }
             }.onFailure {
                 handleError(it)
             }
+        }
+    }
+
+    /**
+     * Репозиторий уже перевыпускал код, но он всё ещё не 6-значный (сайт его не примет).
+     * Показываем "Код обновляется…" и повторяем запрос сами, без кнопки "Готово".
+     */
+    private fun handleInvalidCode(otpInfo: OtpInfo) {
+        timerJob?.cancel()
+        invalidCodeReloadJob?.cancel()
+        if (invalidCodeReloads >= MAX_INVALID_CODE_RELOADS) {
+            invalidCodeReloads = 0
+            updateState(ButtonState.REPEAT, false, "Не удалось получить код, обновите его", 0L)
+            return
+        }
+        invalidCodeReloads++
+        updateState(ButtonState.REPEAT, true, "", otpInfo.remainingSeconds())
+        invalidCodeReloadJob = viewModelScope.launch {
+            delay(INVALID_CODE_RELOAD_DELAY)
+            loadOtpInfo()
         }
     }
 

@@ -12,6 +12,7 @@ import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ErrorResult
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import coil3.request.transformations
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,8 +69,14 @@ class CoilLibriaImageLoaderImpl @Inject constructor(
         imageView.load(url, getImageLoader()) {
             val cacheKey = url.toCacheKey()
             diskCacheKey(cacheKey)
-            memoryCacheKey(cacheKey)
-            placeholderMemoryCacheKey(cacheKey)
+            if (config.transformations.isEmpty()) {
+                memoryCacheKey(cacheKey)
+                placeholderMemoryCacheKey(cacheKey)
+            } else {
+                // Преобразованная картинка не должна подменять оригинал в памяти (и наоборот).
+                memoryCacheKey(cacheKey?.plus(config.transformations.joinToString("") { "#${it.cacheKey}" }))
+                transformations(config.transformations)
+            }
             listener(
                 onStart = {
                     config.onStart?.invoke()

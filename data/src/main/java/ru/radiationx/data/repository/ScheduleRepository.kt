@@ -4,11 +4,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.api.ScheduleApi
 import ru.radiationx.data.entity.domain.feed.ScheduleItem
+import ru.radiationx.data.entity.domain.schedule.ReleaseScheduleInfo
 import ru.radiationx.data.entity.domain.schedule.ScheduleDay
+import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.mapper.toDomain
 import ru.radiationx.data.interactors.ReleaseUpdateMiddleware
 import ru.radiationx.data.system.ApiUtils
@@ -28,17 +32,49 @@ class ScheduleRepository @Inject constructor(
 
     private val dataRelay = MutableStateFlow<List<ScheduleDay>?>(null)
 
+    private val infoRelay = MutableStateFlow<Map<ReleaseId, ReleaseScheduleInfo>?>(null)
+    private val infoMutex = Mutex()
+
     fun observeSchedule(): Flow<List<ScheduleDay>> = dataRelay.filterNotNull()
+
+    /**
+     * releaseId → данные расписания. Грузится один раз на процесс (или берётся из последнего
+     * [loadSchedule]); параллельные вызовы ждут один общий запрос. Ошибка пробрасывается и не кэшируется.
+     */
+    suspend fun getScheduleInfo(): Map<ReleaseId, ReleaseScheduleInfo> {
+        infoRelay.value?.also { return it }
+        return infoMutex.withLock {
+            infoRelay.value ?: run {
+                loadSchedule()
+                infoRelay.value.orEmpty()
+            }
+        }
+    }
 
     suspend fun loadSchedule(): List<ScheduleDay> = withContext(Dispatchers.IO) {
         scheduleApi
             .getSchedule()
-            .map { it.release.toDomain(apiUtils, apiConfig) }
-            .groupBy { it.days.firstOrNull()?.let(ScheduleDay.Companion::toCalendarDay) }
-            .map { (day, releases) ->
+            .map { response ->
+                val release = response.release.toDomain(apiUtils, apiConfig)
+                val info = ReleaseScheduleInfo(
+                    releaseId = release.id,
+                    nextEpisodeNumber = response.nextReleaseEpisodeNumber,
+                    fullSeasonIsReleased = response.fullSeasonIsReleased == true,
+                    publishedEpisodeOrdinal = response.publishedReleaseEpisode?.ordinal,
+                    publishDay = release.days.firstOrNull()?.let {
+                        runCatching { ScheduleDay.toCalendarDay(it) }.getOrNull()
+                    },
+                )
+                ScheduleItem(releaseItem = release, scheduleInfo = info)
+            }
+            .also { items ->
+                infoRelay.value = items.mapNotNull { it.scheduleInfo }.associateBy { it.releaseId }
+            }
+            .groupBy { it.scheduleInfo?.publishDay }
+            .map { (day, items) ->
                 ScheduleDay(
                     day = day ?: Calendar.MONDAY,
-                    items = releases.map(::ScheduleItem)
+                    items = items
                 )
             }
             .let { scheduleDays ->

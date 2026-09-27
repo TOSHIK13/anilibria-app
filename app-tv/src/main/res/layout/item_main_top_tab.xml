@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ru.radiationx.anilibria.ui.widget.TopTabTextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="@dimen/main_top_tab_height"
+    android:background="@drawable/bg_main_top_tab"
+    android:clickable="true"
+    android:focusable="true"
+    android:fontFamily="sans-serif"
+    android:gravity="center"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:paddingStart="@dimen/main_top_tab_padding_horizontal"
+    android:paddingEnd="@dimen/main_top_tab_padding_horizontal"
+    android:textColor="@color/main_top_tab_text"
+    android:textSize="@dimen/main_top_tab_text_size"
+    tools:text="Главная" />

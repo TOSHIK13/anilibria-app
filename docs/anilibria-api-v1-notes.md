@@ -21,7 +21,10 @@
 ## OTP
 
 - `otp.code` приходит строкой.
-- Проверенные ответы возвращали 6 символов, но приложение не должно визуально дополнять или обрезать код.
+- Баг сервера: примерно 15% кодов приходят 5-значными (случайное число без ведущего нуля). Сервер хранит именно 5 цифр (`27055` находится, `027055` → 404), а сайт (`/app/auth/otp/linkDevice`) принимает только ровно 6 цифр, поэтому такой код ввести невозможно.
+- Тот же `device_id` получает тот же код до `expired_at`; новый `device_id` сразу получает новый код.
+- Обход: код никогда не дополняем и не обрезаем. Если код не `^\d{6}$`, `AuthRepository.getOtpInfo()` меняет `device_id` (`AuthHolder.resetDeviceId()`) и перезапрашивает, до 5 попыток. Если всё равно не 6 цифр, TV показывает "Код обновляется…" и повторяет запрос сам.
+- `POST /otp/login`, пока код не введён на сайте, отвечает HTTP 500 `Server Error` (не 401, как в документации); неизвестный код — 404. Приложение трактует 500/401/404 от `/otp/login` как "Код ещё не введён на сайте" (`OtpNotAcceptedException`), кнопка "Готово" остаётся доступной. Сетевые ошибки не маскируются.
 - `remaining_time` приходит числом секунд и используется для таймера.
 - При истечении таймера пользователь обновляет код кнопкой.
 
@@ -93,7 +96,34 @@
 ## Расписание
 
 - `GET /api/v1/anime/schedule/week`
-- Ответ: голый массив элементов, внутри каждого есть `release`.
+- Ответ: голый массив элементов `{release, next_release_episode_number, full_season_is_released,
+  published_release_episode}`.
+  - `next_release_episode_number` — номер следующей серии (int или null);
+  - `full_season_is_released` — boolean;
+  - `published_release_episode` — объект серии (как в `episodes[]`, нужен `ordinal`) или null,
+    если на этой неделе серия ещё не вышла.
+- `ScheduleRepository.getScheduleInfo()` — кэш `releaseId → ReleaseScheduleInfo` на процесс.
+
+## Доп. поля релиза (детали, latest, catalog, franchise)
+
+- `age_rating`: `{value: "R16_PLUS", label: "16+", is_adult, description}` → `Release.ageRating = label`.
+- `average_duration_of_episode`: int минут → `Release.averageEpisodeDurationMin`.
+- `shikimori`: `{id, url, votes, rating: 7.46}` → `Release.shikimoriRating`.
+- `background_covers`: массив `{preview, thumbnail}` (без `optimized`), только в деталях релиза;
+  часто пустой. `preview` — 1920x1080 jpg, `thumbnail` — 32x18 → `Release.backgroundCover`.
+- Серия (`episodes[]`, `latest_episode`): `preview` `{src, preview, thumbnail, optimized{src, preview, thumbnail}}`,
+  `optimized.preview` — webp 720x405 → `Episode.previewUrl`; `duration` — секунды → `Episode.durationSec`.
+
+## Франшизы
+
+- `GET /api/v1/anime/franchises/release/{releaseId}` — голый массив франшиз (обычно 0 или 1).
+- Франшиза: `{id (uuid), name, name_english, image{preview, thumbnail, optimized}, rating, first_year,
+  last_year, total_releases, total_episodes, total_duration, total_duration_in_seconds, franchise_releases[]}`.
+- `franchise_releases[]`: `{id, sort_order, release_id, franchise_id, release}`; `release` краткий
+  (poster, name, year, type, episodes_total, age_rating, shikimori…, без `genres`/`episodes`),
+  текущий релиз входит в список.
+- В legacy `franchises` был внутри релиза; в V1 его нет → `ReleaseInteractor.loadFranchises()`.
+  `loadWithFranchises()` для плееров оставлен как был (только сам релиз).
 
 ## История просмотра и таймкоды
 

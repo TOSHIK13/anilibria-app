@@ -11,9 +11,13 @@ class CardPresenterSelector(
 ) : PresenterSelector() {
 
     private val presentersMap = mutableMapOf<Class<*>, Presenter>()
+    private val continuePresenter by lazy { ContinueCardPresenter() }
 
     override fun getPresenter(item: Any?): Presenter? {
         item ?: return null
+        if (item is LibriaCard && item.continueInfo != null) {
+            return continuePresenter
+        }
         val presenter = presentersMap[item::class.java]
         if (presenter != null) {
             return presenter

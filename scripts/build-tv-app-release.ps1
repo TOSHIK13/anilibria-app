@@ -1,3 +1,8 @@
+param(
+    # Beta build (applicationId ...app.tv.mod.beta) installs next to the main mod.
+    [switch]$Beta
+)
+
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -52,12 +57,15 @@ $env:PATH = "$jdkHome\bin;$sdk\platform-tools;$sdk\cmdline-tools\latest\bin;$sdk
 
 Push-Location $root
 try {
-    & .\gradlew.bat :app-tv:copyAppReleaseApk
+    $gradleArgs = @(":app-tv:copyAppReleaseApk")
+    if ($Beta) { $gradleArgs += "-PtvBeta=true" }
+    & .\gradlew.bat @gradleArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Gradle build failed with exit code $LASTEXITCODE."
     }
 
-    $latest = Get-ChildItem (Join-Path $root "release-apks") -Filter "AniLiberty_TV_Mod_v*.apk" |
+    $apkFilter = if ($Beta) { "AniLiberty_TV_Beta_v*.apk" } else { "AniLiberty_TV_Mod_v*.apk" }
+    $latest = Get-ChildItem (Join-Path $root "release-apks") -Filter $apkFilter |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
 

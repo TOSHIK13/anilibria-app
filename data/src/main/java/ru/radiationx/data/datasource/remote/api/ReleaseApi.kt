@@ -8,6 +8,7 @@ import ru.radiationx.data.datasource.remote.address.ApiConfig
 import ru.radiationx.data.datasource.remote.fetchResponse
 import ru.radiationx.data.entity.response.collection.CollectionReleaseResponse
 import ru.radiationx.data.entity.response.collection.CollectionReleasesResponse
+import ru.radiationx.data.entity.response.collection.V1FranchiseResponse
 import ru.radiationx.data.entity.response.release.RandomReleaseResponse
 import javax.inject.Inject
 
@@ -18,6 +19,13 @@ class ReleaseApi @Inject constructor(
     private val apiConfig: ApiConfig,
     private val moshi: Moshi
 ) {
+
+    companion object {
+        /** Поля ленты + серии без ссылок на видео (превью `optimized.preview`, как в CollectionMapper). */
+        const val SHORT_RELEASE_FIELDS = FeedApi.RELEASE_FIELDS +
+                ",episodes.id,episodes.ordinal,episodes.name,episodes.preview.optimized.preview," +
+                "episodes.duration"
+    }
 
     private val animeUrl: String
         get() = "${apiConfig.animeBaseUrl}/api/v1/anime"
@@ -56,12 +64,13 @@ class ReleaseApi @Inject constructor(
 
     /**
      * Краткие релизы для карточек: только поля, которые читает CollectionMapper
-     * (как в ленте, [FeedApi.RELEASE_FIELDS]) — ответ в ~5 раз легче полного.
+     * (как в ленте, [FeedApi.RELEASE_FIELDS]) плюс номер/превью/длительность серий
+     * для «Продолжить просмотр» — ответ в разы легче полного.
      */
     suspend fun getShortReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> {
         val args = mapOf(
             "ids" to ids.joinToString(","),
-            "include" to FeedApi.RELEASE_FIELDS,
+            "include" to SHORT_RELEASE_FIELDS,
         )
         return client
             .get("$animeUrl/releases/list", args)
@@ -92,6 +101,14 @@ class ReleaseApi @Inject constructor(
         }
         return client
             .get("$animeUrl/releases/recommended", args)
+            .fetchList()
+    }
+
+    /** Франшизы релиза: голый массив, части в `franchise_releases[]` с кратким `release`. */
+    suspend fun getFranchisesByRelease(releaseId: Int): List<V1FranchiseResponse> {
+        val args = mapOf<String, String>()
+        return client
+            .get("$animeUrl/franchises/release/$releaseId", args)
             .fetchList()
     }
 

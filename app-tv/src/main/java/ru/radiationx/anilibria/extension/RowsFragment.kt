@@ -6,7 +6,9 @@ import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRow
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardDiffCallback
+import ru.radiationx.anilibria.common.ContinueWatchingCardsViewModel
 import ru.radiationx.anilibria.ui.presenter.CardPresenterSelector
+import ru.radiationx.anilibria.ui.presenter.cust.ContinueListRow
 import ru.radiationx.shared.ktx.android.subscribeTo
 
 fun Fragment.createCardsRowBy(
@@ -18,7 +20,13 @@ fun Fragment.createCardsRowBy(
         viewModel.onLinkCardBind()
     }
     val cardsAdapter = ArrayObjectAdapter(cardsPresenter)
-    val row = ListRow(rowId, HeaderItem(viewModel.defaultTitle), cardsAdapter)
+    val header = HeaderItem(viewModel.defaultTitle)
+    // Ряд «Продолжить просмотр» рисуется своим презентером (см. ContinueListRowPresenter).
+    val row = if (viewModel is ContinueWatchingCardsViewModel) {
+        ContinueListRow(rowId, header, cardsAdapter)
+    } else {
+        ListRow(rowId, header, cardsAdapter)
+    }
     subscribeTo(viewModel.cardsData) {
         cardsAdapter.setItems(it, CardDiffCallback)
     }

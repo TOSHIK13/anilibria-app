@@ -17,6 +17,7 @@ import ru.radiationx.data.datasource.remote.api.AuthApi
 import ru.radiationx.data.entity.common.AuthState
 import ru.radiationx.data.entity.domain.auth.OtpInfo
 import ru.radiationx.data.entity.domain.auth.SocialAuth
+import ru.radiationx.data.entity.domain.auth.hasValidCode
 import ru.radiationx.data.entity.domain.other.ProfileItem
 import ru.radiationx.data.entity.mapper.toDomain
 import ru.radiationx.shared.ktx.coRunCatching
@@ -98,9 +99,15 @@ class AuthRepository @Inject constructor(
     }
 
     suspend fun getOtpInfo(): OtpInfo = withContext(Dispatchers.IO) {
-        authApi
-            .loadOtpInfo(authHolder.getDeviceId())
-            .toDomain()
+        loadValidOtpInfo(
+            load = { authApi.loadOtpInfo(authHolder.getDeviceId()).toDomain() },
+            onInvalid = { attempt, info ->
+                // Сервер теряет ведущий ноль (5 цифр), сайт такой код не примет.
+                // Тот же device_id получит тот же код до expired_at, поэтому меняем device_id.
+                Timber.w("OTP code '${info.code}' is not 6 digits, attempt $attempt/$OTP_MAX_ATTEMPTS, resetting device_id")
+                authHolder.resetDeviceId()
+            }
+        )
     }
 
     suspend fun acceptOtp(code: String) = withContext(Dispatchers.IO) {
@@ -211,4 +218,26 @@ class AuthRepository @Inject constructor(
         }
     }
 
+}
+
+internal const val OTP_MAX_ATTEMPTS = 5
+
+/**
+ * Запрашивает OTP до [maxAttempts] раз, пока код не станет 6-значным.
+ * Перед каждым повтором вызывается [onInvalid]. Если все попытки неудачны,
+ * возвращается последний ответ (UI сам покажет "Код обновляется…").
+ */
+internal suspend fun loadValidOtpInfo(
+    maxAttempts: Int = OTP_MAX_ATTEMPTS,
+    load: suspend () -> OtpInfo,
+    onInvalid: suspend (attempt: Int, info: OtpInfo) -> Unit,
+): OtpInfo {
+    var attempt = 1
+    var info = load()
+    while (!info.hasValidCode() && attempt < maxAttempts) {
+        onInvalid(attempt, info)
+        attempt++
+        info = load()
+    }
+    return info
 }

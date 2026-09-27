@@ -20,11 +20,24 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
         const val ID_YOUTUBE = 6L
         const val ID_PROFILE = 7L
         const val ID_COLLECTIONS = 8L
+        const val ID_CATALOG = 9L
+        const val ID_SCHEDULE = 10L
 
         val ids = listOf(
             ID_MAIN,
             ID_MY,
             ID_COLLECTIONS,
+            ID_PROFILE,
+        )
+
+        /** Верхние вкладки: страницы из [ids] + экраны-действия (каталог, расписание, поиск). */
+        val tabIds = listOf(
+            ID_MAIN,
+            ID_MY,
+            ID_COLLECTIONS,
+            ID_CATALOG,
+            ID_SCHEDULE,
+            ID_SEARCH,
             ID_PROFILE,
         )
 
@@ -37,6 +50,8 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
             ID_YOUTUBE to "YouTube",
             ID_PROFILE to "Настройки",
             ID_COLLECTIONS to "Коллекции",
+            ID_CATALOG to "Каталог",
+            ID_SCHEDULE to "Расписание",
         )
     }
 

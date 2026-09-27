@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ru.radiationx.anilibria.ui.widget.ContinueCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:focusable="true"
+    android:padding="@dimen/card_continue_ring"
+    android:focusableInTouchMode="true">
+
+    <FrameLayout
+        android:id="@+id/continueImageContainer"
+        android:layout_width="224dp"
+        android:layout_height="126dp"
+        android:background="#222222">
+
+        <ImageView
+            android:id="@+id/continuePreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop" />
+
+        <FrameLayout
+            android:id="@+id/continueFallback"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/continueBlur"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop"
+                android:scaleX="1.25"
+                android:scaleY="1.25" />
+
+            <ImageView
+                android:id="@+id/continuePoster"
+                android:layout_width="72dp"
+                android:layout_height="102dp"
+                android:layout_marginStart="12dp"
+                android:layout_marginTop="12dp"
+                android:background="#222222"
+                android:elevation="4dp"
+                android:importantForAccessibility="no"
+                android:scaleType="centerCrop" />
+
+            <TextView
+                android:id="@+id/continueEpisode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="98dp"
+                android:layout_marginTop="35dp"
+                android:layout_marginEnd="8dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp" />
+
+            <TextView
+                android:id="@+id/continueTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="98dp"
+                android:layout_marginTop="62dp"
+                android:layout_marginEnd="8dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:singleLine="true"
+                android:textColor="#B3FFFFFF"
+                android:textSize="12sp" />
+        </FrameLayout>
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/continueTitle"
+        android:layout_width="224dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="132dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-medium"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/continueSubtitle"
+        android:layout_width="224dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="152dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:textColor="#B3FFFFFF"
+        android:textSize="12sp" />
+</ru.radiationx.anilibria.ui.widget.ContinueCardView>

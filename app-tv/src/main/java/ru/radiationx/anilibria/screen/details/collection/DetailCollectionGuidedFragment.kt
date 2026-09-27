@@ -21,7 +21,7 @@ class DetailCollectionGuidedFragment : FakeGuidedStepFragment() {
         private const val ARG_ID = "id"
         private const val CHECK_SET_ID = 1
 
-        private val COLLECTION_ITEMS = listOf(
+        val COLLECTION_ITEMS = listOf(
             null to "Не в коллекции",
             CollectionType.PLANNED to "Запланировано",
             CollectionType.WATCHING to "Смотрю",

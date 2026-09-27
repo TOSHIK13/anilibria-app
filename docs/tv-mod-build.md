@@ -34,6 +34,23 @@ defaultConfig {
 Do not change it in feature branches unless you intentionally want a separate
 install.
 
+## Beta build next to the mod
+
+To test a branch on the same TV without replacing the installed mod:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-tv-app-release.ps1 -Beta
+```
+
+`-Beta` passes `-PtvBeta=true` to Gradle:
+
+- `applicationId=ru.radiationx.anilibria.app.tv.mod.beta` (separate install, own data and login);
+- launcher label `AniLiberty TV Beta`, `versionName` suffix `-beta`, `BuildConfig.IS_BETA=true`;
+- output `D:/Ani/release-apks/AniLiberty_TV_Beta_v<version>_<yyyy-MM-dd_HH-mm>.apk`, same signing key.
+
+The in-app updater still points at the main mod APK; installing an update from inside the beta
+updates the main mod, not the beta.
+
 ## Signing
 
 Release builds are signed from `local.properties`. The current local dev
