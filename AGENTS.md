@@ -39,11 +39,13 @@
 `scripts/tv/env.ps1` (dot-source) выставляет `JAVA_HOME`, `ANDROID_HOME`, `GRADLE_USER_HOME` и `PATH` — не прописывать их вручную в каждой команде.
 
 Устройства (`-Device`):
-- `emu` — эмулятор `emulator-5554`, AVD `Ani_TV_API_36` (`tv.ps1 emu` запускает). Для промежуточных проверок.
-- `tv` — реальный ТВ Ugoos UHD Google TV STB, `192.168.1.151:5555`. Для финальной проверки.
-- Пакет: `ru.radiationx.anilibria.app.tv.mod`.
+- `emu` — эмулятор `emulator-5554`, AVD `Ani_TV_API_36` (`tv.ps1 emu` запускает). Для промежуточных проверок и вообще для всего, что не требует явного разрешения пользователя в чате.
+- `tv` — реальный ТВ Ugoos UHD Google TV STB, `192.168.1.151:5555`. **Только для финальной проверки и только по прямому указанию пользователя в чате** (см. правило ниже).
+- Пакет (`-Variant`, по умолчанию `debug`): debug — `ru.radiationx.anilibria.app.tv.mod.debug` (ставится рядом с release, отдельные данные/логин); release — `ru.radiationx.anilibria.app.tv.mod`. TV debug APK и установка через `tv.ps1` по умолчанию используют debug-пакет; `tv.ps1 -Variant release ...` — для release.
 
 «No connected devices!» — не ошибка кода: проверить `tv.ps1 devices`, честно сообщить, если устройства нет.
+
+**Реальный ТВ (`-Device tv`, `192.168.1.151:5555`) — без прямого разрешения пользователя в текущем чате его не трогать вообще**: ни `install`/`uninstall`, ни `pm clear`, ни `keys`/`text` (эмуляция ввода), ни `shot` (скриншоты), ни `stop`/`restart`. По умолчанию все проверки — на эмуляторе (`-Device emu`, дефолт). Release-пакет (`ru.radiationx.anilibria.app.tv.mod`) никогда не удалять и не чистить (`pm clear`) — ни на эмуляторе, ни тем более на реальном ТВ.
 
 ## 4. Проверка UI на устройстве (дёшево по токенам)
 

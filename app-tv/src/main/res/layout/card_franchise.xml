@@ -23,6 +23,33 @@
             android:importantForAccessibility="no"
             android:scaleType="centerCrop" />
 
+        <!-- Иконка коллекции пользователя для этой части — кружок в левом нижнем углу постера. -->
+        <ImageView
+            android:id="@+id/franchiseCollectionIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="4dp"
+            android:background="@drawable/bg_franchise_chip_dark"
+            android:importantForAccessibility="no"
+            android:padding="3dp"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:src="@drawable/ic_collection_watching" />
+
+        <!-- Не отмечена ни в одной коллекции при просмотренном открытом релизе — подсветка. -->
+        <ImageView
+            android:id="@+id/franchiseUnseenIcon"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="top|start"
+            android:layout_marginStart="4dp"
+            android:layout_marginTop="4dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_alert_circle_outline"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
         <TextView
             android:id="@+id/franchiseOrder"
             android:layout_width="wrap_content"

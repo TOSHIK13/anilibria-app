@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -136,6 +137,11 @@ class CollectionRepository @Inject constructor(
         requestRefresh()
         emitAll(idsState)
     }.distinctUntilChanged()
+
+    /** Коллекция конкретного релиза из кэша [observeCollectionIds] — без сетевого запроса на карточку. */
+    fun observeReleaseCollection(releaseId: ReleaseId): Flow<CollectionType?> = observeCollectionIds()
+        .map { it?.get(releaseId) }
+        .distinctUntilChanged()
 
     /** Обновляет кэш из сети, если он устарел ([force] — без учёта TTL). Не блокирует вызывающего. */
     fun requestRefresh(force: Boolean = false) {

@@ -17,12 +17,14 @@ Commands:
   scenario <file>              run a script: one command per line (keys ... | wait <sec> | shot <name> | focus | log | start | restart | text ...)
 
 Device: -Device emu (emulator-5554, default), tv (192.168.1.151:5555) or any serial; or $env:ANI_TV_DEVICE.
+Package: -Variant debug (default, ru....mod.debug, side-by-side with release) or release (ru....mod).
 Screenshots go to -Out (default $env:TEMP\ani-tv-shots).
 #>
 param(
     [Parameter(Position = 0)][string]$Command = 'help',
     [Parameter(Position = 1)][string]$Arg,
     [string]$Device = $(if ($env:ANI_TV_DEVICE) { $env:ANI_TV_DEVICE } else { 'emu' }),
+    [ValidateSet('debug', 'release')][string]$Variant = $(if ($env:ANI_TV_VARIANT) { $env:ANI_TV_VARIANT } else { 'debug' }),
     [double]$Delay = 0.5,
     [int]$Width = 960,
     [string]$Crop,
@@ -33,7 +35,7 @@ param(
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 . (Join-Path $PSScriptRoot 'env.ps1')
-$pkg = 'ru.radiationx.anilibria.app.tv.mod'
+$pkg = if ($Variant -eq 'release') { 'ru.radiationx.anilibria.app.tv.mod' } else { 'ru.radiationx.anilibria.app.tv.mod.debug' }
 $serial = switch ($Device) { 'emu' { 'emulator-5554' } 'tv' { '192.168.1.151:5555' } default { $Device } }
 
 $adbExe = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'

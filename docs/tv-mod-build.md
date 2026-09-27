@@ -34,6 +34,21 @@ defaultConfig {
 Do not change it in feature branches unless you intentionally want a separate
 install.
 
+## Debug build next to release
+
+`app-tv` debug builds (`assembleAppDebug`, `installAppDebug`, `scripts/tv/tv.ps1 build`/`install`)
+now use a separate applicationId so they install side by side with the release
+mod instead of overwriting it:
+
+- `applicationId=ru.radiationx.anilibria.app.tv.mod.debug`, `versionName` suffix `-debug`,
+  launcher label `AniLiberty TV Debug`;
+- combined with `-PtvBeta=true` it becomes `....mod.beta.debug`, label
+  `AniLiberty TV Beta Debug` — still separate from both release and beta installs.
+
+`scripts/tv/tv.ps1` targets the debug package by default (`-Variant debug`); pass
+`-Variant release` to point commands (`start`/`stop`/`restart`/`log`/`install`) at the
+release package `ru.radiationx.anilibria.app.tv.mod` instead.
+
 ## Beta build next to the mod
 
 To test a branch on the same TV without replacing the installed mod:

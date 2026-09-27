@@ -22,6 +22,8 @@ data class ContinueTarget(
     val episodeId: EpisodeId,
     val episode: Episode?,
     val positionMs: Long,
+    /** Все серии уже просмотрены — это пересмотр с начала, а не продолжение. */
+    val isRewatch: Boolean = false,
 )
 
 class DetailDataConverter @Inject constructor() {
@@ -71,13 +73,35 @@ class DetailDataConverter @Inject constructor() {
 
     /**
      * Куда ведёт «Продолжить»: последняя открытая серия, а если она досмотрена —
-     * следующая с начала (если есть). null — релиз ещё не смотрели.
+     * следующая с начала (если есть). Если досмотрены вообще все серии — пересмотр
+     * с первой. null — релиз ещё не смотрели.
      */
     fun continueTarget(release: Release, accesses: List<EpisodeAccess>): ContinueTarget? {
-        if (accesses.none { it.seek > 0 || it.isViewed }) return null
-        val last = accesses.maxByOrNull { it.lastAccessRaw } ?: return null
         val episodes = release.episodes
-        val index = episodes.indexOfFirst { it.id == last.id }
+        if (episodes.isEmpty()) return null
+        val watched = accesses.filter { it.seek > 0 || it.isViewed }
+        if (watched.isEmpty()) return null
+
+        val indexById = episodes.withIndex().associate { (index, episode) -> episode.id to index }
+
+        // Все серии, у которых есть история просмотра, отмечены как просмотренные полностью,
+        // а таких серий не меньше, чем в релизе — сезон досмотрен целиком.
+        val allViewed = episodes.isNotEmpty() && episodes.all { episode ->
+            accesses.firstOrNull { it.id == episode.id }?.isViewed == true
+        }
+        if (allViewed) {
+            val first = episodes.first()
+            return ContinueTarget(first.id, first, 0L, isRewatch = true)
+        }
+
+        // При равном времени последнего доступа (например, история пришла одним пакетом
+        // с общим таймстемпом) берём серию с бОльшим порядковым номером, а не первую
+        // попавшуюся — иначе «следующая после последней» всегда будет второй серией.
+        val last = watched.maxWithOrNull(
+            compareBy<EpisodeAccess> { it.lastAccessRaw }
+                .thenBy { indexById[it.id] ?: -1 }
+        ) ?: return null
+        val index = indexById[last.id] ?: -1
         val next = if (last.isViewed && index >= 0) episodes.getOrNull(index + 1) else null
         return if (next != null) {
             ContinueTarget(next.id, next, 0L)
@@ -111,8 +135,10 @@ class DetailDataConverter @Inject constructor() {
         ).joinToString(" ").takeIf { it.isNotEmpty() }
         val episodesText = episodesText(released, total)
         val age = ageRating?.trim()?.takeIf { it.isNotEmpty() }
-        val rating = shikimoriRating?.let { "★ ${ratingFormat.format(it)} Shikimori" }
-        return listOf(status) + listOfNotNull(type, yearSeason, episodesText, age, rating)
+        val shikimoriChip = shikimoriRating?.let { "★ ${ratingFormat.format(it)} Shikimori" }
+        // Вторая оценка рядом с первой — та же карточка API, доп. запросов не нужно.
+        val malChip = malRating?.let { "★ ${ratingFormat.format(it)} MyAnimeList" }
+        return listOf(status) + listOfNotNull(type, yearSeason, episodesText, age, shikimoriChip, malChip)
             .map { DetailChip(it) }
     }
 
@@ -211,6 +237,7 @@ class DetailDataConverter @Inject constructor() {
             episodeName = target.episode?.displayName(),
             watchedCount = accesses.count { it.isViewed },
             totalCount = total,
+            isRewatch = target.isRewatch,
         )
     }
 
