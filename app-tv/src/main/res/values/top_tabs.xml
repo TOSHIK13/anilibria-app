@@ -42,8 +42,27 @@
     <dimen name="catalog_grid_vertical_spacing">16dp</dimen>
     <dimen name="catalog_empty_top">214dp</dimen>
     <dimen name="catalog_empty_button_height">44dp</dimen>
-    <!-- Высота карточек выбранного ряда «Расписания»: заголовок дня над ними не заходит под вкладки. -->
-    <dimen name="schedule_rows_top_offset">104dp</dimen>
+    <!-- «Расписание» — неделя (макет f-wk): колонки 118 dp через 4 dp от 66 dp, заголовок дня 36 dp. -->
+    <dimen name="schedule_week_top">66dp</dimen>
+    <dimen name="schedule_week_column_width">118dp</dimen>
+    <dimen name="schedule_week_column_gap">4dp</dimen>
+    <dimen name="schedule_week_header_height">36dp</dimen>
+    <!-- Первая строка — на 44 dp от верха колонки (8 dp под заголовком), шаг 65 dp. -->
+    <dimen name="schedule_week_list_top">8dp</dimen>
+    <dimen name="schedule_week_row_height">61dp</dimen>
+    <dimen name="schedule_week_row_gap">4dp</dimen>
+    <dimen name="schedule_week_row_radius">7dp</dimen>
+    <dimen name="schedule_week_poster_width">37dp</dimen>
+    <dimen name="schedule_week_poster_height">53dp</dimen>
+    <dimen name="schedule_week_text_start">48dp</dimen>
+    <dimen name="schedule_week_title_top">7dp</dimen>
+    <dimen name="schedule_week_title_line_extra">1dp</dimen>
+    <dimen name="schedule_week_episode_top">38.5dp</dimen>
+    <!-- «ещё N» сразу под шестой строкой (текст на 439 dp от верха колонки). -->
+    <dimen name="schedule_week_more_height">24dp</dimen>
+    <dimen name="schedule_week_more_padding_horizontal">12dp</dimen>
+    <!-- «нет серий»: текст на 60 dp от верха колонки (от начала списка строк). -->
+    <dimen name="schedule_week_empty_top">17dp</dimen>
 
     <color name="main_top_tab_underline">#E53935</color>
     <color name="main_top_tab_focused_background">#FFFFFF</color>

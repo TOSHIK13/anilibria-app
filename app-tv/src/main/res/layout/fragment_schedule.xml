@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+«Расписание» — неделя (макет f-wk, 1 dp = 2 px кадра 1920×1080): 7 колонок от сегодняшнего дня
+(собираются в ScheduleFragment), состояния загрузки и ошибки.
+-->
+<ru.radiationx.anilibria.screen.schedule.ScheduleWeekLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF15212A">
+
+    <LinearLayout
+        android:id="@+id/scheduleWeek"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_marginStart="@dimen/main_top_tabs_margin_start"
+        android:layout_marginTop="@dimen/schedule_week_top"
+        android:orientation="horizontal"
+        android:visibility="invisible" />
+
+    <ProgressBar
+        android:id="@+id/scheduleProgress"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/scheduleError"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="@dimen/catalog_empty_top"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:text="Не удалось загрузить"
+            android:textColor="#FFFFFFFF"
+            android:textSize="22sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Проверьте подключение и попробуйте ещё раз"
+            android:textColor="#9EFFFFFF"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/scheduleRetry"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/catalog_empty_button_height"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/bg_catalog_button"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:text="Повторить"
+            android:textColor="@color/catalog_button_text"
+            android:textSize="15sp" />
+
+    </LinearLayout>
+
+</ru.radiationx.anilibria.screen.schedule.ScheduleWeekLayout>

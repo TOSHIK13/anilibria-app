@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Строка колонки недели «Расписания» (макет f-wk: 236×122 px, постер 74×106 px). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/schedule_week_row_height"
+    android:layout_marginBottom="@dimen/schedule_week_row_gap"
+    android:background="@drawable/bg_schedule_week_row"
+    android:focusable="true">
+
+    <ImageView
+        android:id="@+id/scheduleRowPoster"
+        android:layout_width="@dimen/schedule_week_poster_width"
+        android:layout_height="@dimen/schedule_week_poster_height"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="4dp"
+        android:background="#1AFFFFFF"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop" />
+
+    <TextView
+        android:id="@+id/scheduleRowTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/schedule_week_text_start"
+        android:layout_marginTop="@dimen/schedule_week_title_top"
+        android:breakStrategy="simple"
+        android:duplicateParentState="true"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-medium"
+        android:hyphenationFrequency="none"
+        android:includeFontPadding="false"
+        android:lineSpacingExtra="@dimen/schedule_week_title_line_extra"
+        android:maxLines="2"
+        android:textColor="@color/schedule_week_title"
+        android:textSize="11sp"
+        tools:text="Мир отомэ-игр — это тяжёлый мир для мобов" />
+
+    <TextView
+        android:id="@+id/scheduleRowEpisode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/schedule_week_text_start"
+        android:layout_marginTop="@dimen/schedule_week_episode_top"
+        android:layout_marginEnd="4dp"
+        android:duplicateParentState="true"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/schedule_week_subtitle"
+        android:textSize="10sp"
+        tools:text="● Серия 12" />
+
+</FrameLayout>

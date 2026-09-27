@@ -35,7 +35,19 @@ class ScheduleRepository @Inject constructor(
     private val infoRelay = MutableStateFlow<Map<ReleaseId, ReleaseScheduleInfo>?>(null)
     private val infoMutex = Mutex()
 
+    @Volatile
+    private var apiOrder: Map<ReleaseId, Int> = emptyMap()
+
     fun observeSchedule(): Flow<List<ScheduleDay>> = dataRelay.filterNotNull()
+
+    /** Последнее загруженное расписание (кэш на процесс), null — ещё не загружалось. */
+    fun getCachedSchedule(): List<ScheduleDay>? = dataRelay.value
+
+    /**
+     * Позиция релиза в ответе API последней загрузки: [loadSchedule] пересортировывает тайтлы
+     * внутри дня, а экранам может понадобиться исходный порядок.
+     */
+    fun getApiOrder(): Map<ReleaseId, Int> = apiOrder
 
     /**
      * releaseId → данные расписания. Грузится один раз на процесс (или берётся из последнего
@@ -68,6 +80,7 @@ class ScheduleRepository @Inject constructor(
                 ScheduleItem(releaseItem = release, scheduleInfo = info)
             }
             .also { items ->
+                apiOrder = items.withIndex().associate { (index, item) -> item.releaseItem.id to index }
                 infoRelay.value = items.mapNotNull { it.scheduleInfo }.associateBy { it.releaseId }
             }
             .groupBy { it.scheduleInfo?.publishDay }
