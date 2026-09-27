@@ -99,8 +99,8 @@ data class TrackerAccount(
  */
 data class TrackerReleaseRef(
     val releaseId: ReleaseId,
-    val shikimoriId: Long? = null,
-    val malId: Long? = null,
+    val shikimoriId: Int? = null,
+    val malId: Int? = null,
 ) {
     val hasExternalIds: Boolean
         get() = shikimoriId != null || malId != null

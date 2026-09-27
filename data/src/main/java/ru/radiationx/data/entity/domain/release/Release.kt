@@ -51,13 +51,13 @@ data class Release(
     /** Голосов на Shikimori (V1 `shikimori.votes`). */
     val shikimoriVotes: Int? = null,
     /** id релиза на Shikimori (V1 `shikimori.id`); совпадает с id MyAnimeList. */
-    val shikimoriId: Long? = null,
-    /** id релиза на MyAnimeList (V1 `mal.id`). */
-    val malId: Long? = null,
+    val shikimoriId: Int? = null,
     /** Рейтинг MyAnimeList (V1 `mal.rating`). */
     val malRating: Double? = null,
     /** Голосов на MyAnimeList (V1 `mal.votes`). */
     val malVotes: Int? = null,
+    /** MyAnimeList id (V1 `mal.id`, fallback `shikimori.id` — у Shikimori те же id). */
+    val malId: Int? = null,
     /** Собственный рейтинг AniLibria (V1 `rating.average`); null — нет оценок. */
     val ownRatingAverage: Double? = null,
     /** Голосов за собственный рейтинг (V1 `rating.votes`). */

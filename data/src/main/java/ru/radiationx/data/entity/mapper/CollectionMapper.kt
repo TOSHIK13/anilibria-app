@@ -116,8 +116,8 @@ fun CollectionReleaseResponse.toDomain(
         shikimoriVotes = shikimori?.votes?.takeIf { it > 0 },
         malRating = mal?.rating?.takeIf { it > 0.0 },
         shikimoriId = shikimori?.id?.takeIf { it > 0 },
-        malId = mal?.id?.takeIf { it > 0 },
         malVotes = mal?.votes?.takeIf { it > 0 },
+        malId = (mal?.id ?: shikimori?.id)?.takeIf { it > 0 },
         ownRatingAverage = rating?.average?.takeIf { it > 0.0 },
         ownRatingVotes = rating?.votes,
         collectionStats = ReleaseCollectionStats(

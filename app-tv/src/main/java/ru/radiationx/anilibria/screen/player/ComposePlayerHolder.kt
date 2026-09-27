@@ -105,6 +105,21 @@ class ComposePlayerHolder(
         cacheDataSourceFactory = null
     }
 
+    /**
+     * Пока экран плеера остановлен (сон/блокировка приставки), MediaSession снимается:
+     * иначе PLAY от HDMI-CEC/ассистента при пробуждении запустит видео в фоне.
+     */
+    fun setMediaSessionActive(context: Context, active: Boolean) {
+        if (!active) {
+            stopMediaSession()
+            return
+        }
+        val currentPlayer = player ?: return
+        if (mediaSession == null) {
+            startMediaSession(context, currentPlayer)
+        }
+    }
+
     private fun startMediaSession(context: Context, player: ExoPlayer) {
         stopMediaSession()
         mediaSession = MediaSession.Builder(context, player)
