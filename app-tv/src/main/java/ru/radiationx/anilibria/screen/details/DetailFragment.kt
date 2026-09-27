@@ -93,10 +93,19 @@ class DetailFragment : RowsSupportFragment() {
 
     private val recommendsViewModel by viewModel<DetailRecommendsViewModel> { argExtra }
 
+    private val similarAniListViewModel by viewModel<DetailSimilarAniListViewModel> { argExtra }
+
+    private val similarShikimoriViewModel by viewModel<DetailSimilarShikimoriViewModel> { argExtra }
+
+    private val similarMalViewModel by viewModel<DetailSimilarMalViewModel> { argExtra }
+
     private fun getViewModel(rowId: Long): ViewModel? = when (rowId) {
         DetailsViewModel.RELEASE_ROW_ID -> headerViewModel
         DetailsViewModel.RELATED_ROW_ID -> relatedViewModel
         DetailsViewModel.RECOMMENDS_ROW_ID -> recommendsViewModel
+        DetailsViewModel.SIMILAR_ANILIST_ROW_ID -> similarAniListViewModel
+        DetailsViewModel.SIMILAR_SHIKIMORI_ROW_ID -> similarShikimoriViewModel
+        DetailsViewModel.SIMILAR_MAL_ROW_ID -> similarMalViewModel
         else -> null
     }
 
@@ -138,6 +147,9 @@ class DetailFragment : RowsSupportFragment() {
         viewLifecycleOwner.lifecycle.addObserver(headerViewModel)
         viewLifecycleOwner.lifecycle.addObserver(relatedViewModel)
         viewLifecycleOwner.lifecycle.addObserver(recommendsViewModel)
+        viewLifecycleOwner.lifecycle.addObserver(similarAniListViewModel)
+        viewLifecycleOwner.lifecycle.addObserver(similarShikimoriViewModel)
+        viewLifecycleOwner.lifecycle.addObserver(similarMalViewModel)
 
         adapter = rowsAdapter
         setupCollapsingHeader()

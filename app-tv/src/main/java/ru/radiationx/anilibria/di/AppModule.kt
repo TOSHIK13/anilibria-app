@@ -7,6 +7,12 @@ import ru.radiationx.anilibria.AppBuildConfig
 import ru.radiationx.anilibria.AppMigrationExecutor
 import ru.radiationx.anilibria.TvCheckerSources
 import ru.radiationx.anilibria.common.CardsDataConverter
+import ru.radiationx.anilibria.similar.CatalogMalIndex
+import ru.radiationx.anilibria.similar.LiveSimilarReleasesSource
+import ru.radiationx.anilibria.similar.SimilarCacheStorage
+import ru.radiationx.anilibria.similar.SimilarReleasesRepository
+import ru.radiationx.anilibria.similar.SimilarReleasesSource
+import ru.radiationx.anilibria.similar.SimilarServicesApi
 import ru.radiationx.anilibria.watchnext.HomeChannelPublisher
 import ru.radiationx.anilibria.watchnext.WatchNextPublisher
 import ru.radiationx.data.SharedBuildConfig
@@ -44,6 +50,13 @@ class AppModule(context: Context) : QuillModule() {
         // Для канала на главном экране TV (в Activity-скоупе переопределяется контекстом Activity).
         instance { CardsDataConverter(context) }
         single<HomeChannelPublisher>()
+
+        // «Похожие» в деталях: сейчас ТВ спрашивает сервисы сам (кеш на диске).
+        single<SimilarCacheStorage>()
+        single<CatalogMalIndex>()
+        single<SimilarServicesApi>()
+        singleImpl<SimilarReleasesSource, LiveSimilarReleasesSource>()
+        single<SimilarReleasesRepository>()
 
         instance {
             MintPermissions.controller
