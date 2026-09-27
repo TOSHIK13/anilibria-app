@@ -119,6 +119,13 @@ class WatchProgressRepository @Inject constructor(
         .map { it[releaseId] }
         .distinctUntilChanged()
 
+    /** Прогресс релиза по текущему состоянию (без ожидания пересчёта [observe]). */
+    fun currentProgress(releaseId: ReleaseId): ReleaseWatchProgress? {
+        val episodes = state.value?.values?.filter { it.releaseId == releaseId.id }
+        if (episodes.isNullOrEmpty()) return null
+        return WatchHistoryLogic.progress(episodes)[releaseId]
+    }
+
     /** Все известные серии с таймкодами (для заполнения кэша таймкодов). */
     fun observeEpisodes(): Flow<Map<String, WatchHistoryEpisode>> = state.filterNotNull()
 
@@ -150,6 +157,22 @@ class WatchProgressRepository @Inject constructor(
         if (System.currentTimeMillis() - failedAt < RETRY_BACKOFF_MS) return
         if (refreshJob?.isActive == true) return
         refreshJob = scope.launch { refresh() }
+    }
+
+    /**
+     * Принудительно перезагружает историю с сервера в обход ограничения [REFRESH_TTL_MS]
+     * и паузы после ошибки (кнопка «Обновить историю просмотров» в настройках TV).
+     * Снимок на диске стирается; очередь неотправленных таймкодов сохраняется и
+     * отправляется перед загрузкой.
+     *
+     * @return true — история загружена; false — нет авторизации или загрузка не удалась.
+     */
+    suspend fun forceRefresh(): Boolean {
+        ensureRestored()
+        if (authRepository.getAuthState() != AuthState.AUTH) return false
+        persistJob?.cancel()
+        storage.clearSnapshot()
+        return refresh(force = true)
     }
 
     fun clear() {
@@ -297,17 +320,17 @@ class WatchProgressRepository @Inject constructor(
         LoadTiming.span("watch", "history restored", start, "items=${snapshot.episodes.size}")
     }
 
-    private suspend fun refresh() {
-        refreshMutex.withLock {
-            if (System.currentTimeMillis() - loadedAt < REFRESH_TTL_MS) return
+    private suspend fun refresh(force: Boolean = false): Boolean {
+        return refreshMutex.withLock {
+            if (!force && System.currentTimeMillis() - loadedAt < REFRESH_TTL_MS) return true
             ensureRestored()
-            if (authRepository.getAuthState() != AuthState.AUTH) return
+            if (authRepository.getAuthState() != AuthState.AUTH) return false
             flushPending()
             val startedAt = System.currentTimeMillis()
             val timingStart = LoadTiming.now()
             coRunCatching { loadAll() }
                 .onSuccess { server ->
-                    if (authRepository.getAuthState() != AuthState.AUTH) return
+                    if (authRepository.getAuthState() != AuthState.AUTH) return false
                     val now = System.currentTimeMillis()
                     val merged = WatchHistoryLogic.applyPending(
                         WatchHistoryLogic.mergeServer(server, state.value.orEmpty(), startedAt),
@@ -326,6 +349,7 @@ class WatchProgressRepository @Inject constructor(
                     Timber.e(it)
                     LoadTiming.span("watch", "history error", timingStart, it.javaClass.simpleName)
                 }
+                .isSuccess
         }
     }
 

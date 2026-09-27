@@ -8,6 +8,7 @@ import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.transition.TransitionManager
+import com.github.terrakok.cicerone.Router
 import dev.androidbroadcast.vbpd.viewBinding
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
@@ -17,6 +18,7 @@ import ru.radiationx.anilibria.common.MotionLayoutListener
 import ru.radiationx.anilibria.databinding.FragmentConfigBinding
 import ru.radiationx.data.entity.common.ConfigScreenState
 import ru.radiationx.data.system.LoadTiming
+import ru.radiationx.quill.inject
 import ru.radiationx.quill.viewModel
 import ru.radiationx.shared.ktx.android.subscribeTo
 
@@ -24,6 +26,7 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
 
     companion object {
         private const val ARG_SPLASH_ONLY = "splash_only"
+        private const val ARG_FROM_SETTINGS = "from_settings"
 
         /** Результат для activity: вступительная анимация в режиме splash-only закончилась. */
         const val RESULT_INTRO_FINISHED = "config_intro_finished"
@@ -31,8 +34,12 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
         /** Пауза на готовом логотипе в режиме splash-only (вместо выезда прогресса). */
         private const val SPLASH_HOLD_MS = 250L
 
-        fun newInstance(splashOnly: Boolean) = ConfigFragment().apply {
-            arguments = bundleOf(ARG_SPLASH_ONLY to splashOnly)
+        /**
+         * @param fromSettings открыт из настроек («Адрес сервера»): по окончании проверки
+         * экран закрывается и возвращает на настройки (главную лаунчер повторно не открывает).
+         */
+        fun newInstance(splashOnly: Boolean, fromSettings: Boolean = false) = ConfigFragment().apply {
+            arguments = bundleOf(ARG_SPLASH_ONLY to splashOnly, ARG_FROM_SETTINGS to fromSettings)
         }
     }
 
@@ -40,10 +47,15 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
 
     private val viewModel: ConfiguringViewModel by viewModel()
 
+    private val router by inject<Router>()
+
     private var introFinished = false
 
     private val splashOnly: Boolean
         get() = arguments?.getBoolean(ARG_SPLASH_ONLY) == true
+
+    private val fromSettings: Boolean
+        get() = arguments?.getBoolean(ARG_FROM_SETTINGS) == true
 
     private val splashTransitionListener = object : MotionLayoutListener() {
         override fun onTransitionCompleted(motionLayout: MotionLayout, currentId: Int) {
@@ -70,6 +82,9 @@ class ConfigFragment : Fragment(R.layout.fragment_config) {
         override fun onTransitionCompleted(motionLayout: MotionLayout, currentId: Int) {
             if (currentId == R.id.logo_end) {
                 viewModel.endConfiguring()
+                if (fromSettings) {
+                    router.exit()
+                }
             }
         }
     }

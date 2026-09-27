@@ -96,8 +96,9 @@ class PlayerViewModel @Inject constructor(
 
     init {
         playerController.reset()
-        currentQuality = PlayerQuality.FULLHD
-        qualityState.value = PlayerQuality.FULLHD
+        // Качество по умолчанию — из настроек (общий ключ player_quality, меняется и из меню плеера).
+        currentQuality = preferencesHolder.playerQuality.value
+        qualityState.value = currentQuality
         speedState.value = preferencesHolder.playSpeed.value
 
         combine(
@@ -157,7 +158,6 @@ class PlayerViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
-        preferencesHolder.playerQuality.value = PlayerQuality.FULLHD
         preferencesHolder
             .playerQuality
             .onEach {

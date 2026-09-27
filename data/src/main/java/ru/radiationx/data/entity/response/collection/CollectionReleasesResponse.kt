@@ -64,6 +64,8 @@ data class CollectionReleaseResponse(
 @JsonClass(generateAdapter = true)
 data class CollectionShikimoriResponse(
     @Json(name = "rating") val rating: Double?,
+    /** id на Shikimori / MAL (у Shikimori и MAL один и тот же id). */
+    @Json(name = "id") val id: Long? = null,
     @Json(name = "votes") val votes: Int? = null,
 )
 

@@ -114,7 +114,9 @@
 
 - `age_rating`: `{value: "R16_PLUS", label: "16+", is_adult, description}` → `Release.ageRating = label`.
 - `average_duration_of_episode`: int минут → `Release.averageEpisodeDurationMin`.
-- `shikimori`: `{id, url, votes, rating: 7.46}` → `Release.shikimoriRating`.
+- `shikimori`: `{id, url, votes, rating: 7.46}` → `Release.shikimoriRating`, `Release.shikimoriId`;
+  `mal` — та же форма → `Release.malRating`, `Release.malId` (id совпадают). Внешние сервисы
+  статистики (задел) — [`docs/trackers.md`](trackers.md).
 - `background_covers`: массив `{preview, thumbnail}` (без `optimized`), только в деталях релиза;
   часто пустой. `preview` — 1920x1080 jpg, `thumbnail` — 32x18 → `Release.backgroundCover`.
 - Серия (`episodes[]`, `latest_episode`): `preview` `{src, preview, thumbnail, optimized{src, preview, thumbnail}}`,

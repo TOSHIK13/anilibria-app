@@ -21,6 +21,9 @@ import ru.radiationx.data.repository.watch.PendingTimecode
 import ru.radiationx.data.repository.watch.WatchHistoryEpisode
 import ru.radiationx.data.repository.watch.WatchHistoryLogic
 import ru.radiationx.data.system.HttpException
+import ru.radiationx.data.tracker.AnimeTrackerRegistry
+import ru.radiationx.data.tracker.TrackerEpisodeWatchedEvent
+import ru.radiationx.data.tracker.TrackerReleaseRef
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.math.roundToLong
@@ -29,6 +32,7 @@ class EpisodeProgressRepository @Inject constructor(
     private val viewsApi: ViewsApi,
     private val authRepository: AuthRepository,
     private val watchProgressRepository: WatchProgressRepository,
+    private val trackerRegistry: AnimeTrackerRegistry,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -83,6 +87,9 @@ class EpisodeProgressRepository @Inject constructor(
         // Кеш и история обновляются до запроса: позиция не теряется, даже если отправка не дошла
         // (тогда изменение остаётся в очереди и уйдёт при следующей синхронизации).
         putLocal(episodeId, serverId, time, isWatched)
+        if (isWatched && current?.isWatched != true) {
+            dispatchEpisodeWatched(episodeId)
+        }
         watchProgressRepository.pushTimecodes(
             listOf(pendingUpdate(episodeId, serverId, time, isWatched))
         )
@@ -96,7 +103,11 @@ class EpisodeProgressRepository @Inject constructor(
             return
         }
         val time = access.seek.toDouble() / 1000.0
+        val wasWatched = cache.getValue()[episode.serverId]?.isWatched == true
         putLocal(episode.id, episode.serverId, time, access.isViewed)
+        if (access.isViewed && !wasWatched) {
+            dispatchEpisodeWatched(episode.id)
+        }
         watchProgressRepository.pushTimecodes(
             listOf(pendingUpdate(episode.id, episode.serverId, time, access.isViewed))
         )
@@ -150,6 +161,14 @@ class EpisodeProgressRepository @Inject constructor(
                 )
             }
         )
+        trackerRegistry.dispatchEpisodeWatched(
+            TrackerEpisodeWatchedEvent(
+                release = TrackerReleaseRef(release.id, release.shikimoriId, release.malId),
+                episodeOrdinal = null,
+                episodesWatched = release.episodes.size,
+                episodesTotal = release.series?.toIntOrNull() ?: release.episodes.size,
+            )
+        )
         watchProgressRepository.pushTimecodes(
             release.episodes.mapIndexed { index, episode ->
                 pendingUpdate(episode.id, episode.serverId, times[index], true, now)
@@ -196,6 +215,19 @@ class EpisodeProgressRepository @Inject constructor(
             isWatched = isWatched,
             time = time.toFloat(),
             ordinal = episodeId.id.toFloatOrNull(),
+        )
+    }
+
+    /** Внешним сервисам статистики (без привязанных сервисов — ничего не делает). */
+    private fun dispatchEpisodeWatched(episodeId: EpisodeId) {
+        val progress = watchProgressRepository.currentProgress(episodeId.releaseId)
+        trackerRegistry.dispatchEpisodeWatched(
+            TrackerEpisodeWatchedEvent(
+                release = TrackerReleaseRef(episodeId.releaseId),
+                episodeOrdinal = episodeId.id.toFloatOrNull(),
+                episodesWatched = progress?.watched ?: 1,
+                episodesTotal = progress?.total,
+            )
         )
     }
 

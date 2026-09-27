@@ -125,6 +125,7 @@ import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ReleaseCardRepository
 import ru.radiationx.data.repository.WatchProgressRepository
+import ru.radiationx.data.tracker.AnimeTrackerRegistry
 import ru.radiationx.data.repository.ConfigurationRepository
 import ru.radiationx.data.repository.DonationRepository
 import ru.radiationx.data.repository.EpisodeProgressRepository
@@ -260,6 +261,7 @@ class DataModule(context: Context) : QuillModule() {
         single<EpisodeProgressRepository>()
         single<WatchProgressRepository>()
         single<ReleaseCardRepository>()
+        single<AnimeTrackerRegistry>()
 
         single<ReleaseUpdateMiddleware>()
 
