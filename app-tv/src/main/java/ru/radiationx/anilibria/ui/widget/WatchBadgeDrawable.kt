@@ -9,6 +9,8 @@ import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
+import androidx.annotation.DrawableRes
+import androidx.core.content.ContextCompat
 import ru.radiationx.data.repository.ReleaseWatchProgress
 
 /**
@@ -22,11 +24,12 @@ import ru.radiationx.data.repository.ReleaseWatchProgress
  *
  * Бейдж «НОВАЯ» / «ФИЛЬМ» — тоже справа сверху, под индикатором (или в углу, если индикатора нет).
  * Левый верхний угол не занимаем — там водяной знак AniLibria на постерах.
+ * Иконка коллекции пользователя — кружок в левом нижнем углу.
  * В фокусе — белая рамка по скруглённому контуру карточки.
  * Полностью просмотренный релиз — постер притемняется полупрозрачной заливкой («в тени»);
  * в фокусе затемнение снимается, чтобы карточка оставалась читаемой.
  */
-class WatchBadgeDrawable(context: Context) : Drawable() {
+class WatchBadgeDrawable(private val context: Context) : Drawable() {
 
     enum class Badge { NEW, FILM }
 
@@ -38,6 +41,9 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
 
     private val badgeGap = 4 * density
     private val badgeHeight = 20 * density
+
+    private val collectionIconSize = 20 * density
+    private val collectionIconPad = 4 * density
 
     private val focusStroke = 3 * density
     private val focusCorner = 8 * density
@@ -65,12 +71,18 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
     private val watchedDimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(115, 0, 0, 0)
     }
+    private val collectionBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(184, 0, 0, 0)
+    }
+    private val collectionIconCache = mutableMapOf<Int, Drawable>()
     private val rect = RectF()
 
     private var text: String? = null
     private var badge: Badge? = null
     private var focused = false
     private var watchedFully = false
+    private var collectionIconResId: Int? = null
+    private var collectionIcon: Drawable? = null
 
     fun setProgress(progress: ReleaseWatchProgress?, available: Int?, fallbackTotal: Int?) {
         val newText = progress?.let { formatProgress(it.watched, available, it.total ?: fallbackTotal) }
@@ -105,10 +117,23 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
         invalidateSelf()
     }
 
+    /** Иконка коллекции пользователя ([iconRes]) — кружок в левом нижнем углу; null — не в коллекции. */
+    fun setCollectionIcon(@DrawableRes iconRes: Int?) {
+        if (collectionIconResId == iconRes) return
+        collectionIconResId = iconRes
+        collectionIcon = iconRes?.let { id ->
+            collectionIconCache.getOrPut(id) {
+                ContextCompat.getDrawable(context, id)!!.mutate().apply { setTint(Color.WHITE) }
+            }
+        }
+        invalidateSelf()
+    }
+
     fun clear() {
         setProgress(null, null, null)
         setBadge(null)
         setWatchedFully(false)
+        setCollectionIcon(null)
     }
 
     override fun draw(canvas: Canvas) {
@@ -118,6 +143,7 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
         var nextTop = bounds.top + margin
         text?.let { nextTop = drawCounter(canvas, it) + badgeGap }
         badge?.let { drawBadge(canvas, it, nextTop) }
+        collectionIcon?.let { drawCollectionIcon(canvas, it) }
         if (focused) {
             val half = focusStroke / 2
             rect.set(
@@ -166,6 +192,18 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
         val metrics = badgeTextPaint.fontMetrics
         val baseline = rect.centerY() - (metrics.ascent + metrics.descent) / 2
         canvas.drawText(text, rect.centerX() - textWidth / 2, baseline, badgeTextPaint)
+    }
+
+    private fun drawCollectionIcon(canvas: Canvas, icon: Drawable) {
+        val diameter = collectionIconSize + collectionIconPad * 2
+        val left = bounds.left + margin
+        val top = bounds.bottom - margin - diameter
+        rect.set(left, top, left + diameter, top + diameter)
+        canvas.drawRoundRect(rect, diameter / 2, diameter / 2, collectionBgPaint)
+        val iconLeft = (rect.left + collectionIconPad).toInt()
+        val iconTop = (rect.top + collectionIconPad).toInt()
+        icon.setBounds(iconLeft, iconTop, (iconLeft + collectionIconSize).toInt(), (iconTop + collectionIconSize).toInt())
+        icon.draw(canvas)
     }
 
     override fun setAlpha(alpha: Int) = Unit

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.FranchiseCard
+import ru.radiationx.anilibria.common.iconRes
 import ru.radiationx.anilibria.ui.widget.FranchiseCardView
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.ReleaseInteractor
@@ -71,6 +72,8 @@ class FranchiseCardViewHolder(
     private val meta: TextView = cardView.findViewById(R.id.franchiseMeta)
     private val progressText: TextView = cardView.findViewById(R.id.franchiseProgress)
     private val chip: View = cardView.findViewById(R.id.franchiseChip)
+    private val collectionIcon: ImageView = cardView.findViewById(R.id.franchiseCollectionIcon)
+    private val unseenIcon: View = cardView.findViewById(R.id.franchiseUnseenIcon)
 
     private val scope = MainScope()
     private var progressJob: Job? = null
@@ -93,6 +96,10 @@ class FranchiseCardViewHolder(
         meta.text = item.meta
         meta.isVisible = item.meta.isNotEmpty()
         chip.isVisible = item.isCurrent
+        val collectionType = item.collectionType
+        collectionIcon.isVisible = collectionType != null
+        collectionType?.let { collectionIcon.setImageResource(it.iconRes()) }
+        unseenIcon.isVisible = item.isUnseen
         poster.showImageUrl(item.image)
         applyState(item, null, item.episodesAvailable)
         if (view.isAttachedToWindow) {

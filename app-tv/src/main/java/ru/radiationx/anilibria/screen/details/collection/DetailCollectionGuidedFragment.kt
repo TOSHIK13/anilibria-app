@@ -3,9 +3,11 @@ package ru.radiationx.anilibria.screen.details.collection
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.ContextCompat
 import androidx.leanback.widget.GuidedAction
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.fragment.FakeGuidedStepFragment
+import ru.radiationx.anilibria.common.iconRes
 import ru.radiationx.anilibria.screen.details.DetailExtra
 import ru.radiationx.anilibria.ui.widget.manager.ExternalProgressManager
 import ru.radiationx.data.entity.domain.collection.CollectionType
@@ -70,6 +72,7 @@ class DetailCollectionGuidedFragment : FakeGuidedStepFragment() {
                 GuidedAction.Builder(requireContext())
                     .id(index.toLong())
                     .title(item.second)
+                    .icon(item.first?.let { ContextCompat.getDrawable(requireContext(), it.iconRes()) })
                     .checkSetId(CHECK_SET_ID)
                     .build()
             }
