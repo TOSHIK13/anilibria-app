@@ -1,12 +1,11 @@
 package ru.radiationx.anilibria.screen.main
 
-import com.github.terrakok.cicerone.Router
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardsDataConverter
 import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LibriaCardRouter
 import ru.radiationx.anilibria.common.LinkCard
-import ru.radiationx.anilibria.screen.ScheduleScreen
+import ru.radiationx.anilibria.screen.mainpages.MainPagesTabsController
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.ScheduleRepository
 import ru.radiationx.shared.ktx.asDayNameDeclension
@@ -22,7 +21,7 @@ class MainScheduleViewModel @Inject constructor(
     private val scheduleRepository: ScheduleRepository,
     private val releaseInteractor: ReleaseInteractor,
     private val converter: CardsDataConverter,
-    private val router: Router,
+    private val tabsController: MainPagesTabsController,
     private val cardRouter: LibriaCardRouter,
 ) : BaseCardsViewModel() {
 
@@ -72,7 +71,7 @@ class MainScheduleViewModel @Inject constructor(
     }
 
     override fun onLinkCardClick() {
-        router.navigateTo(ScheduleScreen())
+        tabsController.openSchedule()
     }
 
     override fun onLinkCardBind() {

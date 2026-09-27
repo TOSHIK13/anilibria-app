@@ -110,8 +110,11 @@ class MainHeroView @JvmOverloads constructor(
         bindTexts(null)
     }
 
+    private var contentVisible = true
+
     /** Показ блока (на страницах без hero, например «Настройки», остаётся только цвет фона). */
     fun setContentVisible(visible: Boolean) {
+        contentVisible = visible
         val target = if (visible) 1f else 0f
         listOf(backgroundContainer, textsContainer).forEach {
             it.animate().cancel()
@@ -148,6 +151,11 @@ class MainHeroView @JvmOverloads constructor(
 
     private fun crossfadeTexts(state: MainHeroState?) {
         shownTextKey = state?.key
+        if (!contentVisible) {
+            // Блок скрыт: меняем тексты молча, не прерывая анимацию скрытия.
+            bindTexts(state)
+            return
+        }
         textsContainer.animate().cancel()
         if (textsContainer.alpha == 0f || titleView.text.isNullOrEmpty()) {
             bindTexts(state)

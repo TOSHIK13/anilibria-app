@@ -60,9 +60,6 @@ class MainPagesFragment : BrowseSupportFragment() {
     private var topTabs: TopTabsView? = null
     private var contentFocusJob: Job? = null
 
-    /** Вкладка-действие, с которой открыли экран: по возвращении фокус встаёт на неё. */
-    private var focusTabOnReturn = -1
-
     /** Подменённая тема на время [BrowseSupportFragment.onCreate], см. [onCreate]. */
     private var createContext: Context? = null
 
@@ -154,6 +151,11 @@ class MainPagesFragment : BrowseSupportFragment() {
             )
         }
 
+        // Страницы просят открыть вкладку (например, «Открыть полное расписание» на «Главной»).
+        subscribeTo(viewModel.openTabEvent) { tabId ->
+            onTabClicked(MainPagesFragmentFactory.tabIds.indexOf(tabId))
+        }
+
         subscribeTo(viewModel.hasUpdatesData) {
             val alert = if (it) "Обновление" else null
             topTabs?.setAlert(alert) { viewModel.onAppUpdateClick() }
@@ -164,12 +166,6 @@ class MainPagesFragment : BrowseSupportFragment() {
 
         setupFocusSearch(view)
         setupBackHandling()
-
-        if (focusTabOnReturn >= 0) {
-            val tabIndex = focusTabOnReturn
-            focusTabOnReturn = -1
-            view.post { focusTabs(tabIndex) }
-        }
     }
 
     override fun onDestroyView() {
@@ -194,8 +190,13 @@ class MainPagesFragment : BrowseSupportFragment() {
     }
 
     private fun updateHeroVisibility() {
-        val pageId = MainPagesFragmentFactory.ids.getOrNull(currentPage)
-        heroView?.setContentVisible(pageId != MainPagesFragmentFactory.ID_PROFILE)
+        heroView?.setContentVisible(!isFullPage(currentPage))
+    }
+
+    /** Страница со своей вёрсткой (без hero): вкладки над ней не прячутся. */
+    private fun isFullPage(page: Int): Boolean {
+        val pageId = MainPagesFragmentFactory.ids.getOrNull(page)
+        return pageId in MainPagesFragmentFactory.fullPageIds
     }
 
     /**
@@ -204,6 +205,10 @@ class MainPagesFragment : BrowseSupportFragment() {
      * при загрузке) — в этом случае возвращаем страницу к первому ряду.
      */
     override fun showTitle(show: Boolean) {
+        if (!show && isFullPage(currentPage)) {
+            super.showTitle(true)
+            return
+        }
         if (!show && topTabs?.hasFocus() == true) {
             super.showTitle(true)
             view?.post {
@@ -264,29 +269,10 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     /** Все вкладки срабатывают только по OK: фокус на вкладке лишь подсвечивает её. */
     private fun onTabClicked(tabIndex: Int) {
-        when (MainPagesFragmentFactory.tabIds.getOrNull(tabIndex)) {
-            MainPagesFragmentFactory.ID_CATALOG -> {
-                focusTabOnReturn = tabIndex
-                viewModel.onCatalogClick()
-            }
-
-            MainPagesFragmentFactory.ID_SCHEDULE -> {
-                focusTabOnReturn = tabIndex
-                viewModel.onScheduleClick()
-            }
-
-            MainPagesFragmentFactory.ID_SEARCH -> {
-                focusTabOnReturn = tabIndex
-                viewModel.onSearchClick()
-            }
-
-            else -> {
-                val page = pageIndexOfTab(tabIndex)
-                if (page < 0) return
-                selectPage(page)
-                focusContent(page)
-            }
-        }
+        val page = pageIndexOfTab(tabIndex)
+        if (page < 0) return
+        selectPage(page)
+        focusContent(page)
     }
 
     private fun selectPage(page: Int) {
@@ -303,7 +289,8 @@ class MainPagesFragment : BrowseSupportFragment() {
         contentFocusJob = viewLifecycleOwner.lifecycleScope.launch {
             repeat(CONTENT_FOCUS_ATTEMPTS) {
                 val content = mainFragment?.view
-                if (selectedPosition == page && content != null && content.isAttachedToWindow) {
+                // До первого переключения страниц Leanback держит selectedPosition = -1 (это «Главная»).
+                if (selectedPosition.coerceAtLeast(0) == page && content != null && content.isAttachedToWindow) {
                     if (content.hasFocus() || content.requestFocus()) return@launch
                 }
                 delay(CONTENT_FOCUS_ATTEMPT_DELAY_MS)

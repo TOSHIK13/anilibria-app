@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.speech.SpeechRecognizer
 import android.view.View
 import android.view.ViewGroup
+import androidx.leanback.app.BrowseSupportFragment
 import androidx.leanback.app.SearchSupportFragment
 import androidx.leanback.widget.ArrayObjectAdapter
 import androidx.leanback.widget.HeaderItem
@@ -13,7 +14,9 @@ import androidx.leanback.widget.OnItemViewSelectedListener
 import androidx.leanback.widget.Presenter
 import androidx.leanback.widget.Row
 import androidx.leanback.widget.RowPresenter
+import androidx.core.view.updatePadding
 import androidx.lifecycle.ViewModel
+import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardDiffCallback
 import ru.radiationx.anilibria.common.GradientBackgroundManager
@@ -21,7 +24,6 @@ import ru.radiationx.anilibria.common.LibriaCard
 import ru.radiationx.anilibria.common.LinkCard
 import ru.radiationx.anilibria.common.LoadingCard
 import ru.radiationx.anilibria.common.RowDiffCallback
-import ru.radiationx.anilibria.extension.applyCard
 import ru.radiationx.anilibria.extension.createCardsRowBy
 import ru.radiationx.anilibria.screen.details.DetailsViewModel
 import ru.radiationx.anilibria.ui.presenter.CardPresenterSelector
@@ -30,12 +32,16 @@ import ru.radiationx.anilibria.ui.presenter.cust.CustomListRowViewHolder
 import ru.radiationx.anilibria.ui.widget.manager.ExternalProgressManager
 import ru.radiationx.anilibria.ui.widget.manager.ExternalTextManager
 import ru.radiationx.quill.inject
-import ru.radiationx.quill.installModules
-import ru.radiationx.quill.quillModule
-import ru.radiationx.quill.viewModel
 import ru.radiationx.shared.ktx.android.subscribeTo
+import ru.radiationx.shared_app.di.quillParentViewModel
 
-class SuggestionsFragment : SearchSupportFragment(), SearchSupportFragment.SearchResultProvider {
+/**
+ * «Поиск» — страница главного экрана (вкладка). ViewModel живут в
+ * [ru.radiationx.anilibria.screen.mainpages.MainPagesFragment], [SuggestionsController] — в
+ * [ru.radiationx.anilibria.di.MainPagesModule]. Полный редизайн поиска — отдельный этап.
+ */
+class SuggestionsFragment : SearchSupportFragment(), SearchSupportFragment.SearchResultProvider,
+    BrowseSupportFragment.MainFragmentAdapterProvider {
 
     private val rowsPresenter by lazy { CustomListRowPresenter() }
     private val rowsAdapter by lazy { ArrayObjectAdapter(rowsPresenter) }
@@ -43,21 +49,39 @@ class SuggestionsFragment : SearchSupportFragment(), SearchSupportFragment.Searc
     private val progressManager by lazy { ExternalProgressManager() }
     private val emptyTextManager by lazy { ExternalTextManager() }
 
-    private val rowsViewModel by viewModel<SuggestionsRowsViewModel>()
-    private val resultViewModel by viewModel<SuggestionsResultViewModel>()
-    private val recommendsViewModel by viewModel<SuggestionsRecommendsViewModel>()
+    private val rowsViewModel by quillParentViewModel<SuggestionsRowsViewModel>()
+    private val resultViewModel by quillParentViewModel<SuggestionsResultViewModel>()
+    private val recommendsViewModel by quillParentViewModel<SuggestionsRecommendsViewModel>()
 
     private val backgroundManager by inject<GradientBackgroundManager>()
 
+    private val selfMainFragmentAdapter by lazy { BrowseSupportFragment.MainFragmentAdapter(this) }
+
+    override fun getMainFragmentAdapter(): BrowseSupportFragment.MainFragmentAdapter<*> {
+        return selfMainFragmentAdapter
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        installModules(quillModule {
-            single<SuggestionsController>()
-        })
+        disableAutoStartRecognition()
         super.onCreate(savedInstanceState)
+    }
+
+    /**
+     * Страница создаётся при каждом переходе на вкладку: без этого Leanback сам включал бы
+     * голосовой ввод (и запрос доступа к микрофону). Голос — только по кнопке микрофона.
+     */
+    private fun disableAutoStartRecognition() {
+        runCatching {
+            SearchSupportFragment::class.java.getDeclaredField("mAutoStartRecognition").apply {
+                isAccessible = true
+            }.setBoolean(this, false)
+        }
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        // Строка поиска и результаты — под вкладками главного экрана.
+        view.updatePadding(top = resources.getDimensionPixelSize(R.dimen.main_page_content_top))
 
         viewLifecycleOwner.lifecycle.addObserver(rowsViewModel)
         viewLifecycleOwner.lifecycle.addObserver(resultViewModel)
@@ -107,6 +131,9 @@ class SuggestionsFragment : SearchSupportFragment(), SearchSupportFragment.Searc
             }
             rowsAdapter.setItems(rows, RowDiffCallback)
         }
+
+        selfMainFragmentAdapter.fragmentHost.notifyViewCreated(selfMainFragmentAdapter)
+        selfMainFragmentAdapter.fragmentHost.notifyDataReady(selfMainFragmentAdapter)
     }
 
     override fun onPause() {
@@ -217,7 +244,6 @@ class SuggestionsFragment : SearchSupportFragment(), SearchSupportFragment.Searc
             rowViewHolder: RowPresenter.ViewHolder, row: Row,
         ) {
             if (rowViewHolder is CustomListRowViewHolder) {
-                backgroundManager.applyCard(item)
                 when (item) {
                     is LibriaCard -> {
                         rowViewHolder.setDescription(item.title, item.description)

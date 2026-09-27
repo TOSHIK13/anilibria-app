@@ -5,9 +5,6 @@ import com.github.terrakok.cicerone.Router
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.screen.LifecycleViewModel
-import ru.radiationx.anilibria.screen.ScheduleScreen
-import ru.radiationx.anilibria.screen.SearchScreen
-import ru.radiationx.anilibria.screen.SuggestionsScreen
 import ru.radiationx.anilibria.screen.UpdateScreen
 import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.shared.ktx.coRunCatching
@@ -17,9 +14,13 @@ import javax.inject.Inject
 class MainPagesViewModel @Inject constructor(
     private val checkerRepository: CheckerRepository,
     private val router: Router,
+    tabsController: MainPagesTabsController,
 ) : LifecycleViewModel() {
 
     val hasUpdatesData = MutableStateFlow(false)
+
+    /** Запросы страниц открыть вкладку (id из [MainPagesFragmentFactory]). */
+    val openTabEvent = tabsController.openTabEvent
 
     init {
         viewModelScope.launch {
@@ -35,17 +36,5 @@ class MainPagesViewModel @Inject constructor(
 
     fun onAppUpdateClick() {
         router.navigateTo(UpdateScreen())
-    }
-
-    fun onCatalogClick() {
-        router.navigateTo(SearchScreen())
-    }
-
-    fun onSearchClick() {
-        router.navigateTo(SuggestionsScreen())
-    }
-
-    fun onScheduleClick() {
-        router.navigateTo(ScheduleScreen())
     }
 }

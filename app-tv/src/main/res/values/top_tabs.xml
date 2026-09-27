@@ -24,6 +24,11 @@
     <dimen name="main_rows_top_offset">242dp</dimen>
     <!-- Верх контента нестроковых страниц (настройки) под вкладками. -->
     <dimen name="main_page_content_top">64dp</dimen>
+    <!-- Панель фильтров «Каталога» между вкладками и сеткой. -->
+    <dimen name="catalog_controls_height">48dp</dimen>
+    <dimen name="catalog_grid_padding_top">24dp</dimen>
+    <!-- Высота карточек выбранного ряда «Расписания»: заголовок дня над ними не заходит под вкладки. -->
+    <dimen name="schedule_rows_top_offset">104dp</dimen>
 
     <color name="main_top_tab_underline">#E53935</color>
     <color name="main_top_tab_focused_background">#FFFFFF</color>

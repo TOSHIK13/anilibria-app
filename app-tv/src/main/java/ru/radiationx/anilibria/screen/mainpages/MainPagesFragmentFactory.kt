@@ -6,6 +6,9 @@ import ru.radiationx.anilibria.common.CachedRowsFragmentFactory
 import ru.radiationx.anilibria.screen.collections.CollectionsFragment
 import ru.radiationx.anilibria.screen.main.MainFragment
 import ru.radiationx.anilibria.screen.profile.ProfileFragment
+import ru.radiationx.anilibria.screen.schedule.ScheduleFragment
+import ru.radiationx.anilibria.screen.search.SearchFragment
+import ru.radiationx.anilibria.screen.suggestions.SuggestionsFragment
 import ru.radiationx.anilibria.screen.watching.WatchingFragment
 import ru.radiationx.anilibria.screen.youtube.YoutubeFragment
 
@@ -23,18 +26,22 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
         const val ID_CATALOG = 9L
         const val ID_SCHEDULE = 10L
 
+        /** Страницы главного экрана, по одной на верхнюю вкладку. */
         val ids = listOf(
             ID_MAIN,
             ID_MY,
             ID_COLLECTIONS,
+            ID_CATALOG,
+            ID_SCHEDULE,
+            ID_SEARCH,
             ID_PROFILE,
         )
 
-        /** Верхние вкладки: страницы из [ids] + экраны-действия (каталог, расписание, поиск). */
-        val tabIds = listOf(
-            ID_MAIN,
-            ID_MY,
-            ID_COLLECTIONS,
+        /** Верхние вкладки, в том же порядке, что и [ids]. */
+        val tabIds = ids
+
+        /** Страницы без hero-блока: у них своя вёрстка, вкладки над ними видны всегда. */
+        val fullPageIds = setOf(
             ID_CATALOG,
             ID_SCHEDULE,
             ID_SEARCH,
@@ -60,6 +67,9 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
             ID_MAIN -> MainFragment()
             ID_MY -> WatchingFragment()
             ID_COLLECTIONS -> CollectionsFragment()
+            ID_CATALOG -> SearchFragment()
+            ID_SCHEDULE -> ScheduleFragment()
+            ID_SEARCH -> SuggestionsFragment()
             ID_YOUTUBE -> YoutubeFragment()
             ID_PROFILE -> ProfileFragment()
             else -> super.getFragmentByRow(row)

@@ -19,15 +19,12 @@ import ru.radiationx.anilibria.screen.player.BasePlayerGuidedFragment.Companion.
 import ru.radiationx.anilibria.screen.player.episodes.PlayerEpisodesGuidedFragment
 import ru.radiationx.anilibria.screen.player.settings.PlayerBufferSettingsGuidedFragment
 import ru.radiationx.anilibria.screen.player.settings.PlayerBufferTarget
-import ru.radiationx.anilibria.screen.schedule.ScheduleFragment
-import ru.radiationx.anilibria.screen.search.SearchFragment
 import ru.radiationx.anilibria.screen.search.BaseSearchValuesGuidedFragment.Companion.ARG_VALUES
 import ru.radiationx.anilibria.screen.search.completed.SearchCompletedGuidedFragment
 import ru.radiationx.anilibria.screen.search.genre.SearchGenreGuidedFragment
 import ru.radiationx.anilibria.screen.search.season.SearchSeasonGuidedFragment
 import ru.radiationx.anilibria.screen.search.sort.SearchSortGuidedFragment
 import ru.radiationx.anilibria.screen.search.year.SearchYearGuidedFragment
-import ru.radiationx.anilibria.screen.suggestions.SuggestionsFragment
 import ru.radiationx.anilibria.screen.trash.TestFragment
 import ru.radiationx.anilibria.screen.update.UpdateFragment
 import ru.radiationx.anilibria.screen.update.source.UpdateSourceGuidedFragment
@@ -72,12 +69,6 @@ class DetailCollectionGuidedScreen(private val releaseId: ReleaseId) : GuidedApp
     }
 }
 
-class ScheduleScreen : FragmentScreen {
-    override fun createFragment(factory: FragmentFactory): Fragment {
-        return ScheduleFragment()
-    }
-}
-
 class UpdateScreen : FragmentScreen {
     override fun createFragment(factory: FragmentFactory): Fragment {
         return UpdateFragment()
@@ -93,18 +84,6 @@ class UpdateSourceScreen : GuidedAppScreen() {
 class UpdateWarningScreen(private val link: UpdateData.UpdateLink) : GuidedAppScreen() {
     override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
         return UpdateWarningGuidedFragment.newInstance(link)
-    }
-}
-
-class SuggestionsScreen : FragmentScreen {
-    override fun createFragment(factory: FragmentFactory): Fragment {
-        return SuggestionsFragment()
-    }
-}
-
-class SearchScreen : FragmentScreen {
-    override fun createFragment(factory: FragmentFactory): Fragment {
-        return SearchFragment()
     }
 }
 
