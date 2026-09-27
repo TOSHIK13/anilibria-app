@@ -34,9 +34,9 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
         val tabIds = listOf(
             ID_MAIN,
             ID_MY,
+            ID_COLLECTIONS,
             ID_CATALOG,
             ID_SCHEDULE,
-            ID_COLLECTIONS,
             ID_SEARCH,
             ID_PROFILE,
         )

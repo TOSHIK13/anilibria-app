@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.ContextThemeWrapper
 import android.view.FocusFinder
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -21,6 +22,7 @@ import androidx.leanback.widget.PageRow
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.ui.widget.MainHeroView
@@ -36,8 +38,6 @@ class MainPagesFragment : BrowseSupportFragment() {
         const val INITIAL_REVEAL_TIMEOUT_MS = 1_500L
         const val INITIAL_REVEAL_FADE_MS = 150L
 
-        /** Как у заголовков Leanback: страница меняется, когда курсор задержался на вкладке. */
-        const val TAB_FOCUS_SWITCH_DELAY_MS = 250L
         const val CONTENT_FOCUS_ATTEMPTS = 20
         const val CONTENT_FOCUS_ATTEMPT_DELAY_MS = 25L
     }
@@ -58,7 +58,6 @@ class MainPagesFragment : BrowseSupportFragment() {
     private var revealFallbackJob: Job? = null
 
     private var topTabs: TopTabsView? = null
-    private var tabSwitchJob: Job? = null
     private var contentFocusJob: Job? = null
 
     /** Вкладка-действие, с которой открыли экран: по возвращении фокус встаёт на неё. */
@@ -66,6 +65,16 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     /** Подменённая тема на время [BrowseSupportFragment.onCreate], см. [onCreate]. */
     private var createContext: Context? = null
+
+    /**
+     * Пользователь уже нажимал кнопки пульта: стартовый фокус на «Продолжить просмотр»
+     * (он может прийти поздно) больше не перехватываем.
+     */
+    val userNavigated = MutableStateFlow(false)
+
+    fun onUserKey(event: KeyEvent) {
+        if (event.action == KeyEvent.ACTION_DOWN) userNavigated.value = true
+    }
 
     private val currentPage: Int
         get() = lastSelectedPosition.coerceAtLeast(0)
@@ -137,8 +146,8 @@ class MainPagesFragment : BrowseSupportFragment() {
         topTabs = (titleView as? TopTabsView)?.also { tabs ->
             tabs.setTabs(MainPagesFragmentFactory.tabIds.map { MainPagesFragmentFactory.variant1.getValue(it) })
             tabs.setSelectedTab(tabIndexOfPage(currentPage))
-            tabs.onTabFocusedListener = ::onTabFocused
             tabs.onTabClickListener = ::onTabClicked
+            tabs.onTabKeyListener = ::onUserKey
             ImageViewCompat.setImageTintList(
                 tabs.logoView,
                 ColorStateList.valueOf(tabs.context.getCompatColor(R.color.dark_contrast_icon))
@@ -164,7 +173,6 @@ class MainPagesFragment : BrowseSupportFragment() {
     }
 
     override fun onDestroyView() {
-        tabSwitchJob?.cancel()
         contentFocusJob?.cancel()
         topTabs = null
         heroView = null
@@ -254,18 +262,8 @@ class MainPagesFragment : BrowseSupportFragment() {
         return MainPagesFragmentFactory.tabIds.indexOf(id)
     }
 
-    private fun onTabFocused(tabIndex: Int) {
-        tabSwitchJob?.cancel()
-        val page = pageIndexOfTab(tabIndex)
-        if (page < 0 || page == currentPage) return
-        tabSwitchJob = viewLifecycleOwner.lifecycleScope.launch {
-            delay(TAB_FOCUS_SWITCH_DELAY_MS)
-            selectPage(page)
-        }
-    }
-
+    /** Все вкладки срабатывают только по OK: фокус на вкладке лишь подсвечивает её. */
     private fun onTabClicked(tabIndex: Int) {
-        tabSwitchJob?.cancel()
         when (MainPagesFragmentFactory.tabIds.getOrNull(tabIndex)) {
             MainPagesFragmentFactory.ID_CATALOG -> {
                 focusTabOnReturn = tabIndex
@@ -334,18 +332,8 @@ class MainPagesFragment : BrowseSupportFragment() {
                     View.FOCUS_LEFT, View.FOCUS_RIGHT -> tabs.findNextHorizontal(focused, direction)
                         ?: focused
 
-                    View.FOCUS_DOWN -> {
-                        tabSwitchJob?.cancel()
-                        // Страница могла ещё не смениться (debounce) — переключаем сразу.
-                        val page = pageIndexOfTab(tabs.indexOfTab(focused))
-                        if (page >= 0 && page != currentPage) {
-                            selectPage(page)
-                            focusContent(page)
-                            focused
-                        } else {
-                            mainFragment?.view?.takeIf { it.isShown } ?: focused
-                        }
-                    }
+                    // Вниз — всегда в контент текущей страницы, даже с другой вкладки.
+                    View.FOCUS_DOWN -> mainFragment?.view?.takeIf { it.isShown } ?: focused
 
                     else -> focused
                 }
@@ -402,7 +390,6 @@ class MainPagesFragment : BrowseSupportFragment() {
             return focusTabs()
         }
         if (currentPage != 0) {
-            tabSwitchJob?.cancel()
             selectPage(0)
             focusTabs(tabIndexOfPage(0))
             return true

@@ -27,6 +27,15 @@
     <dimen name="main_hero_cover_width">750dp</dimen>
     <dimen name="main_hero_cover_height">422dp</dimen>
 
+    <!-- Чёткий постер справа: между вкладками и заголовком первого ряда. -->
+    <color name="main_hero_poster_placeholder">#26FFFFFF</color>
+    <dimen name="main_hero_poster_width">104dp</dimen>
+    <dimen name="main_hero_poster_height">148dp</dimen>
+    <dimen name="main_hero_poster_top">64dp</dimen>
+    <dimen name="main_hero_poster_margin_end">56dp</dimen>
+    <dimen name="main_hero_poster_radius">8dp</dimen>
+    <dimen name="main_hero_poster_elevation">6dp</dimen>
+
     <dimen name="main_row_header_text_size">16sp</dimen>
     <dimen name="main_row_header_shift">2.5dp</dimen>
 </resources>

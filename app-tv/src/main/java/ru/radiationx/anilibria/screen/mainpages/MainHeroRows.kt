@@ -12,9 +12,12 @@ private const val ROW_FADE_MS = 150L
  * Ряды страницы с hero-блоком. Leanback ставит выбранный ряд всегда на одну высоту
  * (browseRowsMarginTop, WINDOW_ALIGN_NO_EDGE) — под hero; ряды выше выбранного заехали бы
  * на тексты hero, поэтому они скрываются (как в Google TV).
+ * Ряды, которые догружаются и вставляются над выбранным (например, «Продолжить просмотр»),
+ * появляются без анимации: иначе анимация вставки проявляет их поверх hero.
  */
 fun RowsSupportFragment.hideRowsAboveSelected() {
     val grid = verticalGridView ?: return
+    grid.itemAnimator = null
     grid.addOnChildViewHolderSelectedListener(object : OnChildViewHolderSelectedListener() {
         override fun onChildViewHolderSelected(
             parent: RecyclerView,

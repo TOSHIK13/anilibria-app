@@ -61,5 +61,19 @@
             android:textColor="@color/main_hero_description"
             android:textSize="@dimen/main_hero_text_size"
             tools:text="Больше всего Блейд хочет подружиться со своими одноклассникам в Академии Роузвуд" />
+
+        <!-- Чёткий постер справа от текстов; только когда нет широкого фона (как в деталях). -->
+        <ImageView
+            android:id="@+id/mainHeroPoster"
+            android:layout_width="@dimen/main_hero_poster_width"
+            android:layout_height="@dimen/main_hero_poster_height"
+            android:layout_gravity="end|top"
+            android:layout_marginTop="@dimen/main_hero_poster_top"
+            android:layout_marginEnd="@dimen/main_hero_poster_margin_end"
+            android:background="@color/main_hero_poster_placeholder"
+            android:elevation="@dimen/main_hero_poster_elevation"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
     </FrameLayout>
 </merge>

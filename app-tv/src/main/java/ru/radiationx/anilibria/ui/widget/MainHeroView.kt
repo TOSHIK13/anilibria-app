@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
 import android.text.SpannableStringBuilder
@@ -15,6 +16,7 @@ import android.util.AttributeSet
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -63,6 +65,8 @@ class MainHeroView @JvmOverloads constructor(
     private val metaView: TextView
     private val lineView: TextView
     private val descriptionView: TextView
+    private val posterView: ImageView
+    private var shownPosterUrl: String? = null
 
     private val baseColor = context.getCompatColor(R.color.main_hero_background)
     private val accentColor = context.getCompatColor(R.color.main_hero_accent)
@@ -85,6 +89,14 @@ class MainHeroView @JvmOverloads constructor(
         metaView = findViewById(R.id.mainHeroMeta)
         lineView = findViewById(R.id.mainHeroLine)
         descriptionView = findViewById(R.id.mainHeroDescription)
+        posterView = findViewById(R.id.mainHeroPoster)
+        val posterRadius = resources.getDimension(R.dimen.main_hero_poster_radius)
+        posterView.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, posterRadius)
+            }
+        }
+        posterView.clipToOutline = true
         TextViewCompat.setLineHeight(
             descriptionView,
             resources.getDimensionPixelSize(R.dimen.main_hero_description_line_height)
@@ -159,10 +171,24 @@ class MainHeroView @JvmOverloads constructor(
         lineView.isVisible = line != null
         lineView.text = line?.let { lineText(it) }
         descriptionView.text = state?.description.orEmpty()
+        bindPoster(state)
         descriptionView.updateLayoutParams<LayoutParams> {
             topMargin = resources.getDimensionPixelSize(
                 if (line != null) R.dimen.main_hero_description_top else R.dimen.main_hero_description_top_no_line
             )
+        }
+    }
+
+    /** Постер меняется вместе с текстами; при широком фоне арт уже справа — постер не нужен. */
+    private fun bindPoster(state: MainHeroState?) {
+        val url = state?.posterUrl?.takeIf { state.coverUrl == null }
+        posterView.isVisible = url != null
+        if (url == shownPosterUrl) return
+        shownPosterUrl = url
+        if (url == null) {
+            posterView.setImageDrawable(null)
+        } else {
+            posterView.showImageUrl(url)
         }
     }
 
