@@ -48,6 +48,8 @@ data class DetailProgress(
     val episodeName: String?,
     val watchedCount: Int,
     val totalCount: Int?,
+    /** Все серии уже просмотрены — кнопка предлагает пересмотр с начала. */
+    val isRewatch: Boolean = false,
 )
 
 data class DetailRatings(

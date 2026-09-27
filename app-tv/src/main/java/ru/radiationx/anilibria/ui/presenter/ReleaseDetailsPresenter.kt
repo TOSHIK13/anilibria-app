@@ -174,6 +174,9 @@ class LibriaReleaseViewHolder(
                 else -> 820
             }
         )
+        // Длинное название иначе обрезается многоточием — прокручиваем его марки как бегущую строку,
+        // не трогая остальную вёрстку (позиции элементов ниже фиксированы абсолютно).
+        binding.rowReleaseTitleRu.isSelected = true
         binding.rowReleaseTitleEn.text = details.titleEn
         binding.rowReleaseTitleEn.isVisible = details.titleEn.isNotEmpty()
         binding.rowReleaseTitleEn.maxWidth = dp(if (nextOnTop) 620 else 660)
@@ -235,7 +238,11 @@ class LibriaReleaseViewHolder(
 
         continueButton.isVisible = progress != null
         if (progress != null) {
-            continueButton.text = "▶ Продолжить · серия ${progress.episodeLabel}"
+            continueButton.text = if (progress.isRewatch) {
+                "↻ Смотреть заново"
+            } else {
+                "▶ Продолжить · серия ${progress.episodeLabel}"
+            }
             playButton.text = "Смотреть"
         } else {
             val first = details.firstEpisodeLabel ?: "1"
@@ -251,7 +258,7 @@ class LibriaReleaseViewHolder(
         binding.rowReleaseActionCollection.text = "${details.collectionName ?: "В коллекцию"} ▾"
         binding.rowReleaseActionRatings.isVisible = details.ratings != null
 
-        fitPills(progress?.episodeLabel)
+        fitPills(progress?.takeIf { !it.isRewatch }?.episodeLabel)
 
         applyAutoFocus()
     }
@@ -259,6 +266,7 @@ class LibriaReleaseViewHolder(
     /**
      * Кнопки не должны вылезать за экран: при нехватке места уменьшаем поля кнопок,
      * затем сокращаем «★ Оценки» до «★» и «Продолжить · серия N» до «▶ Серия N».
+     * Для «Смотреть заново» сокращать нечего — там нет номера серии.
      */
     private fun fitPills(continueEpisode: String?) {
         val row = binding.rowReleaseActions
