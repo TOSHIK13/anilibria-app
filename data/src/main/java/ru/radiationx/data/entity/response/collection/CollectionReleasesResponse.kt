@@ -41,6 +41,11 @@ data class CollectionReleaseResponse(
     @Json(name = "updated_at") val updatedAt: String?,
     @Json(name = "fresh_at") val freshAt: String? = null,
     @Json(name = "added_in_users_favorites") val addedInUsersFavorites: Int? = null,
+    @Json(name = "added_in_planned_collection") val addedInPlannedCollection: Int? = null,
+    @Json(name = "added_in_watched_collection") val addedInWatchedCollection: Int? = null,
+    @Json(name = "added_in_watching_collection") val addedInWatchingCollection: Int? = null,
+    @Json(name = "added_in_postponed_collection") val addedInPostponedCollection: Int? = null,
+    @Json(name = "added_in_abandoned_collection") val addedInAbandonedCollection: Int? = null,
     @Json(name = "external_player") val externalPlayer: String?,
     @Json(name = "is_blocked_by_geo") val isBlockedByGeo: Boolean?,
     @Json(name = "is_blocked_by_copyrights") val isBlockedByCopyrights: Boolean?,
@@ -49,12 +54,22 @@ data class CollectionReleaseResponse(
     @Json(name = "age_rating") val ageRating: CollectionValueResponse? = null,
     @Json(name = "average_duration_of_episode") val averageDurationOfEpisode: Int? = null,
     @Json(name = "shikimori") val shikimori: CollectionShikimoriResponse? = null,
+    /** MyAnimeList: та же форма `{id,url,votes,rating}`, что и у shikimori. */
+    @Json(name = "mal") val mal: CollectionShikimoriResponse? = null,
+    /** Собственный рейтинг AniLibria `{average,votes,distribution}`. */
+    @Json(name = "rating") val rating: CollectionOwnRatingResponse? = null,
     @Json(name = "background_covers") val backgroundCovers: List<CollectionImageResponse>? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class CollectionShikimoriResponse(
     @Json(name = "rating") val rating: Double?,
+    @Json(name = "votes") val votes: Int? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CollectionOwnRatingResponse(
+    @Json(name = "average") val average: Double? = null,
     @Json(name = "votes") val votes: Int? = null,
 )
 

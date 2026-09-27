@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Альфа описания (0.7) задаёт Leanback через lb_guidedactions_item_unselected_description_text_alpha. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#FF111111" android:state_focused="true" />
+    <item android:color="#FFFFFFFF" />
+</selector>

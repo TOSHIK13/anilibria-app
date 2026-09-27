@@ -48,6 +48,18 @@ data class Release(
     val averageEpisodeDurationMin: Int? = null,
     /** Рейтинг Shikimori (V1 `shikimori.rating`). */
     val shikimoriRating: Double? = null,
+    /** Голосов на Shikimori (V1 `shikimori.votes`). */
+    val shikimoriVotes: Int? = null,
+    /** Рейтинг MyAnimeList (V1 `mal.rating`). */
+    val malRating: Double? = null,
+    /** Голосов на MyAnimeList (V1 `mal.votes`). */
+    val malVotes: Int? = null,
+    /** Собственный рейтинг AniLibria (V1 `rating.average`); null — нет оценок. */
+    val ownRatingAverage: Double? = null,
+    /** Голосов за собственный рейтинг (V1 `rating.votes`). */
+    val ownRatingVotes: Int? = null,
+    /** Сколько пользователей добавили релиз в избранное / коллекции (V1 `added_in_*`). */
+    val collectionStats: ReleaseCollectionStats? = null,
     /** Абсолютный URL фона 1920x1080 (V1 `background_covers[0].preview`). */
     val backgroundCover: String? = null,
     /** Английское название (V1 `name.english`); [titleEng] — последнее из [names], часто альтернативные. */

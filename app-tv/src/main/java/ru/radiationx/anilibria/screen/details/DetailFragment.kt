@@ -77,6 +77,7 @@ class DetailFragment : RowsSupportFragment() {
                     favoriteClickListener = headerViewModel::onFavoriteClick,
                     descriptionClickListener = headerViewModel::onDescriptionClick,
                     collectionClickListener = headerViewModel::onCollectionClick,
+                    ratingsClickListener = headerViewModel::onRatingsClick,
                     otherClickListener = headerViewModel::onOtherClick
                 )
             )
@@ -162,6 +163,22 @@ class DetailFragment : RowsSupportFragment() {
             bindCompactHeader()
         }
         subscribeTo(relatedViewModel.franchiseData) { bindCompactHeader() }
+        subscribeTo(headerViewModel.ratingsEvent) { (title, ratings) ->
+            if (childFragmentManager.findFragmentByTag(DetailRatingsDialogFragment.TAG) != null) {
+                return@subscribeTo
+            }
+            DetailRatingsDialogFragment
+                .newInstance(title, ratings)
+                .show(childFragmentManager, DetailRatingsDialogFragment.TAG)
+        }
+        subscribeTo(headerViewModel.descriptionEvent) { description ->
+            if (childFragmentManager.findFragmentByTag(DetailDescriptionDialogFragment.TAG) != null) {
+                return@subscribeTo
+            }
+            DetailDescriptionDialogFragment
+                .newInstance(description.title, description.text)
+                .show(childFragmentManager, DetailDescriptionDialogFragment.TAG)
+        }
 
         setOnItemViewSelectedListener { _, item, rowViewHolder, _ ->
             if (rowViewHolder is CustomListRowViewHolder) {

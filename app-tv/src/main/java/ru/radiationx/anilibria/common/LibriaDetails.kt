@@ -29,6 +29,8 @@ data class LibriaDetails(
     val nextEpisode: DetailNextEpisode?,
     /** Название коллекции пользователя, null — релиз не в коллекции. */
     val collectionName: String?,
+    /** Оценки и статистика для кнопки «★ Оценки»; null — данных нет, кнопка скрыта. */
+    val ratings: DetailRatings? = null,
 ) {
     val hasViewed: Boolean get() = progress != null
 }
@@ -46,6 +48,25 @@ data class DetailProgress(
     val episodeName: String?,
     val watchedCount: Int,
     val totalCount: Int?,
+)
+
+data class DetailRatings(
+    val scores: List<DetailRatingScore>,
+    val stats: List<DetailRatingStat>,
+)
+
+/** Карточка оценки: «Shikimori», «7,46», «16 538 голосов», «shikimori.io». */
+data class DetailRatingScore(
+    val source: String,
+    val value: String,
+    val votes: String,
+    val caption: String,
+)
+
+/** Ячейка статистики: «1 061» + «Смотрят». */
+data class DetailRatingStat(
+    val value: String,
+    val label: String,
 )
 
 data class DetailNextEpisode(

@@ -39,4 +39,30 @@
         <item name="android:includeFontPadding">false</item>
     </style>
 
+    <style name="AppTheme.DetailRatingsSection">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">14dp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:textColor">#EBFFFFFF</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- Полноэкранный оверлей полного описания (затемнение рисует сам layout). -->
+    <style name="AppTheme.DescriptionDialog" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@style/AppTheme.DescriptionDialog.Animation</item>
+    </style>
+
+    <style name="AppTheme.DescriptionDialog.Animation" parent="">
+        <item name="android:windowEnterAnimation">@android:anim/fade_in</item>
+        <item name="android:windowExitAnimation">@android:anim/fade_out</item>
+    </style>
+
 </resources>

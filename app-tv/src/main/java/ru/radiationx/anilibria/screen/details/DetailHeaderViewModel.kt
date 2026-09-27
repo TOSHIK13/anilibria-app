@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.common.DetailDataConverter
+import ru.radiationx.anilibria.common.DetailRatings
 import ru.radiationx.anilibria.common.DetailsState
 import ru.radiationx.anilibria.common.LibriaDetails
 import ru.radiationx.anilibria.common.fragment.GuidedRouter
@@ -32,6 +33,7 @@ import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ScheduleRepository
 import ru.radiationx.data.repository.FavoriteRepository
+import ru.radiationx.shared.ktx.EventFlow
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
 import javax.inject.Inject
@@ -53,6 +55,12 @@ class DetailHeaderViewModel @Inject constructor(
 
     val releaseData = MutableStateFlow<LibriaDetails?>(null)
     val progressState = MutableStateFlow(DetailsState())
+
+    /** Открыть полное описание поверх экрана. */
+    val descriptionEvent = EventFlow<DetailDescription>()
+
+    /** Открыть «★ Оценки»: название релиза + данные. */
+    val ratingsEvent = EventFlow<Pair<String, DetailRatings>>()
 
     private var currentRelease: Release? = null
     private var currentAccesses: List<EpisodeAccess> = emptyList()
@@ -170,7 +178,15 @@ class DetailHeaderViewModel @Inject constructor(
     }
 
     fun onDescriptionClick() {
+        val details = releaseData.value ?: return
+        if (details.description.isBlank()) return
+        descriptionEvent.emit(DetailDescription(details.titleRu, details.description))
+    }
 
+    fun onRatingsClick() {
+        val details = releaseData.value ?: return
+        val ratings = details.ratings ?: return
+        ratingsEvent.emit(details.titleRu to ratings)
     }
 
     fun onCollectionClick() {
@@ -229,3 +245,8 @@ class DetailHeaderViewModel @Inject constructor(
         )
     }
 }
+
+data class DetailDescription(
+    val title: String,
+    val text: String,
+)

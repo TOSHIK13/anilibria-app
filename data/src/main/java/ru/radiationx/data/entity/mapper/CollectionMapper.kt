@@ -9,6 +9,7 @@ import ru.radiationx.data.entity.domain.release.FavoriteInfo
 import ru.radiationx.data.entity.domain.release.PlayerSkips
 import ru.radiationx.data.entity.domain.release.QualityInfo
 import ru.radiationx.data.entity.domain.release.Release
+import ru.radiationx.data.entity.domain.release.ReleaseCollectionStats
 import ru.radiationx.data.entity.domain.release.ReleaseFranchise
 import ru.radiationx.data.entity.domain.release.ReleaseFranchisePart
 import ru.radiationx.data.entity.domain.release.RutubeEpisode
@@ -112,6 +113,19 @@ fun CollectionReleaseResponse.toDomain(
         ageRating = ageRating?.label?.takeIf { it.isNotBlank() },
         averageEpisodeDurationMin = averageDurationOfEpisode?.takeIf { it > 0 },
         shikimoriRating = shikimori?.rating?.takeIf { it > 0.0 },
+        shikimoriVotes = shikimori?.votes?.takeIf { it > 0 },
+        malRating = mal?.rating?.takeIf { it > 0.0 },
+        malVotes = mal?.votes?.takeIf { it > 0 },
+        ownRatingAverage = rating?.average?.takeIf { it > 0.0 },
+        ownRatingVotes = rating?.votes,
+        collectionStats = ReleaseCollectionStats(
+            favorites = addedInUsersFavorites,
+            watching = addedInWatchingCollection,
+            planned = addedInPlannedCollection,
+            watched = addedInWatchedCollection,
+            postponed = addedInPostponedCollection,
+            abandoned = addedInAbandonedCollection,
+        ).takeUnless { it.isEmpty },
         backgroundCover = backgroundCovers
             ?.firstNotNullOfOrNull { it.toBackgroundUrl(imagesBaseUrl) },
         nameEnglish = name?.english

@@ -79,24 +79,44 @@
         <item name="android:paddingLeft">7dp</item>
     </style>
 
+    <!-- Боковые меню (все GuidedStep-экраны). Стили пунктов и подсказки — в guided_styles.xml. -->
     <style name="AppTheme.LeanbackWizard" parent="Theme.Leanback.GuidedStep">
         <item name="android:colorPrimary">@color/dark_colorPrimary</item>
         <item name="android:colorPrimaryDark">@color/dark_colorPrimaryDark</item>
         <item name="android:colorAccent">@color/dark_colorAccent</item>
-        <item name="android:colorBackground">@color/dark_windowBackground</item>
-        <item name="android:windowBackground">@color/dark_windowBackground</item>
+        <item name="android:colorBackground">@color/guided_step_background</item>
+        <item name="android:windowBackground">@color/guided_step_background</item>
 
-        <item name="guidedStepBackground">@color/app_guidedstep_actions_background</item>
-        <item name="guidedActionsBackground">@color/app_guidedstep_actions_background</item>
-        <item name="guidedActionsBackgroundDark">@color/app_guidedstep_subactions_background</item>
+        <item name="guidedStepBackground">@color/guided_step_background</item>
+        <item name="guidedActionsBackground">@color/guided_actions_background</item>
+        <item name="guidedActionsBackgroundDark">@color/guided_actions_background_dark</item>
         <item name="guidedActionsElevation">0dp</item>
+        <item name="guidedActionsSelectorDrawable">@android:color/transparent</item>
 
+        <item name="guidanceContainerStyle">@style/AppTheme.Guided.GuidanceContainer</item>
         <item name="guidanceIconStyle">@style/AppTheme.Widget.GuidanceIconStyle</item>
+        <item name="guidanceBreadcrumbStyle">@style/AppTheme.Guided.GuidanceBreadcrumb</item>
+        <item name="guidanceTitleStyle">@style/AppTheme.Guided.GuidanceTitle</item>
+        <item name="guidanceDescriptionStyle">@style/AppTheme.Guided.GuidanceDescription</item>
+
+        <item name="guidedActionsListStyle">@style/AppTheme.Guided.ActionsList</item>
+        <item name="guidedButtonActionsListStyle">@style/AppTheme.Guided.ButtonActionsList</item>
+        <item name="guidedSubActionsListStyle">@style/AppTheme.Guided.SubActionsList</item>
+        <item name="guidedActionItemContainerStyle">@style/AppTheme.Guided.ActionItemContainer</item>
+        <item name="guidedActionItemContentStyle">@style/AppTheme.Guided.ActionItemContent</item>
+        <item name="guidedActionItemTitleStyle">@style/AppTheme.Guided.ActionItemTitle</item>
+        <item name="guidedActionItemDescriptionStyle">@style/AppTheme.Guided.ActionItemDescription</item>
+        <item name="guidedActionItemCheckmarkStyle">@style/AppTheme.Guided.ActionItemCheckmark</item>
+        <item name="guidedActionItemChevronStyle">@style/AppTheme.Guided.ActionItemChevron</item>
+
+        <!-- Отметки (radio / checkbox): красный кружок / квадрат с белой галочкой. -->
+        <item name="android:listChoiceIndicatorSingle">@drawable/guided_check_single</item>
+        <item name="android:listChoiceIndicatorMultiple">@drawable/guided_check_multiple</item>
     </style>
 
+    <!-- Меню поверх плеера / экрана релиза: тот же вид, фон — полупрозрачная тёмная панель. -->
     <style name="AppTheme.Player.LeanbackWizard" parent="AppTheme.LeanbackWizard">
-        <item name="guidedStepBackground">@color/app_guidedstep_actions_background_player</item>
-        <item name="guidedActionsElevation">@dimen/lb_guidedactions_elevation</item>
+        <item name="guidedStepBackground">@color/guided_step_background_overlay</item>
     </style>
 
     <style name="AppTheme.Widget.GuidanceIconStyle" parent="Widget.Leanback.GuidanceIconStyle">

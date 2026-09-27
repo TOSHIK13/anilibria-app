@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ru.radiationx.data.entity.domain.release.ReleaseCollectionStats
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.response.collection.CollectionReleaseResponse
 import ru.radiationx.data.entity.response.collection.V1FranchiseResponse
@@ -24,6 +25,29 @@ class CollectionMapperV1FieldsTest {
         assertEquals(
             "https://www.anilibria.tv/storage/releases/background-covers/10292/fXB6YQNqKiteVM5CMoOL4bYCOwNYj5iX.jpg",
             release.backgroundCover
+        )
+    }
+
+    @Test
+    fun fullRelease_mapsRatingsAndCollectionStats() {
+        val release = Fixtures.parse<CollectionReleaseResponse>("v1/release_10292.json").map()
+
+        assertEquals(5921, release.shikimoriVotes)
+        assertEquals(8.3, release.malRating!!, 0.0001)
+        assertEquals(70566, release.malVotes)
+        // rating.average == null, votes == 0 на сервере
+        assertNull(release.ownRatingAverage)
+        assertEquals(0, release.ownRatingVotes)
+        assertEquals(
+            ReleaseCollectionStats(
+                favorites = 7680,
+                watching = 1062,
+                planned = 675,
+                watched = 301,
+                postponed = 24,
+                abandoned = 11,
+            ),
+            release.collectionStats
         )
     }
 

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Боковые меню (GuidedStepSupportFragment) в стиле редизайна.
+    Подключаются через AppTheme.LeanbackWizard (guidedStepTheme активити
+    и onProvideTheme() -> AppTheme.Player.LeanbackWizard), так что все guided-экраны
+    получают одинаковый вид.
+-->
+<resources>
+
+    <color name="guided_step_background">#FF15212A</color>
+    <!-- Поверх видео / экрана релиза: полупрозрачная тёмная панель rgba(10,14,18,.9). -->
+    <color name="guided_step_background_overlay">#E60A0E12</color>
+    <color name="guided_actions_background">#0AFFFFFF</color>
+    <color name="guided_actions_background_dark">#14FFFFFF</color>
+
+    <!-- Leanback берёт альфу текста пунктов из этих dimen, а не из стиля. -->
+    <item name="lb_guidedactions_item_unselected_description_text_alpha" format="float" type="dimen">0.70</item>
+    <item name="lb_guidedactions_item_disabled_text_alpha" format="float" type="dimen">0.35</item>
+    <item name="lb_guidedactions_item_disabled_description_text_alpha" format="float" type="dimen">0.30</item>
+
+    <!-- Левая часть: подсказка -->
+    <style name="AppTheme.Guided.GuidanceContainer" parent="Widget.Leanback.GuidanceContainerStyle">
+        <item name="android:paddingStart">56dp</item>
+        <item name="android:paddingEnd">40dp</item>
+    </style>
+
+    <style name="AppTheme.Guided.GuidanceBreadcrumb" parent="Widget.Leanback.GuidanceBreadcrumbStyle">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textColor">#FFFF8A80</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:paddingBottom">6dp</item>
+    </style>
+
+    <style name="AppTheme.Guided.GuidanceTitle" parent="Widget.Leanback.GuidanceTitleStyle">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">#FFFFFFFF</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:maxLines">3</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">10dp</item>
+    </style>
+
+    <style name="AppTheme.Guided.GuidanceDescription" parent="Widget.Leanback.GuidanceDescriptionStyle">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">#B3FFFFFF</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:lineSpacingExtra">5dp</item>
+        <item name="android:maxLines">10</item>
+    </style>
+
+    <!-- Правая часть: список действий -->
+    <style name="AppTheme.Guided.ActionsList" parent="Widget.Leanback.GuidedActionsListStyle">
+        <item name="android:verticalSpacing">6dp</item>
+        <item name="android:paddingStart">28dp</item>
+        <item name="android:paddingEnd">28dp</item>
+    </style>
+
+    <style name="AppTheme.Guided.ButtonActionsList" parent="Widget.Leanback.GuidedButtonActionsListStyle">
+        <item name="android:verticalSpacing">6dp</item>
+        <item name="android:paddingStart">28dp</item>
+        <item name="android:paddingEnd">28dp</item>
+    </style>
+
+    <style name="AppTheme.Guided.SubActionsList" parent="Widget.Leanback.GuidedSubActionsListStyle">
+        <item name="android:verticalSpacing">6dp</item>
+        <item name="android:paddingStart">28dp</item>
+        <item name="android:paddingEnd">28dp</item>
+    </style>
+
+    <!-- Пункт: скруглённая строка 12dp, в фокусе — белая плашка с тёмным текстом (как кнопки релиза). -->
+    <style name="AppTheme.Guided.ActionItemContainer" parent="Widget.Leanback.GuidedActionItemContainerStyle">
+        <item name="android:background">@drawable/bg_guided_action_item</item>
+        <item name="android:foreground">@null</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
+    </style>
+
+    <!-- Текст наследует focused-состояние пункта: container -> content -> title/description. -->
+    <style name="AppTheme.Guided.ActionItemContent" parent="Widget.Leanback.GuidedActionItemContentStyle">
+        <item name="android:duplicateParentState">true</item>
+    </style>
+
+    <style name="AppTheme.Guided.ActionItemTitle" parent="Widget.Leanback.GuidedActionItemTitleStyle">
+        <item name="android:duplicateParentState">true</item>
+        <item name="android:alpha">1</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textColor">@color/guided_action_title</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="AppTheme.Guided.ActionItemDescription" parent="Widget.Leanback.GuidedActionItemDescriptionStyle">
+        <item name="android:duplicateParentState">true</item>
+        <item name="android:layout_marginTop">3dp</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textColor">@color/guided_action_description</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="AppTheme.Guided.ActionItemCheckmark" parent="Widget.Leanback.GuidedActionItemCheckmarkStyle">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_marginEnd">14dp</item>
+    </style>
+
+    <style name="AppTheme.Guided.ActionItemChevron" parent="Widget.Leanback.GuidedActionItemChevronStyle">
+        <item name="android:duplicateParentState">true</item>
+        <item name="android:tint">@color/guided_action_chevron</item>
+    </style>
+
+</resources>

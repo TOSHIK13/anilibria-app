@@ -14,7 +14,6 @@ import androidx.core.widget.TextViewCompat
 import androidx.leanback.widget.RowPresenter
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.DetailChip
-import ru.radiationx.anilibria.common.DetailProgress
 import ru.radiationx.anilibria.common.DetailsState
 import ru.radiationx.anilibria.common.LibriaDetails
 import ru.radiationx.anilibria.common.LibriaDetailsRow
@@ -27,6 +26,7 @@ class ReleaseDetailsPresenter(
     private val favoriteClickListener: () -> Unit,
     private val descriptionClickListener: () -> Unit,
     private val collectionClickListener: () -> Unit,
+    private val ratingsClickListener: () -> Unit,
     private val otherClickListener: () -> Unit,
 ) : RowPresenter() {
 
@@ -48,6 +48,7 @@ class ReleaseDetailsPresenter(
             favoriteClickListener,
             descriptionClickListener,
             collectionClickListener,
+            ratingsClickListener,
             otherClickListener
         )
     }
@@ -68,6 +69,7 @@ class LibriaReleaseViewHolder(
     private val favoriteClickListener: () -> Unit,
     private val descriptionClickListener: () -> Unit,
     private val collectionClickListener: () -> Unit,
+    private val ratingsClickListener: () -> Unit,
     private val otherClickListener: () -> Unit,
 ) : RowPresenter.ViewHolder(itemView) {
 
@@ -115,11 +117,11 @@ class LibriaReleaseViewHolder(
         binding.rowReleaseActionContinue.setOnClickListener { continueClickListener.invoke() }
         binding.rowReleaseActionPlay.setOnClickListener { playClickListener.invoke() }
         binding.rowReleaseActionCollection.setOnClickListener { collectionClickListener.invoke() }
+        binding.rowReleaseActionRatings.setOnClickListener { ratingsClickListener.invoke() }
         binding.rowReleaseActionOther.setOnClickListener { otherClickListener.invoke() }
         binding.rowReleaseActionFavorite.setOnClickListener { favoriteClickListener.invoke() }
-        // Описание, как и раньше, не фокусируемое; обработчик оставлен на случай, если его включат.
-        binding.rowReleaseDescription.setOnClickListener { descriptionClickListener.invoke() }
-        binding.rowReleaseDescription.isClickable = false
+        // Описание фокусируемое (UP с кнопок): OK открывает полный текст.
+        binding.rowReleaseDescriptionBlock.setOnClickListener { descriptionClickListener.invoke() }
         TextViewCompat.setLineHeight(binding.rowReleaseDescription, dp(22))
         binding.root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
@@ -184,10 +186,8 @@ class LibriaReleaseViewHolder(
         binding.rowReleaseInfo.text = details.infoLine
         binding.rowReleaseInfo.isVisible = details.infoLine.isNotEmpty()
 
-        bindProgress(details.progress)
-
         binding.rowReleaseDescription.text = details.description
-        binding.rowReleaseDescription.isVisible = details.description.isNotEmpty()
+        binding.rowReleaseDescriptionBlock.isVisible = details.description.isNotEmpty()
 
         binding.rowReleaseImageCard.isVisible = showPoster
         if (showPoster && loadedPoster != details.image) {
@@ -228,35 +228,6 @@ class LibriaReleaseViewHolder(
         }
     }
 
-    private fun bindProgress(progress: DetailProgress?) {
-        binding.rowReleaseProgress.isVisible = progress != null
-        progress ?: return
-        val duration = progress.durationSec
-        val timeText = buildString {
-            append(formatTime(progress.positionSec))
-            if (duration != null) {
-                append(" из ")
-                append(formatTime(duration))
-            }
-        }
-        binding.rowReleaseProgressTitle.text =
-            "Вы остановились на ${progress.episodeLabel} серии · $timeText"
-        val watchedText = buildString {
-            append("просмотрено ${progress.watchedCount}")
-            progress.totalCount?.also { append(" из $it") }
-        }
-        binding.rowReleaseProgressSubtitle.text = listOfNotNull(
-            progress.episodeName?.let { "«$it»" },
-            watchedText
-        ).joinToString(" · ")
-        val fraction = if (duration != null && duration > 0) {
-            (progress.positionSec.toFloat() / duration).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-        binding.rowReleaseProgressBar.progress = (fraction * binding.rowReleaseProgressBar.max).toInt()
-    }
-
     private fun bindActions(details: LibriaDetails) {
         val progress = details.progress
         val continueButton = binding.rowReleaseActionContinue
@@ -278,34 +249,67 @@ class LibriaReleaseViewHolder(
             "☆ В избранное"
         }
         binding.rowReleaseActionCollection.text = "${details.collectionName ?: "В коллекцию"} ▾"
+        binding.rowReleaseActionRatings.isVisible = details.ratings != null
+
+        fitPills(progress?.episodeLabel)
 
         applyAutoFocus()
     }
 
-    private fun applyAutoFocus() {
-        if (!autoFocusActive || lastDetails == null || !binding.rowReleaseActions.isVisible) return
-        val firstPill = when {
-            binding.rowReleaseActionContinue.isVisible -> binding.rowReleaseActionContinue
-            binding.rowReleaseActionPlay.isVisible -> binding.rowReleaseActionPlay
-            else -> binding.rowReleaseActionFavorite
+    /**
+     * Кнопки не должны вылезать за экран: при нехватке места уменьшаем поля кнопок,
+     * затем сокращаем «★ Оценки» до «★» и «Продолжить · серия N» до «▶ Серия N».
+     */
+    private fun fitPills(continueEpisode: String?) {
+        val row = binding.rowReleaseActions
+        val pills = (0 until row.childCount).map { row.getChildAt(it) as TextView }
+        val available = view.resources.displayMetrics.widthPixels - dp(48 + 48)
+        val ratings = binding.rowReleaseActionRatings
+        val continueButton = binding.rowReleaseActionContinue
+
+        fun setPadding(normal: Int) {
+            pills.forEach {
+                val horizontal = if (it === binding.rowReleaseActionOther) 19 else normal
+                it.setPaddingRelative(dp(horizontal), it.paddingTop, dp(horizontal), it.paddingBottom)
+            }
         }
+
+        fun fits(): Boolean {
+            row.measure(
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            return row.measuredWidth <= available
+        }
+
+        ratings.text = "★ Оценки"
+        setPadding(26)
+        if (fits()) return
+        setPadding(18)
+        if (fits()) return
+        ratings.text = "★"
+        if (fits()) return
+        if (continueEpisode != null) {
+            continueButton.text = "▶ Серия $continueEpisode"
+        }
+    }
+
+    private fun firstPill(): View = when {
+        binding.rowReleaseActionContinue.isVisible -> binding.rowReleaseActionContinue
+        binding.rowReleaseActionPlay.isVisible -> binding.rowReleaseActionPlay
+        else -> binding.rowReleaseActionFavorite
+    }
+
+    private fun applyAutoFocus() {
+        // DOWN с описания — всегда на первую кнопку, а не на ближайшую по геометрии.
+        binding.rowReleaseDescriptionBlock.nextFocusDownId = firstPill().id
+        if (!autoFocusActive || lastDetails == null || !binding.rowReleaseActions.isVisible) return
+        val firstPill = firstPill()
         if (firstPill === autoFocusTarget && firstPill.isFocused) return
         val previousTarget = autoFocusTarget
         autoFocusTarget = firstPill
         if (!firstPill.requestFocus()) {
             autoFocusTarget = previousTarget
-        }
-    }
-
-    private fun formatTime(totalSec: Int): String {
-        val sec = totalSec.coerceAtLeast(0)
-        val hours = sec / 3600
-        val minutes = sec % 3600 / 60
-        val seconds = sec % 60
-        return if (hours > 0) {
-            "%d:%02d:%02d".format(hours, minutes, seconds)
-        } else {
-            "%d:%02d".format(minutes, seconds)
         }
     }
 

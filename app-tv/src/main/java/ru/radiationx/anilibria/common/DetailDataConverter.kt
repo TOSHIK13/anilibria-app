@@ -64,6 +64,8 @@ class DetailDataConverter @Inject constructor() {
             collectionName = collection?.let { type ->
                 DetailCollectionGuidedFragment.COLLECTION_ITEMS.firstOrNull { it.first == type }?.second
             },
+            // Частичный (кэшированный) релиз несёт только «в избранном» — ждём полный.
+            ratings = if (isFull) ratings() else null,
         )
     }
 
@@ -132,6 +134,63 @@ class DetailDataConverter @Inject constructor() {
             types.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() },
             episodes
         ).joinToString(" · ")
+    }
+
+    /** Узкий неразрывный пробел между разрядами: «16 538». */
+    private val thinCountFormat = DecimalFormat(
+        "#,###",
+        DecimalFormatSymbols(ruLocale).apply { groupingSeparator = ' ' }
+    )
+
+    private val scoreFormat = DecimalFormat("0.00", DecimalFormatSymbols(ruLocale))
+
+    private fun Release.ratings(): DetailRatings? {
+        val scores = listOfNotNull(
+            score("Shikimori", shikimoriRating, shikimoriVotes, "shikimori.io"),
+            score("MyAnimeList", malRating, malVotes, "myanimelist.net"),
+            ownRatingVotes?.takeIf { it > 0 }?.let {
+                score("AniLiberty", ownRatingAverage, it, "оценки пользователей")
+            },
+        )
+        val stats = collectionStats?.let { stats ->
+            listOfNotNull(
+                stat(stats.favorites, "В избранном"),
+                stat(stats.watching, "Смотрят"),
+                stat(stats.planned, "Запланировали"),
+                stat(stats.watched, "Просмотрели"),
+                stat(stats.postponed, "Отложили"),
+                stat(stats.abandoned, "Бросили"),
+            )
+        }.orEmpty()
+        if (scores.isEmpty() && stats.isEmpty()) return null
+        return DetailRatings(scores, stats)
+    }
+
+    private fun score(source: String, rating: Double?, votes: Int?, caption: String): DetailRatingScore? {
+        rating ?: return null
+        return DetailRatingScore(
+            source = source,
+            value = scoreFormat.format(rating),
+            votes = votes?.takeIf { it > 0 }
+                ?.let { "${thinCountFormat.format(it)} ${votesWord(it)}" }
+                .orEmpty(),
+            caption = caption,
+        )
+    }
+
+    private fun stat(value: Int?, label: String): DetailRatingStat? =
+        value?.let { DetailRatingStat(thinCountFormat.format(it), label) }
+
+    /** голос / голоса / голосов. */
+    private fun votesWord(count: Int): String {
+        val mod100 = count % 100
+        val mod10 = count % 10
+        return when {
+            mod100 in 11..14 -> "голосов"
+            mod10 == 1 -> "голос"
+            mod10 in 2..4 -> "голоса"
+            else -> "голосов"
+        }
     }
 
     private fun Release.infoLine(): String {
