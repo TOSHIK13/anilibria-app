@@ -202,6 +202,11 @@ class SearchFragment : GridFragment() {
             right = res.getDimensionPixelSize(R.dimen.main_top_logo_margin_end),
             bottom = res.getDimensionPixelSize(R.dimen.catalog_grid_padding_bottom),
         )
+        // Leanback-сетка по умолчанию не клипует по padding (чтобы фокус-зум верхнего ряда
+        // мог вылезать в верхний паддинг): из-за этого при прокрутке в тот же паддинг снизу
+        // на 1-2px попадал нижний край карточек уже прокрученного ряда сверху. Клип по padding
+        // возвращаем — зум верхнего ряда всё ещё умещается в паддинг с запасом.
+        grid.clipToPadding = true
         grid.horizontalSpacing = res.getDimensionPixelSize(R.dimen.catalog_grid_horizontal_spacing)
         grid.verticalSpacing = res.getDimensionPixelSize(R.dimen.catalog_grid_vertical_spacing)
         grid.setGravity(Gravity.START)

@@ -161,6 +161,7 @@ class LibriaCardViewHolder(
 
     private fun applyState(item: LibriaCard, progress: ReleaseWatchProgress?, available: Int?) {
         val watched = progress?.watched ?: 0
+        val total = progress?.total ?: item.episodesTotal
         val badge = when {
             watched > 0 && available != null && available > watched && isFresh(item.freshAt) ->
                 WatchBadgeDrawable.Badge.NEW
@@ -168,8 +169,14 @@ class LibriaCardViewHolder(
             item.isFilm -> WatchBadgeDrawable.Badge.FILM
             else -> null
         }
+        val watchedFully = if (item.isFilm) {
+            watched > 0
+        } else {
+            total != null && watched > 0 && watched >= total
+        }
         watchBadge.setProgress(progress, available, item.episodesTotal)
         watchBadge.setBadge(badge)
+        watchBadge.setWatchedFully(watchedFully)
     }
 
     private fun isFresh(freshAtSec: Long?): Boolean {

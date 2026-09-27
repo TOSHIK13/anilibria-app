@@ -23,6 +23,8 @@ import ru.radiationx.data.repository.ReleaseWatchProgress
  * Бейдж «НОВАЯ» / «ФИЛЬМ» — тоже справа сверху, под индикатором (или в углу, если индикатора нет).
  * Левый верхний угол не занимаем — там водяной знак AniLibria на постерах.
  * В фокусе — белая рамка по скруглённому контуру карточки.
+ * Полностью просмотренный релиз — постер притемняется полупрозрачной заливкой («в тени»);
+ * в фокусе затемнение снимается, чтобы карточка оставалась читаемой.
  */
 class WatchBadgeDrawable(context: Context) : Drawable() {
 
@@ -60,11 +62,15 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
         strokeWidth = focusStroke
         color = Color.WHITE
     }
+    private val watchedDimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(115, 0, 0, 0)
+    }
     private val rect = RectF()
 
     private var text: String? = null
     private var badge: Badge? = null
     private var focused = false
+    private var watchedFully = false
 
     fun setProgress(progress: ReleaseWatchProgress?, available: Int?, fallbackTotal: Int?) {
         val newText = progress?.let { formatProgress(it.watched, available, it.total ?: fallbackTotal) }
@@ -93,12 +99,22 @@ class WatchBadgeDrawable(context: Context) : Drawable() {
         invalidateSelf()
     }
 
+    fun setWatchedFully(watchedFully: Boolean) {
+        if (this.watchedFully == watchedFully) return
+        this.watchedFully = watchedFully
+        invalidateSelf()
+    }
+
     fun clear() {
         setProgress(null, null, null)
         setBadge(null)
+        setWatchedFully(false)
     }
 
     override fun draw(canvas: Canvas) {
+        if (watchedFully && !focused) {
+            canvas.drawRect(bounds, watchedDimPaint)
+        }
         var nextTop = bounds.top + margin
         text?.let { nextTop = drawCounter(canvas, it) + badgeGap }
         badge?.let { drawBadge(canvas, it, nextTop) }
