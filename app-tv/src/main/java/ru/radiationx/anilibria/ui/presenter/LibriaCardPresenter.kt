@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.LibriaCard
-import ru.radiationx.anilibria.ui.widget.SegmentedProgressDrawable
+import ru.radiationx.anilibria.ui.widget.WatchBadgeDrawable
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.ReleaseWatchProgress
@@ -84,7 +84,7 @@ class LibriaCardViewHolder(
         containerView.context.resources.getDimension(R.dimen.card_corner_radius)
     }
 
-    private val watchBadge = SegmentedProgressDrawable(containerView.context)
+    private val watchBadge = WatchBadgeDrawable(containerView.context)
     private val scope = MainScope()
     private var progressJob: Job? = null
     private var boundItem: LibriaCard? = null
@@ -161,16 +161,15 @@ class LibriaCardViewHolder(
 
     private fun applyState(item: LibriaCard, progress: ReleaseWatchProgress?, available: Int?) {
         val watched = progress?.watched ?: 0
-        val total = progress?.total ?: item.episodesTotal
         val badge = when {
             watched > 0 && available != null && available > watched && isFresh(item.freshAt) ->
-                SegmentedProgressDrawable.Badge.NEW
+                WatchBadgeDrawable.Badge.NEW
 
-            total != null && watched > 0 && watched >= total -> SegmentedProgressDrawable.Badge.COMPLETED
-            item.isFilm -> SegmentedProgressDrawable.Badge.FILM
+            item.isFilm -> WatchBadgeDrawable.Badge.FILM
             else -> null
         }
-        watchBadge.setState(watched, available, total, item.isFilm, badge)
+        watchBadge.setProgress(progress, available, item.episodesTotal)
+        watchBadge.setBadge(badge)
     }
 
     private fun isFresh(freshAtSec: Long?): Boolean {

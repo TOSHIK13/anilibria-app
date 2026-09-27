@@ -20,7 +20,6 @@ import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.FranchiseCard
 import ru.radiationx.anilibria.ui.widget.FranchiseCardView
-import ru.radiationx.anilibria.ui.widget.SegmentedProgressDrawable
 import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.interactors.ReleaseInteractor
 import ru.radiationx.data.repository.ReleaseWatchProgress
@@ -30,7 +29,7 @@ import ru.radiationx.shared_app.imageloader.showImageUrl
 
 /**
  * Карточка части франшизы ([FranchiseCard]): постер слева, «03 · ТВ», название, год и серии,
- * сегментная полоса просмотра (как на постерах) и «9/23» / «Просмотрен ✓» / «Не начато».
+ * и прогресс «8/9(12)» / «12/12 ✓» (как плашка на постере) / «Просмотрен ✓» / «Не начато».
  * Открытый релиз — плашка «ВЫ ЗДЕСЬ»; досмотренные части — приглушённый постер.
  */
 class FranchiseCardPresenter : Presenter() {
@@ -70,17 +69,14 @@ class FranchiseCardViewHolder(
     private val order: TextView = cardView.findViewById(R.id.franchiseOrder)
     private val title: TextView = cardView.findViewById(R.id.franchiseTitle)
     private val meta: TextView = cardView.findViewById(R.id.franchiseMeta)
-    private val bar: View = cardView.findViewById(R.id.franchiseBar)
     private val progressText: TextView = cardView.findViewById(R.id.franchiseProgress)
     private val chip: View = cardView.findViewById(R.id.franchiseChip)
 
-    private val barDrawable = SegmentedProgressDrawable(cardView.context, barOnly = true)
     private val scope = MainScope()
     private var progressJob: Job? = null
     private var boundItem: FranchiseCard? = null
 
     init {
-        bar.background = barDrawable
         TextViewCompat.setLineHeight(title, (17 * density + 0.5f).toInt())
         // Подписка на прогресс живёт только пока карточка на экране — иначе утечка вью.
         cardView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
@@ -107,7 +103,6 @@ class FranchiseCardViewHolder(
     fun unbind() {
         boundItem = null
         stopObserveProgress()
-        barDrawable.clear()
     }
 
     private fun observeProgress() {
@@ -138,11 +133,12 @@ class FranchiseCardViewHolder(
         } else {
             total != null && watched > 0 && watched >= total
         }
-        barDrawable.setState(watched, available, total, item.isFilm, null)
-        bar.isVisible = !item.isFilm && watched > 0
         progressText.text = when {
             item.isFilm -> if (watched > 0) "Просмотрен ✓" else "Не смотрел"
             watched > 0 && total != null && watched >= total -> "$watched/$total ✓"
+            watched > 0 && total != null && available != null && available < total ->
+                "$watched/$available($total)"
+
             watched > 0 && total != null -> "$watched/$total"
             watched > 0 -> "$watched эп."
             else -> "Не начато"

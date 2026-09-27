@@ -64,28 +64,19 @@
             android:textSize="12sp"
             tools:text="2023 · 23 эп." />
 
-        <View
-            android:id="@+id/franchiseBar"
-            android:layout_width="match_parent"
-            android:layout_height="4dp"
-            android:layout_gravity="bottom"
-            android:layout_marginStart="82dp"
-            android:layout_marginEnd="10dp"
-            android:layout_marginBottom="20dp" />
-
         <TextView
             android:id="@+id/franchiseProgress"
             android:layout_width="168dp"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom"
             android:layout_marginStart="82dp"
-            android:layout_marginBottom="3dp"
+            android:layout_marginBottom="10dp"
             android:ellipsize="end"
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="#B3FFFFFF"
             android:textSize="11sp"
-            tools:text="9/23" />
+            tools:text="8 из 9 (12)" />
 
         <TextView
             android:id="@+id/franchiseChip"
