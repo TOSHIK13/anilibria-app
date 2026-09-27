@@ -24,9 +24,24 @@
     <dimen name="main_rows_top_offset">242dp</dimen>
     <!-- Верх контента нестроковых страниц (настройки) под вкладками. -->
     <dimen name="main_page_content_top">64dp</dimen>
-    <!-- Панель фильтров «Каталога» между вкладками и сеткой. -->
-    <dimen name="catalog_controls_height">48dp</dimen>
-    <dimen name="catalog_grid_padding_top">24dp</dimen>
+    <!-- «Каталог»: чипы фильтров, строка выбранной карточки и сетка под ними (макет f-cat). -->
+    <dimen name="catalog_chips_top">66dp</dimen>
+    <dimen name="catalog_chip_height">32dp</dimen>
+    <dimen name="catalog_chip_gap">8dp</dimen>
+    <dimen name="catalog_chip_padding_horizontal">14dp</dimen>
+    <dimen name="catalog_chip_corner_radius">16dp</dimen>
+    <dimen name="catalog_chip_text_size">13sp</dimen>
+    <dimen name="catalog_title_top">114dp</dimen>
+    <dimen name="catalog_meta_top">143dp</dimen>
+    <!-- Верх области сетки: ряды при прокрутке обрезаются под строкой меты. -->
+    <dimen name="catalog_grid_top">161dp</dimen>
+    <!-- Первый ряд постеров на 178dp; запас сверху под увеличение карточки в фокусе. -->
+    <dimen name="catalog_grid_padding_top">17dp</dimen>
+    <dimen name="catalog_grid_padding_bottom">24dp</dimen>
+    <dimen name="catalog_grid_horizontal_spacing">8dp</dimen>
+    <dimen name="catalog_grid_vertical_spacing">16dp</dimen>
+    <dimen name="catalog_empty_top">214dp</dimen>
+    <dimen name="catalog_empty_button_height">44dp</dimen>
     <!-- Высота карточек выбранного ряда «Расписания»: заголовок дня над ними не заходит под вкладки. -->
     <dimen name="schedule_rows_top_offset">104dp</dimen>
 
@@ -35,6 +50,20 @@
     <color name="main_top_tab_focused_text">#111111</color>
     <color name="main_top_tab_selected_text">#FFFFFF</color>
     <color name="main_top_tab_text_default">#9EFFFFFF</color>
+
+    <style name="AppTheme.CatalogChip">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:layout_marginEnd">@dimen/catalog_chip_gap</item>
+        <item name="android:paddingStart">@dimen/catalog_chip_padding_horizontal</item>
+        <item name="android:paddingEnd">@dimen/catalog_chip_padding_horizontal</item>
+        <item name="android:background">@drawable/bg_catalog_chip</item>
+        <item name="android:focusable">true</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textSize">@dimen/catalog_chip_text_size</item>
+    </style>
 
     <!-- Применяется только на время BrowseSupportFragment.onCreate в MainPagesFragment. -->
     <style name="ThemeOverlay.MainPages" parent="">

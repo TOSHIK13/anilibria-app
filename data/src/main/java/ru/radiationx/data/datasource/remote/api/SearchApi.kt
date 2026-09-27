@@ -50,13 +50,19 @@ class SearchApi @Inject constructor(
         sort: String,
         complete: String,
         page: Int,
+        limit: Int = DEFAULT_LIMIT,
     ): CollectionReleasesResponse {
         val args = buildMap {
             put("page", page.toString())
-            put("limit", "10")
+            put("limit", limit.toString())
             put("f[sorting]", sort)
             genre.takeIf { it.isNotBlank() }?.also { put("f[genres]", it) }
-            year.takeIf { it.isNotBlank() }?.also { put("f[years]", it) }
+            // V1 фильтрует годы только диапазоном: список `f[years]=1996,2001` сервер игнорирует.
+            val years = year.split(",").mapNotNull { it.trim().toIntOrNull() }
+            if (years.isNotEmpty()) {
+                put("f[years][from_year]", years.min().toString())
+                put("f[years][to_year]", years.max().toString())
+            }
             season.takeIf { it.isNotBlank() }?.also { put("f[seasons]", it) }
             if (complete == "true") {
                 put("f[publish_statuses]", "IS_NOT_ONGOING")
@@ -67,4 +73,7 @@ class SearchApi @Inject constructor(
             .fetchResponse(moshi)
     }
 
+    companion object {
+        const val DEFAULT_LIMIT = 10
+    }
 }

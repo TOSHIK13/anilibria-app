@@ -21,11 +21,16 @@ abstract class BaseSearchValuesViewModel(
         updateSelected()
     }
 
+    /** «Готово»: закрыть панель (значения уже применены через [emitValues]). */
     abstract fun applyValues()
+
+    /** Отдать отмеченные значения в форму: сетка за панелью обновляется сразу. */
+    protected abstract fun emitValues()
 
     fun resetSelected() {
         checkedValues.clear()
         updateChecked()
+        emitValues()
     }
 
     fun setSelected(index: Int, selected: Boolean) {
@@ -36,6 +41,7 @@ abstract class BaseSearchValuesViewModel(
             checkedValues.remove(value)
         }
         updateChecked()
+        emitValues()
     }
 
     protected fun updateSelected() {

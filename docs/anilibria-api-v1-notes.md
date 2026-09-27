@@ -47,8 +47,10 @@
 - Список по id: `GET /api/v1/anime/releases/list?ids=9886,8437`
   - ответ: объект `{ data: [...], meta: { pagination: ... } }`, не голый массив.
 - Каталог: `GET /api/v1/anime/catalog/releases`
-  - query: `page`, `limit`, `f[sorting]`, `f[genres]`, `f[years]`, `f[seasons]`, `f[publish_statuses]`
-  - ответ: объект `{ data: [...], meta: { pagination: ... } }`
+  - query: `page`, `limit`, `f[sorting]`, `f[genres]`, `f[years][from_year]`, `f[years][to_year]`, `f[seasons]`, `f[publish_statuses]`
+  - годы — только диапазон: список `f[years]=1996,2001` сервер молча игнорирует (проверено 2026-09);
+    `f[publish_statuses]` понимает `IS_ONGOING` и `IS_NOT_ONGOING`
+  - ответ: объект `{ data: [...], meta: { pagination: { total, count, per_page, current_page, total_pages } } }`
 - Случайный релиз: `GET /api/v1/anime/releases/random?limit=1`
   - ответ: голый массив релизов.
 - Рекомендации: `GET /api/v1/anime/releases/recommended`

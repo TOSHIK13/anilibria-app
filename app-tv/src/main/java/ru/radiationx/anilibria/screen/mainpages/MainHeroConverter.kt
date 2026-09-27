@@ -93,6 +93,17 @@ class MainHeroConverter @Inject constructor() {
 
     fun isOngoing(release: Release): Boolean = release.statusCode == Release.STATUS_CODE_PROGRESS
 
+    /** Строка «Каталога» над сеткой: мета как в hero и до [maxGenres] жанров. */
+    fun catalogMeta(release: Release, maxGenres: Int = 3): String {
+        val genres = release.genres
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .take(maxGenres)
+            .joinToString(", ") { it.capitalizeDefault() }
+            .takeIf { it.isNotEmpty() }
+        return listOfNotNull(release.meta().takeIf { it.isNotEmpty() }, genres).joinToString(SEPARATOR)
+    }
+
     private fun LibriaCard.key(): String = when (val type = type) {
         is LibriaCard.Type.Release -> "release:${type.releaseId.id}"
         is LibriaCard.Type.Youtube -> "youtube:${type.link}"

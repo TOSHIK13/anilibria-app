@@ -21,6 +21,12 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
     protected open val loadOnCreate = true
     protected open val progressOnRefresh = true
     protected open val preventClearOnRefresh = false
+
+    /**
+     * false — без карточек «Загрузить еще» и загрузки в конце списка: следующую страницу
+     * запрашивают через [loadMore] (например, сетка при приближении к концу).
+     */
+    protected open val showLoadMoreCard = true
     open val defaultTitle = "Cards"
 
     /** Имя ряда для LoadTiming (`[main] feed page=1 data ...`), null — не логировать. */
@@ -31,6 +37,7 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
 
     private val currentCards = mutableListOf<LibriaCard>()
     private var currentPage = -1
+    private var hasMorePages = false
 
     private var requestJob: Job? = null
 
@@ -56,6 +63,23 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
 
     open fun onLoadingCardClick() {
         loadPage(currentPage)
+    }
+
+    /** Следующая страница, если она есть и сейчас ничего не грузится. */
+    fun loadMore() {
+        if (hasMorePages) {
+            loadPage(currentPage + 1)
+        }
+    }
+
+    /** Загрузка с первой страницы с отменой текущего запроса (например, сменились фильтры). */
+    protected fun restart() {
+        requestJob?.cancel()
+        requestJob = null
+        currentCards.clear()
+        currentPage = -1
+        hasMorePages = false
+        loadPage(firstPage)
     }
 
     open fun onLibriaCardClick(card: LibriaCard) {}
@@ -102,7 +126,9 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
                     preventClearOnRefresh &&
                     currentCards.isEmpty() &&
                     cardsData.value.any { it is LoadingCard && it.isEmpty }
-            if ((requestPage != firstPage || progressOnRefresh) && !keepEmptyCard) {
+            val showLoadingCard = (requestPage != firstPage || progressOnRefresh) &&
+                    (requestPage == firstPage || showLoadMoreCard)
+            if (showLoadingCard && !keepEmptyCard) {
                 cardsData.value = currentCards + loadingCard
             }
             val timingStart = LoadTiming.now()
@@ -134,7 +160,8 @@ abstract class BaseCardsViewModel : LifecycleViewModel() {
                     currentCards.addAll(newCards)
                 }
 
-                if (hasMoreCards(newCards, currentCards)) {
+                hasMorePages = hasMoreCards(newCards, currentCards)
+                if (hasMorePages && showLoadMoreCard) {
                     cardsData.value = currentCards + loadMoreCard
                 } else {
                     cardsData.value = if (currentCards.isEmpty()) {
