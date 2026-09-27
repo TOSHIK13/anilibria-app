@@ -2,6 +2,9 @@ package ru.radiationx.data.datasource.remote.api
 
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import ru.radiationx.data.ApiClient
 import ru.radiationx.data.datasource.remote.IClient
 import ru.radiationx.data.datasource.remote.address.ApiConfig
@@ -25,6 +28,9 @@ class ReleaseApi @Inject constructor(
         const val SHORT_RELEASE_FIELDS = FeedApi.RELEASE_FIELDS +
                 ",episodes.id,episodes.ordinal,episodes.name,episodes.preview.optimized.preview," +
                 "episodes.duration"
+
+        /** Максимальный `limit` у `releases/list` (больше — 422). */
+        private const val LIST_MAX_LIMIT = 50
     }
 
     private val animeUrl: String
@@ -67,15 +73,21 @@ class ReleaseApi @Inject constructor(
      * (как в ленте, [FeedApi.RELEASE_FIELDS]) плюс номер/превью/длительность серий
      * для «Продолжить просмотр» — ответ в разы легче полного.
      */
-    suspend fun getShortReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> {
-        val args = mapOf(
-            "ids" to ids.joinToString(","),
-            "include" to SHORT_RELEASE_FIELDS,
-        )
-        return client
-            .get("$animeUrl/releases/list", args)
-            .fetchResponse<CollectionReleasesResponse>(moshi)
-            .data
+    suspend fun getShortReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> = coroutineScope {
+        // Без `limit` сервер отдаёт только 25 релизов, больше 50 — 422. Пачки параллельно.
+        ids.distinct().chunked(LIST_MAX_LIMIT).map { chunk ->
+            async {
+                val args = mapOf(
+                    "ids" to chunk.joinToString(","),
+                    "limit" to chunk.size.toString(),
+                    "include" to SHORT_RELEASE_FIELDS,
+                )
+                client
+                    .get("$animeUrl/releases/list", args)
+                    .fetchResponse<CollectionReleasesResponse>(moshi)
+                    .data
+            }
+        }.awaitAll().flatten()
     }
 
     suspend fun getFullReleasesByIds(ids: List<Int>): List<CollectionReleaseResponse> {

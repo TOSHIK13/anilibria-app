@@ -54,6 +54,8 @@ data class Release(
     val malRating: Double? = null,
     /** Голосов на MyAnimeList (V1 `mal.votes`). */
     val malVotes: Int? = null,
+    /** MyAnimeList id (V1 `mal.id`, fallback `shikimori.id` — у Shikimori те же id). */
+    val malId: Int? = null,
     /** Собственный рейтинг AniLibria (V1 `rating.average`); null — нет оценок. */
     val ownRatingAverage: Double? = null,
     /** Голосов за собственный рейтинг (V1 `rating.votes`). */
