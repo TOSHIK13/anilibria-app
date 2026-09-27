@@ -64,6 +64,11 @@ class SearchFormViewModel @Inject constructor(
             searchForm = searchForm.copy(onlyCompleted = it)
             updateDataByForm()
         }.launchIn(viewModelScope)
+
+        searchController.showGenreEvent.onEach {
+            searchForm = SearchForm(genres = setOf(it))
+            updateDataByForm()
+        }.launchIn(viewModelScope)
     }
 
     fun onYearClick() {

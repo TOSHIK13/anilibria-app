@@ -64,6 +64,22 @@ class SearchRepository @Inject constructor(
         Suggestions(query, items)
     }
 
+    /**
+     * Тот же поиск, что [fastSearch] (`/app/search/releases`, `id1234` — по номеру), но с релизами
+     * целиком: для карточек с годом, типом и прогрессом.
+     */
+    suspend fun searchReleasesByQuery(query: String): List<Release> = withContext(Dispatchers.IO) {
+        val releaseId = getQueryId(query)
+        val responses = if (releaseId != null) {
+            releaseApi.getReleasesByIds(listOf(releaseId))
+        } else {
+            searchApi.fastSearch(query)
+        }
+        responses
+            .map { it.toDomain(apiUtils, apiConfig) }
+            .also { updateMiddleware.handle(it) }
+    }
+
     /** Релизы каталога по фильтрам; всего найдено — [Paginated.allItems] (`meta.pagination.total`). */
     suspend fun searchReleases(
         form: SearchForm,
