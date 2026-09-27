@@ -75,6 +75,15 @@ android {
                 "proguard-rules.pro"
             )
         }
+        debug {
+            // Отдельный applicationId и название, чтобы debug ставился рядом с release,
+            // не затирая его данные/логин. Работает и поверх beta (-PtvBeta=true):
+            // итоговый id получится вида ....beta.debug.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] =
+                if (isTvBeta) "AniLiberty TV Beta Debug" else "AniLiberty TV Debug"
+        }
     }
 
     flavorDimensions += listOf("type")
