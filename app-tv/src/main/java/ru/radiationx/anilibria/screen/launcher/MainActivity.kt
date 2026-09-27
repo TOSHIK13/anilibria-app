@@ -14,6 +14,7 @@ import ru.radiationx.anilibria.R
 import ru.radiationx.anilibria.common.fragment.GuidedStepNavigator
 import ru.radiationx.anilibria.contentprovider.suggestions.SuggestionsContentProvider
 import ru.radiationx.anilibria.di.ActivityModule
+import ru.radiationx.anilibria.di.MainPagesModule
 import ru.radiationx.anilibria.di.NavigationModule
 import ru.radiationx.anilibria.di.PlayerModule
 import ru.radiationx.anilibria.di.SearchModule
@@ -62,6 +63,7 @@ class MainActivity : FragmentActivity() {
             PlayerModule(),
             UpdateModule(),
             SearchModule(),
+            MainPagesModule(),
         )
         super.onCreate(savedInstanceState)
         watchNextHandled = savedInstanceState?.getBoolean(KEY_WATCH_NEXT_HANDLED) ?: false

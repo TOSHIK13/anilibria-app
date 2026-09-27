@@ -50,6 +50,8 @@ data class Release(
     val shikimoriRating: Double? = null,
     /** Голосов на Shikimori (V1 `shikimori.votes`). */
     val shikimoriVotes: Int? = null,
+    /** id релиза на Shikimori (V1 `shikimori.id`); совпадает с id MyAnimeList. */
+    val shikimoriId: Int? = null,
     /** Рейтинг MyAnimeList (V1 `mal.rating`). */
     val malRating: Double? = null,
     /** Голосов на MyAnimeList (V1 `mal.votes`). */

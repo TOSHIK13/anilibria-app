@@ -1,4 +1,4 @@
-package ru.radiationx.anilibria.screen.watching
+package ru.radiationx.anilibria.screen.suggestions
 
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardsDataConverter
@@ -9,7 +9,12 @@ import ru.radiationx.data.repository.HistoryRepository
 import ru.radiationx.data.repository.ReleaseRepository
 import javax.inject.Inject
 
-class WatchingRecommendsViewModel @Inject constructor(
+/**
+ * Ряд «Рекомендации» по последнему открытому релизу (`/releases/recommended`).
+ * Не путать с [SuggestionsRecommendsViewModel] (каталог по рейтингу).
+ * Раньше жил на вкладке «Я смотрю»; перенесён сюда для страницы «Поиск» (пока не подключён).
+ */
+class SuggestionsHistoryRecommendsViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val releaseRepository: ReleaseRepository,
     private val releaseInteractor: ReleaseInteractor,

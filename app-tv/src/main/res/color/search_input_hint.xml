@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder строки поиска: 55 % от цвета текста. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#8C111111" android:state_focused="true" />
+    <item android:color="#8CFFFFFF" />
+</selector>

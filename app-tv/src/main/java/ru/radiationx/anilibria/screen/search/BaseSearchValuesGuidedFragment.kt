@@ -82,7 +82,7 @@ abstract class BaseSearchValuesGuidedFragment : FakeGuidedStepFragment() {
         actions.add(
             GuidedAction.Builder(requireContext())
                 .id(GuidedAction.ACTION_ID_OK)
-                .title("Ок")
+                .title("Готово")
                 .build()
         )
 

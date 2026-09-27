@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+«Поиск» (макет f-s0/f-s1/f-s2, 1 dp = 2 px кадра 1920×1080): микрофон и строка поиска под вкладками,
+ниже — прокручиваемые блоки (собираются в SuggestionsFragment). Фон при фокусе на результате —
+размытый постер.
+-->
+<ru.radiationx.anilibria.screen.suggestions.SuggestionsPageLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF15212A">
+
+    <ImageView
+        android:id="@+id/suggestionsBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop" />
+
+    <View
+        android:id="@+id/suggestionsScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:background="@drawable/bg_search_scrim" />
+
+    <ru.radiationx.anilibria.screen.suggestions.SuggestionsScrollView
+        android:id="@+id/suggestionsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="@dimen/search_content_top"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:fadingEdge="none"
+        android:overScrollMode="never"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/suggestionsSections"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical"
+            android:paddingTop="@dimen/search_content_padding_top"
+            android:paddingBottom="@dimen/search_content_padding_bottom" />
+
+    </ru.radiationx.anilibria.screen.suggestions.SuggestionsScrollView>
+
+    <ImageView
+        android:id="@+id/suggestionsMic"
+        android:layout_width="@dimen/search_bar_height"
+        android:layout_height="@dimen/search_bar_height"
+        android:layout_marginStart="@dimen/search_mic_start"
+        android:layout_marginTop="@dimen/search_bar_top"
+        android:background="@drawable/bg_search_mic"
+        android:contentDescription="Голосовой поиск"
+        android:focusable="true"
+        android:padding="11dp"
+        android:src="@drawable/ic_search_mic"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+    <ru.radiationx.anilibria.screen.suggestions.SuggestionsSearchInput
+        android:id="@+id/suggestionsInput"
+        android:layout_width="@dimen/search_input_width"
+        android:layout_height="@dimen/search_bar_height"
+        android:layout_marginStart="@dimen/search_input_start"
+        android:layout_marginTop="@dimen/search_bar_top"
+        android:background="@drawable/bg_search_input"
+        android:gravity="center_vertical"
+        android:hint="Название, английское название или id"
+        android:imeOptions="actionSearch|flagNoExtractUi|flagNoFullscreen"
+        android:importantForAutofill="no"
+        android:inputType="text|textNoSuggestions"
+        android:maxLines="1"
+        android:paddingStart="@dimen/search_input_padding_start"
+        android:paddingEnd="@dimen/search_input_padding_start"
+        android:textColor="@color/search_input_text"
+        android:textColorHint="@color/search_input_hint"
+        android:textCursorDrawable="@drawable/search_input_cursor"
+        android:textSize="17sp" />
+
+    <TextView
+        android:id="@+id/suggestionsKeyboardHint"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/search_bar_height"
+        android:layout_marginStart="@dimen/search_hint_start"
+        android:layout_marginTop="@dimen/search_bar_top"
+        android:gravity="center_vertical"
+        android:text="OK — клавиатура"
+        android:textColor="#80FFFFFF"
+        android:textSize="12sp"
+        android:visibility="invisible" />
+
+    <ProgressBar
+        android:id="@+id/suggestionsProgress"
+        style="?android:attr/progressBarStyleSmall"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="670dp"
+        android:layout_marginTop="74dp"
+        android:visibility="gone" />
+
+</ru.radiationx.anilibria.screen.suggestions.SuggestionsPageLayout>

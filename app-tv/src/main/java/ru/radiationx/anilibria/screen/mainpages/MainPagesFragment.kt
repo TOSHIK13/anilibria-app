@@ -38,6 +38,11 @@ class MainPagesFragment : BrowseSupportFragment() {
         const val INITIAL_REVEAL_TIMEOUT_MS = 1_500L
         const val INITIAL_REVEAL_FADE_MS = 150L
 
+        /**
+         * Страница открывается, когда курсор задержался на вкладке: при быстром пролистывании
+         * промежуточные страницы не создаются и не грузятся.
+         */
+        const val TAB_FOCUS_SWITCH_DELAY_MS = 300L
         const val CONTENT_FOCUS_ATTEMPTS = 20
         const val CONTENT_FOCUS_ATTEMPT_DELAY_MS = 25L
     }
@@ -59,9 +64,8 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     private var topTabs: TopTabsView? = null
     private var contentFocusJob: Job? = null
-
-    /** Вкладка-действие, с которой открыли экран: по возвращении фокус встаёт на неё. */
-    private var focusTabOnReturn = -1
+    private var tabSwitchJob: Job? = null
+    private var tabSwitchIndex = -1
 
     /** Подменённая тема на время [BrowseSupportFragment.onCreate], см. [onCreate]. */
     private var createContext: Context? = null
@@ -147,11 +151,17 @@ class MainPagesFragment : BrowseSupportFragment() {
             tabs.setTabs(MainPagesFragmentFactory.tabIds.map { MainPagesFragmentFactory.variant1.getValue(it) })
             tabs.setSelectedTab(tabIndexOfPage(currentPage))
             tabs.onTabClickListener = ::onTabClicked
+            tabs.onTabFocusChangeListener = ::onTabFocusChanged
             tabs.onTabKeyListener = ::onUserKey
             ImageViewCompat.setImageTintList(
                 tabs.logoView,
                 ColorStateList.valueOf(tabs.context.getCompatColor(R.color.dark_contrast_icon))
             )
+        }
+
+        // Страницы просят открыть вкладку (например, кнопка поиска в «Каталоге» → «Поиск»).
+        subscribeTo(viewModel.openTabEvent) { tabId ->
+            onTabClicked(MainPagesFragmentFactory.tabIds.indexOf(tabId))
         }
 
         subscribeTo(viewModel.hasUpdatesData) {
@@ -164,16 +174,11 @@ class MainPagesFragment : BrowseSupportFragment() {
 
         setupFocusSearch(view)
         setupBackHandling()
-
-        if (focusTabOnReturn >= 0) {
-            val tabIndex = focusTabOnReturn
-            focusTabOnReturn = -1
-            view.post { focusTabs(tabIndex) }
-        }
     }
 
     override fun onDestroyView() {
         contentFocusJob?.cancel()
+        cancelTabSwitch()
         topTabs = null
         heroView = null
         super.onDestroyView()
@@ -194,8 +199,13 @@ class MainPagesFragment : BrowseSupportFragment() {
     }
 
     private fun updateHeroVisibility() {
-        val pageId = MainPagesFragmentFactory.ids.getOrNull(currentPage)
-        heroView?.setContentVisible(pageId != MainPagesFragmentFactory.ID_PROFILE)
+        heroView?.setContentVisible(!isFullPage(currentPage))
+    }
+
+    /** Страница со своей вёрсткой (без hero): вкладки над ней не прячутся. */
+    private fun isFullPage(page: Int): Boolean {
+        val pageId = MainPagesFragmentFactory.ids.getOrNull(page)
+        return pageId in MainPagesFragmentFactory.fullPageIds
     }
 
     /**
@@ -204,6 +214,10 @@ class MainPagesFragment : BrowseSupportFragment() {
      * при загрузке) — в этом случае возвращаем страницу к первому ряду.
      */
     override fun showTitle(show: Boolean) {
+        if (!show && isFullPage(currentPage)) {
+            super.showTitle(true)
+            return
+        }
         if (!show && topTabs?.hasFocus() == true) {
             super.showTitle(true)
             view?.post {
@@ -262,31 +276,41 @@ class MainPagesFragment : BrowseSupportFragment() {
         return MainPagesFragmentFactory.tabIds.indexOf(id)
     }
 
-    /** Все вкладки срабатывают только по OK: фокус на вкладке лишь подсвечивает её. */
-    private fun onTabClicked(tabIndex: Int) {
-        when (MainPagesFragmentFactory.tabIds.getOrNull(tabIndex)) {
-            MainPagesFragmentFactory.ID_CATALOG -> {
-                focusTabOnReturn = tabIndex
-                viewModel.onCatalogClick()
-            }
-
-            MainPagesFragmentFactory.ID_SCHEDULE -> {
-                focusTabOnReturn = tabIndex
-                viewModel.onScheduleClick()
-            }
-
-            MainPagesFragmentFactory.ID_SEARCH -> {
-                focusTabOnReturn = tabIndex
-                viewModel.onSearchClick()
-            }
-
-            else -> {
-                val page = pageIndexOfTab(tabIndex)
-                if (page < 0) return
+    /**
+     * Фокус на вкладке открывает её страницу с задержкой [TAB_FOCUS_SWITCH_DELAY_MS]; фокус при этом
+     * остаётся на вкладках. Ушёл с вкладки раньше — переключение отменяется.
+     */
+    private fun onTabFocusChanged(tabIndex: Int, hasFocus: Boolean) {
+        if (!hasFocus) {
+            if (tabSwitchIndex == tabIndex) cancelTabSwitch()
+            return
+        }
+        cancelTabSwitch()
+        val page = pageIndexOfTab(tabIndex)
+        if (page < 0 || page == currentPage) return
+        tabSwitchIndex = tabIndex
+        tabSwitchJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(TAB_FOCUS_SWITCH_DELAY_MS)
+            tabSwitchIndex = -1
+            if (topTabs?.getTabView(tabIndex)?.hasFocus() == true) {
                 selectPage(page)
-                focusContent(page)
             }
         }
+    }
+
+    private fun cancelTabSwitch() {
+        tabSwitchJob?.cancel()
+        tabSwitchJob = null
+        tabSwitchIndex = -1
+    }
+
+    /** OK на вкладке: страница сразу (если ещё не открыта) и фокус в её контент. */
+    private fun onTabClicked(tabIndex: Int) {
+        cancelTabSwitch()
+        val page = pageIndexOfTab(tabIndex)
+        if (page < 0) return
+        selectPage(page)
+        focusContent(page)
     }
 
     private fun selectPage(page: Int) {
@@ -303,7 +327,8 @@ class MainPagesFragment : BrowseSupportFragment() {
         contentFocusJob = viewLifecycleOwner.lifecycleScope.launch {
             repeat(CONTENT_FOCUS_ATTEMPTS) {
                 val content = mainFragment?.view
-                if (selectedPosition == page && content != null && content.isAttachedToWindow) {
+                // До первого переключения страниц Leanback держит selectedPosition = -1 (это «Главная»).
+                if (selectedPosition.coerceAtLeast(0) == page && content != null && content.isAttachedToWindow) {
                     if (content.hasFocus() || content.requestFocus()) return@launch
                 }
                 delay(CONTENT_FOCUS_ATTEMPT_DELAY_MS)
@@ -332,8 +357,18 @@ class MainPagesFragment : BrowseSupportFragment() {
                     View.FOCUS_LEFT, View.FOCUS_RIGHT -> tabs.findNextHorizontal(focused, direction)
                         ?: focused
 
-                    // Вниз — всегда в контент текущей страницы, даже с другой вкладки.
-                    View.FOCUS_DOWN -> mainFragment?.view?.takeIf { it.isShown } ?: focused
+                    View.FOCUS_DOWN -> {
+                        cancelTabSwitch()
+                        // Страница вкладки могла ещё не открыться (задержка) — открываем сразу.
+                        val page = pageIndexOfTab(tabs.indexOfTab(focused))
+                        if (page >= 0 && page != currentPage) {
+                            selectPage(page)
+                            focusContent(page)
+                            focused
+                        } else {
+                            mainFragment?.view?.takeIf { it.isShown } ?: focused
+                        }
+                    }
 
                     else -> focused
                 }
@@ -389,7 +424,10 @@ class MainPagesFragment : BrowseSupportFragment() {
             (mainFragment as? RowsSupportFragment)?.setSelectedPosition(0, true)
             return focusTabs()
         }
-        if (currentPage != 0) {
+        // Курсор уже на другой вкладке, но её страница ещё не открылась (задержка) — тоже на «Главную».
+        val focusedTab = tabs.findFocus()?.let(tabs::indexOfTab) ?: -1
+        if (currentPage != 0 || (focusedTab >= 0 && focusedTab != tabIndexOfPage(0))) {
+            cancelTabSwitch()
             selectPage(0)
             focusTabs(tabIndexOfPage(0))
             return true

@@ -14,16 +14,26 @@ import ru.radiationx.anilibria.screen.SearchYearGuidedScreen
 import ru.radiationx.data.entity.domain.search.SearchForm
 import javax.inject.Inject
 
+/** Значение чипа фильтра «Каталога»; [active] — выбрано не значение по умолчанию. */
+data class SearchFilterChip(
+    val value: String,
+    val active: Boolean,
+)
+
 class SearchFormViewModel @Inject constructor(
     private val searchController: SearchController,
     private val guidedRouter: GuidedRouter,
 ) : LifecycleViewModel() {
 
-    val yearData = MutableStateFlow<String?>(null)
-    val seasonData = MutableStateFlow<String?>(null)
-    val genreData = MutableStateFlow<String?>(null)
-    val sortData = MutableStateFlow<String?>(null)
-    val onlyCompletedData = MutableStateFlow<String?>(null)
+    private companion object {
+        const val ALL = "все"
+    }
+
+    val yearData = MutableStateFlow(SearchFilterChip(ALL, false))
+    val seasonData = MutableStateFlow(SearchFilterChip(ALL, false))
+    val genreData = MutableStateFlow(SearchFilterChip(ALL, false))
+    val sortData = MutableStateFlow(SearchFilterChip(ALL, false))
+    val onlyCompletedData = MutableStateFlow(SearchFilterChip(ALL, false))
 
     private var searchForm = SearchForm()
 
@@ -54,6 +64,11 @@ class SearchFormViewModel @Inject constructor(
             searchForm = searchForm.copy(onlyCompleted = it)
             updateDataByForm()
         }.launchIn(viewModelScope)
+
+        searchController.showGenreEvent.onEach {
+            searchForm = SearchForm(genres = setOf(it))
+            updateDataByForm()
+        }.launchIn(viewModelScope)
     }
 
     fun onYearClick() {
@@ -76,31 +91,38 @@ class SearchFormViewModel @Inject constructor(
         guidedRouter.open(SearchCompletedGuidedScreen(searchForm.onlyCompleted))
     }
 
+    /** «Сбросить фильтры» на пустом результате. */
+    fun onResetClick() {
+        searchForm = SearchForm()
+        updateDataByForm()
+    }
+
     private fun updateDataByForm() {
-        yearData.value = searchForm.years.map { it.title }.generateListTitle("Все годы")
-        seasonData.value = searchForm.seasons.map { it.title }.generateListTitle("Все сезоны")
-        genreData.value = searchForm.genres.map { it.title }.generateListTitle("Все жанры")
+        yearData.value = searchForm.years.map { it.title }.toChip()
+        seasonData.value = searchForm.seasons.map { it.title }.toChip()
+        genreData.value = searchForm.genres.map { it.title }.toChip()
         sortData.value = when (searchForm.sort) {
-            SearchForm.Sort.RATING -> "По популярности"
-            SearchForm.Sort.DATE -> "По новизне"
+            SearchForm.Sort.RATING -> SearchFilterChip("по популярности", false)
+            SearchForm.Sort.DATE -> SearchFilterChip("по новизне", true)
         }
         onlyCompletedData.value = if (searchForm.onlyCompleted) {
-            "Только завершенные"
+            SearchFilterChip("завершённые", true)
         } else {
-            "Все"
+            SearchFilterChip(ALL, false)
         }
 
         searchController.applyFormEvent.emit(searchForm)
     }
 
-    private fun List<String>?.generateListTitle(fallback: String, take: Int = 2): String {
-        if (isNullOrEmpty()) {
-            return fallback
+    /** «Романтика, Меха» или «Романтика, Меха +2». */
+    private fun List<String>.toChip(take: Int = 2): SearchFilterChip {
+        if (isEmpty()) {
+            return SearchFilterChip(ALL, false)
         }
-        var result = take(take).joinToString()
+        var result = take(take).joinToString(", ")
         if (size > take) {
-            result += "… +${size - take}"
+            result += " +${size - take}"
         }
-        return result
+        return SearchFilterChip(result, true)
     }
 }

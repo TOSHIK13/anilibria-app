@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- «Поиск» — страница главного экрана (макет f-s0/f-s1/f-s2, 1 dp = 2 px кадра 1920×1080). -->
+    <dimen name="search_bar_top">62dp</dimen>
+    <dimen name="search_bar_height">44dp</dimen>
+    <dimen name="search_mic_start">56dp</dimen>
+    <dimen name="search_input_start">108dp</dimen>
+    <dimen name="search_input_width">590dp</dimen>
+    <dimen name="search_input_padding_start">20dp</dimen>
+    <dimen name="search_hint_start">710dp</dimen>
+    <!-- Блоки прокручиваются от 118 dp (под строкой поиска), первый заголовок — на 134 dp. -->
+    <dimen name="search_content_top">118dp</dimen>
+    <dimen name="search_content_padding_top">16dp</dimen>
+    <dimen name="search_content_padding_bottom">40dp</dimen>
+    <dimen name="search_section_gap">21dp</dimen>
+    <dimen name="search_chip_height">30dp</dimen>
+    <dimen name="search_chip_gap">8dp</dimen>
+    <dimen name="search_chip_padding_horizontal">14dp</dimen>
+    <dimen name="search_chips_top">10dp</dimen>
+    <!-- Запас над и под постерами для увеличения ×1,14 (185 dp × 0,07). -->
+    <dimen name="search_row_zoom_padding">13dp</dimen>
+</resources>

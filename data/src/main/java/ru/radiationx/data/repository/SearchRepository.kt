@@ -64,7 +64,28 @@ class SearchRepository @Inject constructor(
         Suggestions(query, items)
     }
 
-    suspend fun searchReleases(form: SearchForm, page: Int): Paginated<Release> {
+    /**
+     * Тот же поиск, что [fastSearch] (`/app/search/releases`, `id1234` — по номеру), но с релизами
+     * целиком: для карточек с годом, типом и прогрессом.
+     */
+    suspend fun searchReleasesByQuery(query: String): List<Release> = withContext(Dispatchers.IO) {
+        val releaseId = getQueryId(query)
+        val responses = if (releaseId != null) {
+            releaseApi.getReleasesByIds(listOf(releaseId))
+        } else {
+            searchApi.fastSearch(query)
+        }
+        responses
+            .map { it.toDomain(apiUtils, apiConfig) }
+            .also { updateMiddleware.handle(it) }
+    }
+
+    /** Релизы каталога по фильтрам; всего найдено — [Paginated.allItems] (`meta.pagination.total`). */
+    suspend fun searchReleases(
+        form: SearchForm,
+        page: Int,
+        limit: Int = SearchApi.DEFAULT_LIMIT,
+    ): Paginated<Release> {
         val yearsQuery = form.years.joinToString(",") { it.value }
         val seasonsQuery = form.seasons.joinToString(",") { it.value }
         val genresQuery = form.genres.joinToString(",") { it.value }
@@ -80,7 +101,8 @@ class SearchRepository @Inject constructor(
             seasonsQuery,
             sortStr,
             onlyCompletedStr,
-            page
+            page,
+            limit,
         )
     }
 
@@ -91,9 +113,10 @@ class SearchRepository @Inject constructor(
         sort: String,
         onlyCompleted: String,
         page: Int,
+        limit: Int,
     ): Paginated<Release> = withContext(Dispatchers.IO) {
         searchApi
-            .searchReleases(genre, year, season, sort, onlyCompleted, page)
+            .searchReleases(genre, year, season, sort, onlyCompleted, page, limit)
             .toDomain(apiUtils, apiConfig)
             .also { updateMiddleware.handle(it.data) }
     }

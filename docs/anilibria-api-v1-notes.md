@@ -40,6 +40,10 @@
   - `DELETE /api/v1/accounts/users/me/favorites`
   - тело add/delete: `[{"release_id": 123}]`
   - favorites не являются коллекцией `PLANNED`.
+  - `GET .../favorites/releases` принимает `page`, `limit`, `f[sorting]`, `f[years]`, `f[types]`, `f[genres]`, `f[search]`, `f[age_ratings]` (OpenAPI `aniliberty-api-v1-docs.json`, 2026-09).
+  - `f[sorting]` (enum `enums.accounts.users.user.favorite.filter.sorting`): `CREATED_AT_DESC|ASC`, `FRESH_AT_DESC|ASC`, `RATING_DESC|ASC`, `YEAR_DESC|ASC`; справочник — `GET .../favorites/references/sorting` (требует авторизации, без токена 403). Без `f[sorting]` порядок серверный (по дате добавления).
+  - `FRESH_AT_DESC` = «Обновлены недавно»: сверху релизы с самым свежим `fresh_at` (= `Release.torrentUpdate`, новые серии). Сортировка серверная, поэтому общий порядок сохраняется при постраничной загрузке. TV-ряд «Избранное» на «Главной» (`MainFavoritesViewModel`) использует `FavoriteRepository.getFavorites(page, SORTING_FRESH_AT_DESC)`; сортировать на клиенте внутри страницы не нужно (это давало неверный общий порядок).
+  - Коллекции (`collections/releases`) параметра `f[sorting]` в OpenAPI не имеют.
 
 ## Релизы
 
@@ -47,8 +51,10 @@
 - Список по id: `GET /api/v1/anime/releases/list?ids=9886,8437`
   - ответ: объект `{ data: [...], meta: { pagination: ... } }`, не голый массив.
 - Каталог: `GET /api/v1/anime/catalog/releases`
-  - query: `page`, `limit`, `f[sorting]`, `f[genres]`, `f[years]`, `f[seasons]`, `f[publish_statuses]`
-  - ответ: объект `{ data: [...], meta: { pagination: ... } }`
+  - query: `page`, `limit`, `f[sorting]`, `f[genres]`, `f[years][from_year]`, `f[years][to_year]`, `f[seasons]`, `f[publish_statuses]`
+  - годы — только диапазон: список `f[years]=1996,2001` сервер молча игнорирует (проверено 2026-09);
+    `f[publish_statuses]` понимает `IS_ONGOING` и `IS_NOT_ONGOING`
+  - ответ: объект `{ data: [...], meta: { pagination: { total, count, per_page, current_page, total_pages } } }`
 - Случайный релиз: `GET /api/v1/anime/releases/random?limit=1`
   - ответ: голый массив релизов.
 - Рекомендации: `GET /api/v1/anime/releases/recommended`
@@ -108,7 +114,9 @@
 
 - `age_rating`: `{value: "R16_PLUS", label: "16+", is_adult, description}` → `Release.ageRating = label`.
 - `average_duration_of_episode`: int минут → `Release.averageEpisodeDurationMin`.
-- `shikimori`: `{id, url, votes, rating: 7.46}` → `Release.shikimoriRating`.
+- `shikimori`: `{id, url, votes, rating: 7.46}` → `Release.shikimoriRating`, `Release.shikimoriId`;
+  `mal` — та же форма → `Release.malRating`, `Release.malId` (id совпадают). Внешние сервисы
+  статистики (задел) — [`docs/trackers.md`](trackers.md).
 - `background_covers`: массив `{preview, thumbnail}` (без `optimized`), только в деталях релиза;
   часто пустой. `preview` — 1920x1080 jpg, `thumbnail` — 32x18 → `Release.backgroundCover`.
 - Серия (`episodes[]`, `latest_episode`): `preview` `{src, preview, thumbnail, optimized{src, preview, thumbnail}}`,

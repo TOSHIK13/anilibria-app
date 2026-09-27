@@ -38,6 +38,9 @@ class TopTabsView @JvmOverloads constructor(
 
     var onTabClickListener: ((index: Int) -> Unit)? = null
 
+    /** Вкладка получила или потеряла фокус. */
+    var onTabFocusChangeListener: ((index: Int, hasFocus: Boolean) -> Unit)? = null
+
     /** Любая кнопка пульта на вкладке (событие не поглощается). */
     var onTabKeyListener: ((event: KeyEvent) -> Unit)? = null
 
@@ -62,6 +65,7 @@ class TopTabsView @JvmOverloads constructor(
             val tab = inflater.inflate(R.layout.item_main_top_tab, container, false) as TextView
             tab.text = title
             tab.setOnClickListener { onTabClickListener?.invoke(index) }
+            tab.setOnFocusChangeListener { _, hasFocus -> onTabFocusChangeListener?.invoke(index, hasFocus) }
             tab.setOnKeyListener { _, _, event ->
                 onTabKeyListener?.invoke(event)
                 false

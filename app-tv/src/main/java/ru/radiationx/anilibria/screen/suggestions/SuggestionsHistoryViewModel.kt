@@ -1,4 +1,4 @@
-package ru.radiationx.anilibria.screen.watching
+package ru.radiationx.anilibria.screen.suggestions
 
 import ru.radiationx.anilibria.common.BaseCardsViewModel
 import ru.radiationx.anilibria.common.CardsDataConverter
@@ -7,7 +7,11 @@ import ru.radiationx.anilibria.common.LibriaCardRouter
 import ru.radiationx.data.repository.HistoryRepository
 import javax.inject.Inject
 
-class WatchingHistoryViewModel @Inject constructor(
+/**
+ * Ряд «Недавно открытые» (локальная история [HistoryRepository]).
+ * Раньше жил на вкладке «Я смотрю»; перенесён сюда для страницы «Поиск» (пока не подключён).
+ */
+class SuggestionsHistoryViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val converter: CardsDataConverter,
     private val cardRouter: LibriaCardRouter

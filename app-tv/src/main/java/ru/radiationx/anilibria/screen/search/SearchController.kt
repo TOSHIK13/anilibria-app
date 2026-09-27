@@ -16,4 +16,7 @@ class SearchController @Inject constructor() {
     val completedEvent = EventFlow<Boolean>()
 
     val applyFormEvent = EventFlow<SearchForm>()
+
+    /** Открыть «Каталог» только с этим жанром (остальные фильтры сброшены), например из «Поиска». */
+    val showGenreEvent = EventFlow<GenreItem>()
 }

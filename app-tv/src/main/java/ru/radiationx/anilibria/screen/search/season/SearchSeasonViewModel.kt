@@ -41,6 +41,9 @@ class SearchSeasonViewModel @Inject constructor(
 
     override fun applyValues() {
         guidedRouter.close()
+    }
+
+    override fun emitValues() {
         val newSeasons = currentSeasons.filter { item ->
             checkedValues.contains(item.value)
         }.toSet()

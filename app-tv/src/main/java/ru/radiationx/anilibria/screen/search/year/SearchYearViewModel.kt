@@ -52,6 +52,9 @@ class SearchYearViewModel @Inject constructor(
 
     override fun applyValues() {
         guidedRouter.close()
+    }
+
+    override fun emitValues() {
         val newYears = currentYears.filter { item ->
             checkedValues.contains(item.value)
         }.toSet()

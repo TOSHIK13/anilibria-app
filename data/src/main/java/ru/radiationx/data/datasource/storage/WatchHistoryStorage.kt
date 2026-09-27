@@ -47,6 +47,11 @@ class WatchHistoryStorage @Inject constructor(
         editor.apply()
     }
 
+    /** Стирает только снимок истории; очередь неотправленных таймкодов остаётся. */
+    fun clearSnapshot() {
+        sharedPreferences.edit().remove(KEY_SNAPSHOT).apply()
+    }
+
     fun clear() {
         sharedPreferences.edit().remove(KEY_SNAPSHOT).remove(KEY_PENDING).apply()
     }

@@ -51,6 +51,9 @@ class SearchGenreViewModel @Inject constructor(
 
     override fun applyValues() {
         guidedRouter.close()
+    }
+
+    override fun emitValues() {
         val newGenres = currentGenres.filter { item ->
             checkedValues.contains(item.value)
         }.toSet()

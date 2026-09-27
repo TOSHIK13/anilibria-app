@@ -17,17 +17,16 @@ class MainViewModel @Inject constructor(
 
     companion object {
         const val FEED_ROW_ID = 1L
-        const val SCHEDULE_ROW_ID = 2L
         const val FAVORITE_ROW_ID = 3L
         const val YOUTUBE_ROW_ID = 4L
         const val CONTINUE_ROW_ID = 5L
     }
 
     override val rowIds: List<Long> =
-        listOf(CONTINUE_ROW_ID, FEED_ROW_ID, FAVORITE_ROW_ID, SCHEDULE_ROW_ID, YOUTUBE_ROW_ID)
+        listOf(CONTINUE_ROW_ID, FEED_ROW_ID, FAVORITE_ROW_ID, YOUTUBE_ROW_ID)
 
     override val availableRows: MutableSet<Long> =
-        mutableSetOf(FEED_ROW_ID, SCHEDULE_ROW_ID, YOUTUBE_ROW_ID)
+        mutableSetOf(FEED_ROW_ID, YOUTUBE_ROW_ID)
 
     init {
         authRepository

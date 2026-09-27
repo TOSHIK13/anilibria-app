@@ -29,6 +29,9 @@ import ru.radiationx.data.entity.domain.types.ReleaseId
 import ru.radiationx.data.entity.mapper.toDomain
 import ru.radiationx.data.interactors.ReleaseUpdateMiddleware
 import ru.radiationx.data.system.ApiUtils
+import ru.radiationx.data.tracker.AnimeTrackerRegistry
+import ru.radiationx.data.tracker.TrackerCollectionChangedEvent
+import ru.radiationx.data.tracker.TrackerReleaseRef
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
@@ -49,6 +52,7 @@ class CollectionRepository @Inject constructor(
     private val apiConfig: ApiConfig,
     private val authRepository: AuthRepository,
     private val idsStorage: CollectionIdsStorage,
+    private val trackerRegistry: AnimeTrackerRegistry,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -121,6 +125,9 @@ class CollectionRepository @Inject constructor(
             collectionApi.addToCollection(releaseId.id, type)
         }
         onLocalChange(releaseId, type)
+        trackerRegistry.dispatchCollectionChanged(
+            TrackerCollectionChangedEvent(TrackerReleaseRef(releaseId), type)
+        )
     }
 
     /** Кэш «релиз → коллекция»: null — данных ещё нет, пусто — без авторизации или коллекции пусты. */
