@@ -1,0 +1,13 @@
+{
+  "env": {
+    "JAVA_HOME": "D:\\Ani\\.gradle\\codex-tools\\jdk-extract\\jdk-17.0.18+8",
+    "GRADLE_USER_HOME": "D:\\Ani\\.gradle",
+    "ANDROID_HOME": "D:\\Ani\\.gradle\\codex-tools\\android-sdk",
+    "ANDROID_SDK_ROOT": "D:\\Ani\\.gradle\\codex-tools\\android-sdk",
+    "ANDROID_USER_HOME": "D:\\Ani\\.gradle\\codex-tools\\android-user-home",
+    "ANI_TV_DEVICE": "emu"
+  },
+  "enabledPlugins": {
+    "prisma@claude-plugins-official": false
+  }
+}
