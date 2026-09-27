@@ -56,5 +56,6 @@
         android:id="@+id/settingsRowSwitch"
         android:layout_width="40dp"
         android:layout_height="22dp"
-        android:layout_marginStart="16dp" />
+        android:layout_marginStart="16dp"
+        android:duplicateParentState="true" />
 </LinearLayout>

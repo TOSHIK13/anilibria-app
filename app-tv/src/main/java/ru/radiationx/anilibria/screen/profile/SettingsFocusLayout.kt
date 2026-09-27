@@ -12,7 +12,7 @@ import android.widget.FrameLayout
  * - RIGHT из разделов — на запомненную строку раздела ([paneEntry]), LEFT из строк — на выбранный раздел;
  * - UP/DOWN не перескакивают между колонками: у верхнего края фокус уходит на вкладки
  *   (это делает MainPagesFragment, когда внутри страницы кандидатов нет);
- * - вход на страницу (DOWN с вкладок) — на выбранный раздел.
+ * - вход на страницу (DOWN с вкладок) — на выбранный раздел, возврат из панели — на строку ([restoreEntry]).
  *
  * Работает через [addFocusables]: MainPagesFragment ищет соседа FocusFinder'ом по корню страницы.
  */
@@ -25,6 +25,9 @@ class SettingsFocusLayout @JvmOverloads constructor(
     var paneContainer: ViewGroup? = null
     var navEntry: (() -> View?)? = null
     var paneEntry: (() -> View?)? = null
+
+    /** Строка, на которую вернуть фокус при возврате на страницу (например, после боковой панели). */
+    var restoreEntry: (() -> View?)? = null
 
     override fun addFocusables(views: ArrayList<View>, direction: Int, focusableMode: Int) {
         val focused = findFocus()
@@ -58,6 +61,8 @@ class SettingsFocusLayout @JvmOverloads constructor(
     }
 
     override fun onRequestFocusInDescendants(direction: Int, previouslyFocusedRect: Rect?): Boolean {
+        val restore = restoreEntry?.invoke()
+        if (restore != null && restore.requestFocus()) return true
         val entry = navEntry?.invoke()
         if (entry != null && entry.requestFocus()) return true
         return super.onRequestFocusInDescendants(direction, previouslyFocusedRect)

@@ -38,6 +38,11 @@ class MainPagesFragment : BrowseSupportFragment() {
         const val INITIAL_REVEAL_TIMEOUT_MS = 1_500L
         const val INITIAL_REVEAL_FADE_MS = 150L
 
+        /**
+         * Страница открывается, когда курсор задержался на вкладке: при быстром пролистывании
+         * промежуточные страницы не создаются и не грузятся.
+         */
+        const val TAB_FOCUS_SWITCH_DELAY_MS = 300L
         const val CONTENT_FOCUS_ATTEMPTS = 20
         const val CONTENT_FOCUS_ATTEMPT_DELAY_MS = 25L
     }
@@ -59,6 +64,8 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     private var topTabs: TopTabsView? = null
     private var contentFocusJob: Job? = null
+    private var tabSwitchJob: Job? = null
+    private var tabSwitchIndex = -1
 
     /** Подменённая тема на время [BrowseSupportFragment.onCreate], см. [onCreate]. */
     private var createContext: Context? = null
@@ -144,6 +151,7 @@ class MainPagesFragment : BrowseSupportFragment() {
             tabs.setTabs(MainPagesFragmentFactory.tabIds.map { MainPagesFragmentFactory.variant1.getValue(it) })
             tabs.setSelectedTab(tabIndexOfPage(currentPage))
             tabs.onTabClickListener = ::onTabClicked
+            tabs.onTabFocusChangeListener = ::onTabFocusChanged
             tabs.onTabKeyListener = ::onUserKey
             ImageViewCompat.setImageTintList(
                 tabs.logoView,
@@ -170,6 +178,7 @@ class MainPagesFragment : BrowseSupportFragment() {
 
     override fun onDestroyView() {
         contentFocusJob?.cancel()
+        cancelTabSwitch()
         topTabs = null
         heroView = null
         super.onDestroyView()
@@ -267,8 +276,37 @@ class MainPagesFragment : BrowseSupportFragment() {
         return MainPagesFragmentFactory.tabIds.indexOf(id)
     }
 
-    /** Все вкладки срабатывают только по OK: фокус на вкладке лишь подсвечивает её. */
+    /**
+     * Фокус на вкладке открывает её страницу с задержкой [TAB_FOCUS_SWITCH_DELAY_MS]; фокус при этом
+     * остаётся на вкладках. Ушёл с вкладки раньше — переключение отменяется.
+     */
+    private fun onTabFocusChanged(tabIndex: Int, hasFocus: Boolean) {
+        if (!hasFocus) {
+            if (tabSwitchIndex == tabIndex) cancelTabSwitch()
+            return
+        }
+        cancelTabSwitch()
+        val page = pageIndexOfTab(tabIndex)
+        if (page < 0 || page == currentPage) return
+        tabSwitchIndex = tabIndex
+        tabSwitchJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(TAB_FOCUS_SWITCH_DELAY_MS)
+            tabSwitchIndex = -1
+            if (topTabs?.getTabView(tabIndex)?.hasFocus() == true) {
+                selectPage(page)
+            }
+        }
+    }
+
+    private fun cancelTabSwitch() {
+        tabSwitchJob?.cancel()
+        tabSwitchJob = null
+        tabSwitchIndex = -1
+    }
+
+    /** OK на вкладке: страница сразу (если ещё не открыта) и фокус в её контент. */
     private fun onTabClicked(tabIndex: Int) {
+        cancelTabSwitch()
         val page = pageIndexOfTab(tabIndex)
         if (page < 0) return
         selectPage(page)
@@ -319,8 +357,18 @@ class MainPagesFragment : BrowseSupportFragment() {
                     View.FOCUS_LEFT, View.FOCUS_RIGHT -> tabs.findNextHorizontal(focused, direction)
                         ?: focused
 
-                    // Вниз — всегда в контент текущей страницы, даже с другой вкладки.
-                    View.FOCUS_DOWN -> mainFragment?.view?.takeIf { it.isShown } ?: focused
+                    View.FOCUS_DOWN -> {
+                        cancelTabSwitch()
+                        // Страница вкладки могла ещё не открыться (задержка) — открываем сразу.
+                        val page = pageIndexOfTab(tabs.indexOfTab(focused))
+                        if (page >= 0 && page != currentPage) {
+                            selectPage(page)
+                            focusContent(page)
+                            focused
+                        } else {
+                            mainFragment?.view?.takeIf { it.isShown } ?: focused
+                        }
+                    }
 
                     else -> focused
                 }
@@ -376,7 +424,10 @@ class MainPagesFragment : BrowseSupportFragment() {
             (mainFragment as? RowsSupportFragment)?.setSelectedPosition(0, true)
             return focusTabs()
         }
-        if (currentPage != 0) {
+        // Курсор уже на другой вкладке, но её страница ещё не открылась (задержка) — тоже на «Главную».
+        val focusedTab = tabs.findFocus()?.let(tabs::indexOfTab) ?: -1
+        if (currentPage != 0 || (focusedTab >= 0 && focusedTab != tabIndexOfPage(0))) {
+            cancelTabSwitch()
             selectPage(0)
             focusTabs(tabIndexOfPage(0))
             return true

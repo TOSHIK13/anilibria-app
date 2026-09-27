@@ -3,6 +3,8 @@ package ru.radiationx.anilibria.screen.profile
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.isVisible
@@ -46,6 +48,20 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
     /** Последняя строка в фокусе для каждого раздела — туда ведёт RIGHT из колонки разделов. */
     private val lastFocusedKey = mutableMapOf<SettingsSection, String>()
 
+    /**
+     * Строка, по которой нажали OK: после закрытия боковой панели (или возврата с экрана) фокус
+     * возвращается на неё, а не на раздел. Сбрасывается, когда фокус сам ушёл на другой элемент.
+     */
+    private var restoreKey: String? = null
+
+    private val focusChangeListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+        val key = restoreKey ?: return@OnGlobalFocusChangeListener
+        val pages = parentFragment?.view as? ViewGroup ?: view as? ViewGroup ?: return@OnGlobalFocusChangeListener
+        if (newFocus != null && pages.isAncestorOf(newFocus) && newFocus !== restoreTarget(key)) {
+            restoreKey = null
+        }
+    }
+
     override fun getMainFragmentAdapter(): BrowseSupportFragment.MainFragmentAdapter<*> {
         return selfMainFragmentAdapter
     }
@@ -64,6 +80,8 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
         binding.settingsRoot.paneContainer = binding.settingsScroll
         binding.settingsRoot.navEntry = { navViews[selectedSection] }
         binding.settingsRoot.paneEntry = { paneEntryView() }
+        binding.settingsRoot.restoreEntry = { restoreKey?.let(::restoreTarget) }
+        view.viewTreeObserver.addOnGlobalFocusChangeListener(focusChangeListener)
 
         viewModel.sections.onEach {
             renderPane()
@@ -80,6 +98,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
     }
 
     override fun onDestroyView() {
+        view?.viewTreeObserver?.removeOnGlobalFocusChangeListener(focusChangeListener)
         navViews.clear()
         rowViews.clear()
         super.onDestroyView()
@@ -126,6 +145,22 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
         return renderedKeys.asSequence()
             .mapNotNull { rowViews[it]?.let(::focusTarget) }
             .firstOrNull { it.isShown }
+    }
+
+    private fun restoreTarget(key: String): View? = rowViews[key]?.let(::focusTarget)?.takeIf { it.isShown }
+
+    private fun onRowClick(key: String, action: SettingsAction) {
+        restoreKey = key
+        viewModel.onAction(action)
+    }
+
+    private fun ViewGroup.isAncestorOf(child: View): Boolean {
+        var parent = child.parent
+        while (parent != null) {
+            if (parent === this) return true
+            parent = parent.parent
+        }
+        return false
     }
 
     /** Что берёт фокус в элементе: сама строка или пилюля в карточке аккаунта. */
@@ -198,7 +233,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
             isVisible = item.switch != null
             isOn = item.switch == true
         }
-        view.setOnClickListener { viewModel.onAction(item.action) }
+        view.setOnClickListener { onRowClick(item.key, item.action) }
     }
 
     private fun bindAccount(view: View, item: SettingsItem.Account) {
@@ -223,7 +258,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
             text = item.actionTitle
             isVisible = item.action != null
             isFocusable = item.action != null
-            setOnClickListener { item.action?.also(viewModel::onAction) }
+            setOnClickListener { item.action?.also { onRowClick(item.key, it) } }
         }
     }
 

@@ -10,7 +10,8 @@ import android.view.View
 
 /**
  * Переключатель строки настроек 40×22 dp: красная дорожка (вкл) / белая 25 % (выкл), белый кружок.
- * Сам фокус не берёт — переключается по OK на строке.
+ * Сам фокус не берёт — переключается по OK на строке. На белой строке в фокусе (duplicateParentState)
+ * выключенная дорожка тёмная, иначе белый кружок на белом фоне не виден.
  */
 class SettingsSwitchView @JvmOverloads constructor(
     context: Context,
@@ -41,11 +42,21 @@ class SettingsSwitchView @JvmOverloads constructor(
         )
     }
 
+    override fun drawableStateChanged() {
+        super.drawableStateChanged()
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
         val radius = h / 2f
-        trackPaint.color = if (isOn) COLOR_ON else COLOR_OFF
+        val focused = android.R.attr.state_focused in drawableState
+        trackPaint.color = when {
+            isOn -> COLOR_ON
+            focused -> COLOR_OFF_FOCUSED
+            else -> COLOR_OFF
+        }
         rect.set(0f, 0f, w, h)
         canvas.drawRoundRect(rect, radius, radius, trackPaint)
         val inset = 2 * density
@@ -57,5 +68,6 @@ class SettingsSwitchView @JvmOverloads constructor(
     private companion object {
         const val COLOR_ON = 0xFFE53935.toInt()
         const val COLOR_OFF = 0x40FFFFFF
+        const val COLOR_OFF_FOCUSED = 0x40000000
     }
 }
