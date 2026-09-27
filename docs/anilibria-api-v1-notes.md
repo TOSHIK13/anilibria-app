@@ -40,6 +40,10 @@
   - `DELETE /api/v1/accounts/users/me/favorites`
   - тело add/delete: `[{"release_id": 123}]`
   - favorites не являются коллекцией `PLANNED`.
+  - `GET .../favorites/releases` принимает `page`, `limit`, `f[sorting]`, `f[years]`, `f[types]`, `f[genres]`, `f[search]`, `f[age_ratings]` (OpenAPI `aniliberty-api-v1-docs.json`, 2026-09).
+  - `f[sorting]` (enum `enums.accounts.users.user.favorite.filter.sorting`): `CREATED_AT_DESC|ASC`, `FRESH_AT_DESC|ASC`, `RATING_DESC|ASC`, `YEAR_DESC|ASC`; справочник — `GET .../favorites/references/sorting` (требует авторизации, без токена 403). Без `f[sorting]` порядок серверный (по дате добавления).
+  - `FRESH_AT_DESC` = «Обновлены недавно»: сверху релизы с самым свежим `fresh_at` (= `Release.torrentUpdate`, новые серии). Сортировка серверная, поэтому общий порядок сохраняется при постраничной загрузке. TV-ряд «Избранное» на «Главной» (`MainFavoritesViewModel`) использует `FavoriteRepository.getFavorites(page, SORTING_FRESH_AT_DESC)`; сортировать на клиенте внутри страницы не нужно (это давало неверный общий порядок).
+  - Коллекции (`collections/releases`) параметра `f[sorting]` в OpenAPI не имеют.
 
 ## Релизы
 

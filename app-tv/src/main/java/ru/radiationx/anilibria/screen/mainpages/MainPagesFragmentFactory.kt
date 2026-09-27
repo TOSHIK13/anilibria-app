@@ -9,14 +9,13 @@ import ru.radiationx.anilibria.screen.profile.ProfileFragment
 import ru.radiationx.anilibria.screen.schedule.ScheduleFragment
 import ru.radiationx.anilibria.screen.search.SearchFragment
 import ru.radiationx.anilibria.screen.suggestions.SuggestionsFragment
-import ru.radiationx.anilibria.screen.watching.WatchingFragment
 import ru.radiationx.anilibria.screen.youtube.YoutubeFragment
 
 class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
 
     companion object {
         const val ID_MAIN = 1L
-        const val ID_MY = 2L
+        // 2L — бывшая вкладка «Я смотрю» (объединена с «Главной»), id не переиспользуем.
         const val ID_SERIES = 3L
         const val ID_MOVIES = 4L
         const val ID_SEARCH = 5L
@@ -29,7 +28,6 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
         /** Страницы главного экрана, по одной на верхнюю вкладку. */
         val ids = listOf(
             ID_MAIN,
-            ID_MY,
             ID_COLLECTIONS,
             ID_CATALOG,
             ID_SCHEDULE,
@@ -50,7 +48,6 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
 
         val variant1 = mapOf(
             ID_MAIN to "Главная",
-            ID_MY to "Я смотрю",
             ID_SERIES to "Сериалы",
             ID_MOVIES to "Фильмы",
             ID_SEARCH to "Поиск",
@@ -65,7 +62,6 @@ class MainPagesFragmentFactory : CachedRowsFragmentFactory() {
     override fun getFragmentByRow(row: Row): Fragment {
         return when (row.id) {
             ID_MAIN -> MainFragment()
-            ID_MY -> WatchingFragment()
             ID_COLLECTIONS -> CollectionsFragment()
             ID_CATALOG -> SearchFragment()
             ID_SCHEDULE -> ScheduleFragment()

@@ -151,7 +151,7 @@ class MainPagesFragment : BrowseSupportFragment() {
             )
         }
 
-        // Страницы просят открыть вкладку (например, «Открыть полное расписание» на «Главной»).
+        // Страницы просят открыть вкладку (например, кнопка поиска в «Каталоге» → «Поиск»).
         subscribeTo(viewModel.openTabEvent) { tabId ->
             onTabClicked(MainPagesFragmentFactory.tabIds.indexOf(tabId))
         }

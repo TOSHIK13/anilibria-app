@@ -20,11 +20,16 @@ class FavoriteApi @Inject constructor(
     private val favoritesUrl: String
         get() = "${apiConfig.accountsBaseUrl}/api/v1/accounts/users/me/favorites"
 
-    suspend fun getFavorites(page: Int): CollectionReleasesResponse {
-        val args = mapOf(
-            "page" to page.toString(),
-            "limit" to "10",
-        )
+    /**
+     * [sorting] — значение `f[sorting]` (enum `CREATED_AT_DESC|..|FRESH_AT_DESC|..`),
+     * без него сервер отдаёт свой порядок (по дате добавления).
+     */
+    suspend fun getFavorites(page: Int, sorting: String? = null): CollectionReleasesResponse {
+        val args = buildMap {
+            put("page", page.toString())
+            put("limit", "10")
+            if (sorting != null) put("f[sorting]", sorting)
+        }
         return client
             .get("$favoritesUrl/releases", args)
             .fetchResponse(moshi)

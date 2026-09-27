@@ -25,7 +25,7 @@ class MainFavoritesViewModel @Inject constructor(
     private val cardRouter: LibriaCardRouter,
 ) : BaseCardsViewModel() {
 
-    override val defaultTitle: String = "Обновления в избранном"
+    override val defaultTitle: String = "Избранное"
 
     override val timingName: String = "favorites"
 
@@ -53,12 +53,12 @@ class MainFavoritesViewModel @Inject constructor(
         }
     }
 
+    // Порядок задаёт сервер (f[sorting]=FRESH_AT_DESC): сверху релизы с новыми сериями,
+    // поэтому общий порядок сохраняется и при догрузке страниц.
     override suspend fun getLoader(requestPage: Int): List<LibriaCard> = favoriteRepository
-        .getFavorites(requestPage)
+        .getFavorites(requestPage, FavoriteRepository.SORTING_FRESH_AT_DESC)
         .also { releaseInteractor.updateItemsCache(it.data) }
-        .let { favoriteItems ->
-            favoriteItems.data.sortedByDescending { it.torrentUpdate }.map { converter.toCard(it) }
-        }
+        .let { favoriteItems -> favoriteItems.data.map { converter.toCard(it) } }
 
     override fun onLibriaCardClick(card: LibriaCard) {
         cardRouter.navigate(card)

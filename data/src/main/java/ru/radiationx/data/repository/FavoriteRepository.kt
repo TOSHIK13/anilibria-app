@@ -20,9 +20,17 @@ class FavoriteRepository @Inject constructor(
     private val apiConfig: ApiConfig
 ) {
 
-    suspend fun getFavorites(page: Int): Paginated<Release> = withContext(Dispatchers.IO) {
+    companion object {
+        /** `f[sorting]`: сначала релизы с самым свежим обновлением (fresh_at = [Release.torrentUpdate]). */
+        const val SORTING_FRESH_AT_DESC = "FRESH_AT_DESC"
+    }
+
+    suspend fun getFavorites(
+        page: Int,
+        sorting: String? = null,
+    ): Paginated<Release> = withContext(Dispatchers.IO) {
         favoriteApi
-            .getFavorites(page)
+            .getFavorites(page, sorting)
             .toDomain(apiUtils, apiConfig, favoriteAdded = true)
             .also { updateMiddleware.handle(it.data) }
     }
