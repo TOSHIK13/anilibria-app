@@ -9,6 +9,7 @@ interface AuthHolder {
     fun observeVkAuthChange(): Flow<Boolean>
     suspend fun changeVkAuth(value: Boolean)
     suspend fun getDeviceId(): String
+    suspend fun resetDeviceId(): String
 
     fun observeAuthSkipped(): Flow<Boolean>
     suspend fun getAuthSkipped(): Boolean

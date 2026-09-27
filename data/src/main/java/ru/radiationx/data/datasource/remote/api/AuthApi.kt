@@ -86,7 +86,7 @@ class AuthApi @Inject constructor(
                 .post("${apiConfig.accountsBaseUrl}/api/v1/accounts/otp/login", args)
                 .fetchResponse(moshi)
         } catch (ex: Throwable) {
-            throw authParser.checkOtpError(ex)
+            throw authParser.checkOtpLoginError(ex)
         }
     }
 

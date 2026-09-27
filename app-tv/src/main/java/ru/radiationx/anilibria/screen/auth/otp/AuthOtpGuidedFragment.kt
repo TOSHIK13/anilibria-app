@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import ru.radiationx.anilibria.common.fragment.FakeGuidedStepFragment
 import ru.radiationx.anilibria.screen.auth.GuidedProgressAction
 import ru.radiationx.anilibria.screen.auth.GuidedProgressActionsStylist
+import ru.radiationx.data.entity.domain.auth.hasValidCode
 import ru.radiationx.quill.viewModel
 import ru.radiationx.shared.ktx.android.subscribeTo
 
@@ -44,7 +45,7 @@ class AuthOtpGuidedFragment : FakeGuidedStepFragment() {
 
         subscribeTo(viewModel.otpInfoData.filterNotNull()) {
             guidanceStylist.apply {
-                titleView?.text = "Код: ${it.code}"
+                titleView?.text = if (it.hasValidCode()) "Код: ${it.code}" else "Код обновляется…"
                 descriptionView?.text = buildDescription(it.description, viewModel.state.value)
             }
         }

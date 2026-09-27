@@ -10,6 +10,7 @@ import ru.radiationx.data.entity.domain.auth.OtpNotFoundException
 import ru.radiationx.data.entity.domain.auth.Wrong2FaCodeException
 import ru.radiationx.data.entity.domain.auth.WrongPasswordException
 import ru.radiationx.data.entity.domain.auth.WrongUserAgentException
+import ru.radiationx.data.system.HttpException
 import ru.radiationx.shared.ktx.android.nullString
 import javax.inject.Inject
 
@@ -17,6 +18,11 @@ import javax.inject.Inject
  * Created by radiationx on 31.12.17.
  */
 class AuthParser @Inject constructor() {
+
+    companion object {
+        const val OTP_NOT_ACCEPTED_MESSAGE = "Код ещё не введён на сайте"
+        private val OTP_LOGIN_NOT_ACCEPTED_CODES = setOf(401, 404, 500)
+    }
 
     fun checkOtpError(error: Throwable): Throwable = if (error is ApiError) {
         when (error.description) {
@@ -28,6 +34,18 @@ class AuthParser @Inject constructor() {
     } else {
         error
     }
+
+    /**
+     * V1 `/otp/login`, пока код не привязан на сайте, отвечает HTTP 500 "Server Error"
+     * (а для неизвестного кода — 404, документировано 401). Всё это — "код ещё не введён",
+     * пользователь может ввести код и снова нажать "Готово". Сетевые ошибки не трогаем.
+     */
+    fun checkOtpLoginError(error: Throwable): Throwable =
+        if (error is HttpException && error.code in OTP_LOGIN_NOT_ACCEPTED_CODES) {
+            OtpNotAcceptedException(OTP_NOT_ACCEPTED_MESSAGE)
+        } else {
+            checkOtpError(error)
+        }
 
     fun authResult(responseText: String): String {
         val responseJson = JSONObject(responseText)

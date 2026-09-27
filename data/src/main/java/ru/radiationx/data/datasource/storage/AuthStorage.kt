@@ -54,6 +54,14 @@ class AuthStorage @Inject constructor(
         }
     }
 
+    override suspend fun resetDeviceId(): String {
+        return withContext(Dispatchers.IO) {
+            val uid = UUID.randomUUID().toString()
+            sharedPreferences.edit().putString(KEY_DEVICE_UID, uid).apply()
+            uid
+        }
+    }
+
     override fun observeAuthSkipped(): Flow<Boolean> {
         return authSkippedState
     }
