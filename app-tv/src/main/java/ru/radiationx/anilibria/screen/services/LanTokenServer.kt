@@ -7,6 +7,7 @@ import android.util.Base64
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -45,6 +46,9 @@ class LanTokenServer(
     private var server: ServerSocket? = null
     private var acceptJob: Job? = null
 
+    /** Принятые запросы живут отдельно от экрана и слушающего сокета; ограничены таймаутами сокета. */
+    private val requestScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val port: Int get() = server?.localPort ?: -1
 
     /** Путь страницы без хоста, вида `/<secret>/`. */
@@ -70,7 +74,8 @@ class LanTokenServer(
                 } catch (e: Exception) {
                     break
                 }
-                launch(Dispatchers.IO) { handle(client) }
+                // не дочерняя задача acceptJob: stop() после успешного входа не должен обрывать ответ телефону
+                requestScope.launch { handle(client) }
             }
         }
         return true
@@ -282,6 +287,6 @@ b.onclick=function(){
  .then(function(j){
   s.className=j.ok?'ok':'err';s.textContent=j.message;
   if(j.ok){t.value='';}else{b.disabled=false}
- }).catch(function(){s.className='err';s.textContent='Не удалось связаться с ТВ. Проверьте, что телефон в той же сети Wi-Fi.';b.disabled=false});
+ }).catch(function(){s.className='err';s.textContent='Не получили ответ от ТВ. Посмотрите на экран ТВ: если там открылась первая синхронизация — вход выполнен. Если нет — проверьте, что телефон в той же сети Wi-Fi, и отправьте ещё раз.';b.disabled=false});
 };
 </script></body></html>"""
