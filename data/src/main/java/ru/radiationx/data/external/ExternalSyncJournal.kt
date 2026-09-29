@@ -15,6 +15,51 @@ enum class JournalDirection { OUT, IN, CHECK }
 
 enum class JournalResult { DONE, RETRY_AT, ERROR, SKIPPED, UP_TO_DATE }
 
+/** Откуда взялась запись: что запустило синхронизацию. */
+enum class JournalOrigin { EPISODE, COLLECTION, REMOTE, FIRST_SYNC, SCHEDULED, MANUAL_SYNC, COMPARE_PUSH, ACCOUNT, USER }
+
+/** Класс ошибки для расшифровки человеческим текстом. */
+enum class JournalErrorKind { AUTH, RATE_LIMIT, SERVER, REJECTED, NETWORK, BAD_RESPONSE, OTHER }
+
+/** Причина пропуска. */
+enum class JournalReason { NOT_ON_ALILIBRIA, NOT_ON_ANILIST, NO_MAL_ID, RELEASE_NO_MAL, USER_SKIPPED, ACCOUNT_UNLINKED, FIRST_SYNC_PENDING, CHOICE_NOT_MADE }
+
+/**
+ * Состояние записи на одной стороне. [status] — имя статуса ([DesiredStatus] / статус AniList),
+ * null — записи/коллекции нет. [progress] — просмотрено серий, null — неизвестно.
+ */
+data class JournalState(
+    val status: String?,
+    val progress: Int? = null,
+    val total: Int? = null,
+    val isMovie: Boolean = false,
+)
+
+/** Подробности записи; все поля необязательны (старые записи журнала их не содержат). */
+data class JournalMeta(
+    val origin: JournalOrigin? = null,
+    /** Когда произошло событие (у отправки — раньше, чем время записи в журнале). */
+    val eventTime: Long? = null,
+    val anilistBefore: JournalState? = null,
+    val anilistAfter: JournalState? = null,
+    val localBefore: JournalState? = null,
+    val localAfter: JournalState? = null,
+    val mergedCount: Int? = null,
+    /** Номера серий события/объединённых событий. */
+    val episodes: List<Int>? = null,
+    val httpCode: Int? = null,
+    val errorKind: JournalErrorKind? = null,
+    val attempt: Int? = null,
+    val maxAttempts: Int? = null,
+    val reason: JournalReason? = null,
+    /** Для проверок/первой синхронизации: найдено/применено изменений. */
+    val changes: Int? = null,
+    /** Для проверок: сколько ушло в очередь отправки. */
+    val queued: Int? = null,
+    /** id тайтла на anilist.co (для ссылки-текста). */
+    val anilistId: Long? = null,
+)
+
 /** Запись журнала синхронизации. [itemId] — элемент очереди для «Повторить сейчас» / «Пропустить» (null — нет). */
 data class JournalEntry(
     val id: Long,
@@ -32,6 +77,7 @@ data class JournalEntry(
     /** Для [JournalResult.RETRY_AT] — когда следующая попытка (epoch ms). */
     val retryAt: Long? = null,
     val itemId: Long? = null,
+    val meta: JournalMeta = JournalMeta(),
 )
 
 /**
@@ -92,8 +138,9 @@ class ExternalSyncJournal @Inject constructor(
         retryAt: Long? = null,
         itemId: Long? = null,
         now: Long = System.currentTimeMillis(),
+        meta: JournalMeta = JournalMeta(),
     ): JournalEntry = synchronized(lock) {
-        val entry = JournalEntry(nextId++, now, serviceId, direction, malId, releaseId, title, text, detail, result, retryAt, itemId)
+        val entry = JournalEntry(nextId++, now, serviceId, direction, malId, releaseId, title, text, detail, result, retryAt, itemId, meta)
         val base = if (itemId != null) {
             state.value.filterNot { it.itemId == itemId && (it.result == JournalResult.RETRY_AT || it.result == JournalResult.ERROR) }
         } else state.value
@@ -117,6 +164,7 @@ class ExternalSyncJournal @Inject constructor(
         record(
             item.serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title,
             "изменение пропущено пользователем", JournalResult.SKIPPED,
+            meta = JournalMeta(origin = JournalOrigin.USER, reason = JournalReason.USER_SKIPPED, eventTime = item.createdAt),
         )
     }
 
@@ -128,6 +176,58 @@ class ExternalSyncJournal @Inject constructor(
         .put("mal", e.malId ?: JSONObject.NULL).put("release", e.releaseId ?: JSONObject.NULL)
         .put("title", e.title).put("text", e.text).put("detail", e.detail ?: JSONObject.NULL)
         .put("result", e.result.name).put("retryAt", e.retryAt ?: JSONObject.NULL).put("item", e.itemId ?: JSONObject.NULL)
+        .put("meta", metaToJson(e.meta))
+
+    private fun stateToJson(s: JournalState?): Any = if (s == null) JSONObject.NULL else JSONObject()
+        .put("status", s.status ?: JSONObject.NULL).put("progress", s.progress ?: JSONObject.NULL)
+        .put("total", s.total ?: JSONObject.NULL).put("movie", s.isMovie)
+
+    private fun metaToJson(m: JournalMeta) = JSONObject()
+        .put("origin", m.origin?.name ?: JSONObject.NULL).put("eventTime", m.eventTime ?: JSONObject.NULL)
+        .put("alBefore", stateToJson(m.anilistBefore)).put("alAfter", stateToJson(m.anilistAfter))
+        .put("localBefore", stateToJson(m.localBefore)).put("localAfter", stateToJson(m.localAfter))
+        .put("merged", m.mergedCount ?: JSONObject.NULL)
+        .put("episodes", m.episodes?.let { l -> JSONArray().also { a -> l.forEach { a.put(it) } } } ?: JSONObject.NULL)
+        .put("http", m.httpCode ?: JSONObject.NULL).put("errorKind", m.errorKind?.name ?: JSONObject.NULL)
+        .put("attempt", m.attempt ?: JSONObject.NULL).put("maxAttempts", m.maxAttempts ?: JSONObject.NULL)
+        .put("reason", m.reason?.name ?: JSONObject.NULL)
+        .put("anilistId", m.anilistId ?: JSONObject.NULL)
+        .put("changes", m.changes ?: JSONObject.NULL).put("queued", m.queued ?: JSONObject.NULL)
+
+    private fun parseState(o: JSONObject?): JournalState? = o?.let {
+        JournalState(
+            status = if (it.isNull("status")) null else it.getString("status"),
+            progress = if (it.isNull("progress")) null else it.getInt("progress"),
+            total = if (it.isNull("total")) null else it.getInt("total"),
+            isMovie = it.optBoolean("movie", false),
+        )
+    }
+
+    private fun parseMeta(o: JSONObject?): JournalMeta {
+        if (o == null) return JournalMeta()
+        fun int(k: String) = if (o.isNull(k)) null else o.optInt(k)
+        return JournalMeta(
+            origin = enumOrNull<JournalOrigin>(o.optString("origin", "")),
+            eventTime = if (o.isNull("eventTime")) null else o.optLong("eventTime"),
+            anilistBefore = parseState(o.optJSONObject("alBefore")),
+            anilistAfter = parseState(o.optJSONObject("alAfter")),
+            localBefore = parseState(o.optJSONObject("localBefore")),
+            localAfter = parseState(o.optJSONObject("localAfter")),
+            mergedCount = int("merged"),
+            episodes = o.optJSONArray("episodes")?.let { a -> (0 until a.length()).map { a.getInt(it) } },
+            httpCode = int("http"),
+            errorKind = enumOrNull<JournalErrorKind>(o.optString("errorKind", "")),
+            attempt = int("attempt"),
+            maxAttempts = int("maxAttempts"),
+            reason = enumOrNull<JournalReason>(o.optString("reason", "")),
+            changes = int("changes"),
+            queued = int("queued"),
+            anilistId = if (o.isNull("anilistId")) null else o.optLong("anilistId"),
+        )
+    }
+
+    private inline fun <reified T : Enum<T>> enumOrNull(name: String): T? =
+        if (name.isEmpty()) null else runCatching { enumValueOf<T>(name) }.getOrNull()
 
     private fun parse(o: JSONObject?): JournalEntry? = runCatching {
         JournalEntry(
@@ -143,6 +243,7 @@ class ExternalSyncJournal @Inject constructor(
             result = JournalResult.valueOf(o.getString("result")),
             retryAt = if (o.isNull("retryAt")) null else o.getLong("retryAt"),
             itemId = if (o.isNull("item")) null else o.getLong("item"),
+            meta = runCatching { parseMeta(o.optJSONObject("meta")) }.getOrDefault(JournalMeta()),
         )
     }.getOrNull()
 }

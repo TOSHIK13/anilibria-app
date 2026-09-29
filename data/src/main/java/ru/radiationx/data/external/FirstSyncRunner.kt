@@ -156,6 +156,7 @@ class FirstSyncRunner @Inject constructor(
                     serviceId, JournalDirection.IN, a.item.malId, rid.id, title,
                     describeLocal(a), JournalResult.DONE,
                     detail = "первая синхронизация" + if (a.progressKept) " · прогресс в AniLiberty больше, чем в AniList — не уменьшен" else "",
+                    meta = firstMeta(a),
                 )
                 records += PulledTitle(a.item.malId, rid.id, a.finalLocal, a.finalRemote)
                 cur = cur.copy(received = cur.received + 1, done = cur.done + 1)
@@ -166,6 +167,7 @@ class FirstSyncRunner @Inject constructor(
                 journal.record(
                     serviceId, JournalDirection.IN, a.item.malId, rid.id, a.item.title,
                     "не удалось применить изменение из AniList", JournalResult.ERROR, detail = e.message,
+                    meta = JournalMeta(origin = JournalOrigin.FIRST_SYNC, errorKind = if (e is java.io.IOException) JournalErrorKind.NETWORK else JournalErrorKind.OTHER),
                 )
                 cur = cur.copy(errors = cur.errors + 1)
             }
@@ -192,12 +194,17 @@ class FirstSyncRunner @Inject constructor(
                 journal.record(
                     serviceId, JournalDirection.IN, it.item.malId, null, it.item.title,
                     "нет на AniLiberty (MAL id ${it.item.malId}) — пропущено", JournalResult.SKIPPED, detail = "первая синхронизация",
+                    meta = JournalMeta(origin = JournalOrigin.FIRST_SYNC, reason = JournalReason.NOT_ON_ALILIBRIA, anilistBefore = stateOf(it.item.remote, it.item)),
                 )
             }
             plan.actions.filter { it.flow == FirstSyncFlow.CHOOSE }.forEach {
                 journal.record(
                     serviceId, JournalDirection.CHECK, it.item.malId, it.item.releaseId, it.item.title,
                     "статусы расходятся, выбор не сделан — оставлено как есть", JournalResult.SKIPPED, detail = "первая синхронизация",
+                    meta = JournalMeta(
+                        origin = JournalOrigin.FIRST_SYNC, reason = JournalReason.CHOICE_NOT_MADE,
+                        anilistAfter = stateOf(it.item.remote, it.item), localAfter = stateOf(it.item.local, it.item),
+                    ),
                 )
             }
             syncState.recordPulled(serviceId, records, report.linked, report.remoteTotal)
@@ -231,10 +238,21 @@ class FirstSyncRunner @Inject constructor(
                 serviceId, JournalDirection.CHECK, null, null, "AniList",
                 "Первая синхронизация · изменений: ${cur.changes}", if (cur.errors > 0) JournalResult.ERROR else JournalResult.DONE,
                 detail = "в AniLiberty: ${cur.received} · в AniList: ${cur.sent} · пропущено: ${cur.skipped} · ошибок: ${cur.errors}",
+                meta = JournalMeta(origin = JournalOrigin.FIRST_SYNC, changes = cur.changes, queued = cur.sent),
             )
         }
         if (notifyOnFinish) finished.tryEmit(cur.changes)
     }
+
+    private fun stateOf(s: SyncSnapshot?, item: FirstSyncItem): JournalState? =
+        s?.let { JournalState(it.status?.name, it.progress, item.episodes, item.isMovie) }
+
+    private fun firstMeta(a: FirstSyncAction) = JournalMeta(
+        origin = JournalOrigin.FIRST_SYNC,
+        anilistAfter = stateOf(a.item.remote, a.item),
+        localBefore = stateOf(a.item.local, a.item),
+        localAfter = stateOf(a.finalLocal, a.item),
+    )
 
     private fun describeLocal(a: FirstSyncAction): String {
         val status = a.localSetStatus

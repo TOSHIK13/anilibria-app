@@ -14,6 +14,9 @@ import ru.radiationx.data.external.ExternalSyncJournal
 import ru.radiationx.data.external.ExternalSyncState
 import ru.radiationx.data.external.ExternalTokenStore
 import ru.radiationx.data.external.JournalDirection
+import ru.radiationx.data.external.JournalMeta
+import ru.radiationx.data.external.JournalOrigin
+import ru.radiationx.data.external.JournalReason
 import ru.radiationx.data.external.JournalResult
 import ru.radiationx.data.external.OutboxSource
 import java.io.IOException
@@ -60,7 +63,7 @@ class AniListTracker @Inject constructor(
         if (!settings.get(id).sendWatched) return
         val ref = event.release
         val title = ref.title ?: "Релиз ${ref.releaseId.id}"
-        val malId = malIdOf(ref) ?: return skipped(ref, title, "серия не отправлена · у релиза нет MAL id")
+        val malId = malIdOf(ref) ?: return skipped(ref, title, "серия не отправлена · у релиза нет MAL id", JournalOrigin.EPISODE)
         val total = event.episodesTotal
         val desired = if (event.episodeOrdinal == null) {
             val all = total ?: event.episodesWatched
@@ -93,7 +96,10 @@ class AniListTracker @Inject constructor(
         syncState.markPending(id, malId, ref.releaseId.id)
     }
 
-    private fun skipped(ref: TrackerReleaseRef, title: String, text: String) {
-        journal.record(id, JournalDirection.OUT, null, ref.releaseId.id, title, text, JournalResult.SKIPPED)
+    private fun skipped(ref: TrackerReleaseRef, title: String, text: String, origin: JournalOrigin = JournalOrigin.COLLECTION) {
+        journal.record(
+            id, JournalDirection.OUT, null, ref.releaseId.id, title, text, JournalResult.SKIPPED,
+            meta = JournalMeta(origin = origin, reason = JournalReason.RELEASE_NO_MAL),
+        )
     }
 }

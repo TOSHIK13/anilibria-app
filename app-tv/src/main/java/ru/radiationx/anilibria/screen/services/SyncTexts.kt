@@ -87,3 +87,15 @@ fun dayHeaderText(atMs: Long, nowMs: Long = System.currentTimeMillis()): String 
 }
 
 fun timeText(atMs: Long): String = SimpleDateFormat("HH:mm", RU).format(Date(atMs))
+
+/** Свёрнутая фраза журнала: что сделано простыми словами. */
+fun journalSummaryText(e: ru.radiationx.data.external.JournalEntry): String =
+    ru.radiationx.data.external.JournalTexts.summary(e)
+
+/** Пункты раскрытой строки журнала. */
+fun journalDetailLines(e: ru.radiationx.data.external.JournalEntry) =
+    ru.radiationx.data.external.JournalTexts.details(e)
+
+/** Мелкая сноска журнала: MAL id, ссылка, код HTTP. */
+fun journalFootnote(e: ru.radiationx.data.external.JournalEntry): String? =
+    ru.radiationx.data.external.JournalTexts.footnote(e)

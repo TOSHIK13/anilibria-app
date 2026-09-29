@@ -190,6 +190,8 @@ private class RowHolder(
     private val badge = view.findViewById<TextView>(R.id.journalBadge)
     private val text = view.findViewById<TextView>(R.id.journalText)
     private val detail = view.findViewById<TextView>(R.id.journalDetail)
+    private val foot = view.findViewById<TextView>(R.id.journalFoot)
+    private var wasExpanded = false
     private val result = view.findViewById<TextView>(R.id.journalResult)
     private val actions = view.findViewById<View>(R.id.journalActions)
     private val retry = view.findViewById<TextView>(R.id.journalRetry)
@@ -219,8 +221,6 @@ private class RowHolder(
             JournalDirection.IN -> "←"
             JournalDirection.CHECK -> "↻"
         }
-        detail.text = e.detail.orEmpty()
-        detail.isVisible = !e.detail.isNullOrBlank()
         result.text = when (e.result) {
             JournalResult.DONE -> "✓ готово"
             JournalResult.RETRY_AT -> "повтор " + (e.retryAt?.let(::timeText) ?: "")
@@ -235,7 +235,35 @@ private class RowHolder(
     fun updateExpanded() {
         val e = entry ?: return
         val expanded = itemView.hasFocus()
+        val changed = expanded != wasExpanded
+        wasExpanded = expanded
         actions.isVisible = expanded && canAct
+        text.maxLines = if (expanded) 3 else 1
+        val lines = if (expanded) journalDetailLines(e) else emptyList()
+        detail.isVisible = lines.isNotEmpty()
+        if (lines.isNotEmpty()) {
+            val labelColor = if (expanded) 0xFF666666.toInt() else 0xFF909090.toInt()
+            val valueColor = if (expanded) 0xFF141414.toInt() else 0xFFDDDDDD.toInt()
+            val sb = SpannableStringBuilder()
+            lines.forEachIndexed { i, l ->
+                if (i > 0) sb.append("\n")
+                val s0 = sb.length
+                sb.append(l.label).append(": ")
+                sb.setSpan(ForegroundColorSpan(labelColor), s0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                val s1 = sb.length
+                sb.append(l.value)
+                sb.setSpan(ForegroundColorSpan(valueColor), s1, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            detail.text = sb
+        }
+        val note = if (expanded) journalFootnote(e) else null
+        foot.isVisible = note != null
+        foot.text = note.orEmpty()
+        foot.setTextColor(if (expanded) 0xFF777777.toInt() else 0xFF909090.toInt())
+        if (expanded && changed) {
+            // раскрытая строка выросла: держим её целиком в видимой области
+            itemView.post { itemView.requestRectangleOnScreen(android.graphics.Rect(0, 0, itemView.width, itemView.height), false) }
+        }
         (itemView.background as? GradientDrawable ?: GradientDrawable().also { itemView.background = it }).apply {
             cornerRadius = 10 * density
             setColor(if (expanded) 0xFFEEEEEE.toInt() else 0xFF282828.toInt())
@@ -243,7 +271,6 @@ private class RowHolder(
         val primary = if (expanded) 0xFF141414.toInt() else 0xFFFFFFFF.toInt()
         val secondary = if (expanded) 0xFF444444.toInt() else 0xFFB2B2B2.toInt()
         time.setTextColor(if (expanded) 0xFF555555.toInt() else 0xFF909090.toInt())
-        detail.setTextColor(if (expanded) 0xFF444444.toInt() else 0xFF909090.toInt())
         direction.setTextColor(
             when (e.direction) {
                 JournalDirection.OUT -> if (expanded) 0xFF1B5E8F.toInt() else 0xFF6CC6FF.toInt()
@@ -254,9 +281,10 @@ private class RowHolder(
         val body = SpannableStringBuilder(e.title)
         body.setSpan(StyleSpan(Typeface.BOLD), 0, body.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         body.setSpan(ForegroundColorSpan(primary), 0, body.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        if (e.text.isNotBlank()) {
+        val summary = journalSummaryText(e)
+        if (summary.isNotBlank()) {
             val start = body.length
-            body.append(" · ").append(e.text)
+            body.append(" · ").append(summary)
             body.setSpan(ForegroundColorSpan(secondary), start, body.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         text.text = body

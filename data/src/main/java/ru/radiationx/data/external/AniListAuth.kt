@@ -161,6 +161,7 @@ class AniListAuth @Inject constructor(
                 AniListService.ID, JournalDirection.OUT, null, null, "AniList",
                 "аккаунт отключён · очередь очищена", JournalResult.SKIPPED,
                 detail = "не отправлено изменений: ${dropped.size}",
+                meta = JournalMeta(origin = JournalOrigin.ACCOUNT, reason = JournalReason.ACCOUNT_UNLINKED, changes = dropped.size),
             )
         }
     }

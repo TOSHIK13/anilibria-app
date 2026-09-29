@@ -196,6 +196,7 @@ class ExternalSyncEngine @Inject constructor(
                     journal.record(
                         serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title,
                         "тайтла нет на AniList — пропущено", JournalResult.SKIPPED, itemId = item.id,
+                        meta = outMeta(item).copy(reason = JournalReason.NOT_ON_ANILIST),
                     )
                 }
 
@@ -207,6 +208,7 @@ class ExternalSyncEngine @Inject constructor(
                 serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title,
                 describe(item, null), JournalResult.RETRY_AT,
                 detail = "Слишком много запросов (HTTP 429)", retryAt = e.untilMs, itemId = item.id,
+                meta = outMeta(item).copy(httpCode = 429, errorKind = JournalErrorKind.RATE_LIMIT, attempt = item.attempts + 1, maxAttempts = SyncRules.MAX_ATTEMPTS),
             )
         } catch (e: ExternalHttpException) {
             if (store.activeToken(serviceId) == null) {
@@ -215,14 +217,18 @@ class ExternalSyncEngine @Inject constructor(
                     serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title,
                     describe(item, null), JournalResult.ERROR,
                     detail = "Вход в AniList истёк (HTTP ${e.code}) · изменения ждут нового входа", itemId = item.id,
+                    meta = outMeta(item).copy(httpCode = e.code, errorKind = JournalErrorKind.AUTH),
                 )
             } else {
-                fail(item, if (e.code >= 500) "Сервер AniList недоступен (HTTP ${e.code})" else "AniList отклонил запрос (HTTP ${e.code})")
+                fail(
+                    item, if (e.code >= 500) "Сервер AniList недоступен (HTTP ${e.code})" else "AniList отклонил запрос (HTTP ${e.code})",
+                    httpCode = e.code, kind = if (e.code >= 500) JournalErrorKind.SERVER else JournalErrorKind.REJECTED,
+                )
             }
         } catch (e: IOException) {
-            fail(item, "Нет связи с AniList")
+            fail(item, "Нет связи с AniList", kind = JournalErrorKind.NETWORK)
         } catch (e: JSONException) {
-            fail(item, "Неожиданный ответ AniList")
+            fail(item, "Неожиданный ответ AniList", kind = JournalErrorKind.BAD_RESPONSE)
         }
     }
 
@@ -230,6 +236,8 @@ class ExternalSyncEngine @Inject constructor(
         val plan = AniListWriteRules.plan(item.desired, found.media, found.entry)
         val text = describe(item, plan, found.media)
         val detail = SyncRules.mergeDetail(item)
+        val before = found.entry?.let { JournalState(it.status, it.progress, found.media.episodes, found.media.isMovie) }
+            ?: JournalState(null, 0, found.media.episodes, found.media.isMovie)
         var status = found.entry?.status
         var progress = found.entry?.progress ?: 0
         val result = when (plan) {
@@ -253,6 +261,11 @@ class ExternalSyncEngine @Inject constructor(
         journal.record(
             serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title, text, result,
             detail = detail ?: (plan as? SyncPlan.UpToDate)?.reason?.takeIf { it != "уже актуально" }, itemId = item.id,
+            meta = outMeta(item).copy(
+                anilistId = found.media.id,
+                anilistBefore = before,
+                anilistAfter = JournalState(status, progress, found.media.episodes, found.media.isMovie),
+            ),
         )
         if (plan is SyncPlan.Save) {
             sent.tryEmit(
@@ -273,7 +286,21 @@ class ExternalSyncEngine @Inject constructor(
         }
     }
 
-    private fun fail(item: OutboxItem, message: String) {
+    private fun outMeta(item: OutboxItem) = JournalMeta(
+        origin = when (item.source) {
+            OutboxSource.EPISODE -> JournalOrigin.EPISODE
+            OutboxSource.COLLECTION -> JournalOrigin.COLLECTION
+            OutboxSource.MANUAL -> JournalOrigin.COMPARE_PUSH
+        },
+        eventTime = item.createdAt,
+        localAfter = item.desired.let { d ->
+            JournalState(d.status?.takeIf { it != DesiredStatus.REMOVE }?.name, d.progress, d.totalEpisodes)
+        },
+        mergedCount = item.mergedCount.takeIf { it > 1 },
+        episodes = item.episodes.takeIf { it.isNotEmpty() },
+    )
+
+    private fun fail(item: OutboxItem, message: String, httpCode: Int? = null, kind: JournalErrorKind = JournalErrorKind.OTHER) {
         val attempts = item.attempts + 1
         val delayMs = SyncRules.backoffMs(attempts)
         val now = System.currentTimeMillis()
@@ -284,6 +311,7 @@ class ExternalSyncEngine @Inject constructor(
                 serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title, describe(item, null),
                 JournalResult.ERROR, detail = "$message · попытка $attempts из ${SyncRules.MAX_ATTEMPTS} · нужен повтор вручную",
                 itemId = item.id,
+                meta = outMeta(item).copy(httpCode = httpCode, errorKind = kind, attempt = attempts, maxAttempts = SyncRules.MAX_ATTEMPTS),
             )
         } else {
             val at = now + delayMs
@@ -293,6 +321,7 @@ class ExternalSyncEngine @Inject constructor(
                 serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title, describe(item, null),
                 JournalResult.RETRY_AT, detail = "$message · попытка $attempts из ${SyncRules.MAX_ATTEMPTS}",
                 retryAt = at, itemId = item.id,
+                meta = outMeta(item).copy(httpCode = httpCode, errorKind = kind, attempt = attempts, maxAttempts = SyncRules.MAX_ATTEMPTS),
             )
         }
     }

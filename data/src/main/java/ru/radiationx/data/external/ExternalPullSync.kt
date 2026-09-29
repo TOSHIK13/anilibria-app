@@ -120,6 +120,14 @@ class ExternalPullSync @Inject constructor(
                     serviceId, JournalDirection.CHECK, null, null, "AniList",
                     "проверка не выполнена", JournalResult.ERROR,
                     detail = if (expired) "Вход в AniList истёк (HTTP ${e.code}) · нужен новый вход" else "AniList отклонил запрос (HTTP ${e.code})",
+                    meta = JournalMeta(
+                        origin = checkOrigin(manual), httpCode = e.code,
+                        errorKind = when {
+                            expired -> JournalErrorKind.AUTH
+                            e.code >= 500 -> JournalErrorKind.SERVER
+                            else -> JournalErrorKind.REJECTED
+                        },
+                    ),
                 )
                 return PullOutcome.Failed
             } catch (e: IOException) {
@@ -230,6 +238,7 @@ class ExternalPullSync @Inject constructor(
             serviceId, JournalDirection.CHECK, null, null, "AniList",
             "${checkName(manual)} · найдено изменений: ${report.changesCount}", JournalResult.SKIPPED,
             detail = "первая синхронизация не выполнена · изменения не применялись и не отправлялись",
+            meta = JournalMeta(origin = checkOrigin(manual), reason = JournalReason.FIRST_SYNC_PENDING, changes = report.changesCount),
         )
         return PullOutcome.Done(0, 0, compareOnly = true)
     }
@@ -239,6 +248,7 @@ class ExternalPullSync @Inject constructor(
         val rid: ReleaseId,
         val entry: RemoteListEntry?,
         val result: MergeResult,
+        val local: SyncSnapshot,
     )
 
     private suspend fun merge(g: Gathered, manual: Boolean): PullOutcome {
@@ -248,7 +258,7 @@ class ExternalPullSync @Inject constructor(
         for (malId in universe(g)) {
             val entry = g.remote[malId]
             if (g.index.releasesOf(malId).isEmpty()) {
-                if (entry != null) skipOnce(malId, null, entry.title ?: "MAL $malId", "нет на AniLiberty (MAL id $malId)")
+                if (entry != null) skipOnce(malId, null, entry.title ?: "MAL $malId", "нет на AniLiberty (MAL id $malId)", JournalReason.NOT_ON_ALILIBRIA)
                 continue
             }
             if (entry != null) linked++
@@ -261,10 +271,10 @@ class ExternalPullSync @Inject constructor(
             if (result.kind == MergeKind.NO_CHANGE || (!result.changesLocal && result.push == null)) {
                 records += PulledTitle(malId, rid.id, result.newBaseLocal, result.newBaseRemote)
             } else {
-                planned += Planned(malId, rid, entry, result)
+                planned += Planned(malId, rid, entry, result, local)
             }
         }
-        g.noMal.forEach { skipOnce(null, null, it.title ?: "AniList ${it.mediaId}", "нет MAL id — пропущено") }
+        g.noMal.forEach { skipOnce(null, null, it.title ?: "AniList ${it.mediaId}", "нет MAL id — пропущено", JournalReason.NO_MAL_ID) }
 
         var applied = 0
         var queued = 0
@@ -280,6 +290,7 @@ class ExternalPullSync @Inject constructor(
                     journal.record(
                         serviceId, JournalDirection.IN, p.malId, p.rid.id, title,
                         "не удалось применить изменение из AniList", JournalResult.ERROR, detail = e.message,
+                        meta = JournalMeta(origin = JournalOrigin.REMOTE, errorKind = if (e is IOException) JournalErrorKind.NETWORK else JournalErrorKind.OTHER),
                     )
                     continue // база не обновляется: повторим при следующем чтении
                 } catch (e: Exception) {
@@ -288,6 +299,7 @@ class ExternalPullSync @Inject constructor(
                     journal.record(
                         serviceId, JournalDirection.IN, p.malId, p.rid.id, title,
                         "не удалось применить изменение из AniList", JournalResult.ERROR, detail = e.message,
+                        meta = JournalMeta(origin = JournalOrigin.REMOTE, errorKind = if (e is IOException) JournalErrorKind.NETWORK else JournalErrorKind.OTHER),
                     )
                     continue
                 }
@@ -296,6 +308,7 @@ class ExternalPullSync @Inject constructor(
                     serviceId, JournalDirection.IN, p.malId, p.rid.id, title,
                     describeApplied(r, p.entry), JournalResult.DONE,
                     detail = if (r.kind == MergeKind.MERGED) "изменено с двух сторон · прогресс — максимум, статус — более свежий" else DETAIL_REMOTE,
+                    meta = appliedMeta(p),
                 )
             }
             val push = r.push
@@ -318,20 +331,51 @@ class ExternalPullSync @Inject constructor(
             "${checkName(manual)} · найдено изменений: $found",
             if (found > 0) JournalResult.DONE else JournalResult.UP_TO_DATE,
             detail = if (queued > 0) "к отправке в AniList: $queued" else null,
+            meta = JournalMeta(origin = checkOrigin(manual), changes = found, queued = queued),
         )
         return PullOutcome.Done(applied, queued, compareOnly = false)
+    }
+
+    private fun checkOrigin(manual: Boolean) = if (manual) JournalOrigin.MANUAL_SYNC else JournalOrigin.SCHEDULED
+
+    private fun appliedMeta(p: Planned): JournalMeta {
+        val r = p.result
+        val entry = p.entry
+        val total = entry?.episodes
+        val movie = entry?.let { it.format == "MOVIE" || it.episodes == 1 } ?: false
+        val newStatus = when (val s = r.setStatus) {
+            null -> p.local.status
+            DesiredStatus.REMOVE -> null
+            else -> s
+        }
+        val newProgress = when {
+            r.setStatus == DesiredStatus.REMOVE -> 0
+            r.raiseProgressTo != null -> maxOf(r.raiseProgressTo, p.local.progress)
+            else -> p.local.progress
+        }
+        return JournalMeta(
+            origin = JournalOrigin.REMOTE,
+            eventTime = entry?.updatedAt?.takeIf { it > 0 },
+            anilistId = entry?.mediaId?.takeIf { it > 0 },
+            anilistAfter = entry?.let { JournalState(it.status, it.progress, total, movie) },
+            localBefore = JournalState(p.local.status?.name, p.local.progress, total, movie),
+            localAfter = JournalState(newStatus?.name, newProgress, total, movie),
+        )
     }
 
     private fun checkName(manual: Boolean) = if (manual) "Проверка по запросу" else "Плановая проверка"
 
     /** IN SKIPPED без повторов: та же запись уже есть в журнале — не дублируем. */
-    private fun skipOnce(malId: Int?, releaseId: Int?, title: String, text: String) {
+    private fun skipOnce(malId: Int?, releaseId: Int?, title: String, text: String, reason: JournalReason) {
         val exists = journal.entries.value.any {
             it.serviceId == serviceId && it.direction == JournalDirection.IN &&
                 it.result == JournalResult.SKIPPED && it.text == text && it.title == title && it.malId == malId
         }
         if (!exists) {
-            journal.record(serviceId, JournalDirection.IN, malId, releaseId, title, text, JournalResult.SKIPPED)
+            journal.record(
+                serviceId, JournalDirection.IN, malId, releaseId, title, text, JournalResult.SKIPPED,
+                meta = JournalMeta(origin = JournalOrigin.REMOTE, reason = reason),
+            )
         }
     }
 
