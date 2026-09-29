@@ -112,6 +112,7 @@ import ru.radiationx.data.external.AniListAuth
 import ru.radiationx.data.external.AniListService
 import ru.radiationx.data.external.AniListMediaLookup
 import ru.radiationx.data.external.AniListUserList
+import ru.radiationx.data.external.AniListRatings
 import ru.radiationx.data.external.ExternalPullSync
 import ru.radiationx.data.external.ExternalOutbox
 import ru.radiationx.data.external.ExternalServiceSettings
@@ -290,6 +291,7 @@ class DataModule(context: Context) : QuillModule() {
         single<ExternalSyncJournal>()
         single<AniListMediaLookup>()
         single<AniListUserList>()
+        single<AniListRatings>()
         single<ExternalPullSync>()
         single<ExternalSyncEngine>()
         single<FirstSyncRunner>()

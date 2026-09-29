@@ -16,6 +16,7 @@ class DetailOtherGuidedFragment : FakeGuidedStepFragment() {
     companion object {
         private const val CLEAR_ACTION_ID = 0L
         private const val MARK_ACTION_ID = 1L
+        private const val RATE_ACTION_ID = 2L
         private const val ARG_ID = "id"
 
         fun newInstance(releaseId: ReleaseId) = DetailOtherGuidedFragment().putExtra {
@@ -48,6 +49,14 @@ class DetailOtherGuidedFragment : FakeGuidedStepFragment() {
                 .title("Отметить всё как просмотренные")
                 .build()
         )
+        if (viewModel.canRate()) {
+            actions.add(
+                GuidedAction.Builder(requireContext())
+                    .id(RATE_ACTION_ID)
+                    .title("Оценить на AniList")
+                    .build()
+            )
+        }
     }
 
     override fun onGuidedActionClicked(action: GuidedAction) {
@@ -55,6 +64,7 @@ class DetailOtherGuidedFragment : FakeGuidedStepFragment() {
         when (action.id) {
             CLEAR_ACTION_ID -> viewModel.onClearClick()
             MARK_ACTION_ID -> viewModel.onMarkClick()
+            RATE_ACTION_ID -> viewModel.onRateClick()
         }
     }
 }

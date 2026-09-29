@@ -69,6 +69,12 @@ class DetailCollectionGuidedScreen(private val releaseId: ReleaseId) : GuidedApp
     }
 }
 
+class DetailScoreGuidedScreen(private val releaseId: ReleaseId) : GuidedAppScreen() {
+    override fun createFragment(factory: FragmentFactory): FakeGuidedStepFragment {
+        return ru.radiationx.anilibria.screen.details.score.DetailScoreGuidedFragment.newInstance(releaseId)
+    }
+}
+
 class UpdateScreen : FragmentScreen {
     override fun createFragment(factory: FragmentFactory): Fragment {
         return UpdateFragment()

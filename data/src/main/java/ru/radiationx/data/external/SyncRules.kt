@@ -120,7 +120,14 @@ data class MediaInfo(val id: Long, val episodes: Int?, val format: String?) {
 }
 
 /** Запись списка пользователя на стороне сервиса. */
-data class RemoteEntry(val id: Long, val status: String, val progress: Int, val updatedAtSec: Long)
+data class RemoteEntry(
+    val id: Long,
+    val status: String,
+    val progress: Int,
+    val updatedAtSec: Long,
+    /** Оценка пользователя 1..10; 0 — нет. Не участвует в слиянии статуса/прогресса. */
+    val score: Int = 0,
+)
 
 sealed class SyncPlan {
     /** Уже актуально, слать нечего. */

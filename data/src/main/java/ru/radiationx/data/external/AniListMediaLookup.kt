@@ -85,11 +85,23 @@ class AniListMediaLookup @Inject constructor(
         status = o.optString("status"),
         progress = o.optInt("progress"),
         updatedAtSec = o.optLong("updatedAt"),
+        score = o.optInt("score"),
     )
+
+    /** Сохраняет только оценку 1..10 (0 — снять); статус/прогресс существующей записи не трогает. */
+    suspend fun saveScore(mediaId: Long, score: Int): RemoteEntry {
+        val vars = JSONObject().put("m", mediaId).put("r", score.coerceIn(0, 10) * 10)
+        val response = service.graphQl.query(SAVE_SCORE, vars) ?: throw ExternalHttpException(404, "AniList: not found")
+        val saved = data(response)?.optJSONObject("SaveMediaListEntry")
+            ?: throw ExternalHttpException(200, "AniList: пустой ответ")
+        return entry(saved)
+    }
 
     private companion object {
         const val LOOKUP = "query(\$m:Int){Media(idMal:\$m,type:ANIME){id episodes format title{romaji} " +
-                "mediaListEntry{id status progress updatedAt}}}"
+                "mediaListEntry{id status progress updatedAt score(format:POINT_10)}}}"
+        const val SAVE_SCORE = "mutation(\$m:Int,\$r:Int){SaveMediaListEntry(mediaId:\$m,scoreRaw:\$r)" +
+                "{id status progress updatedAt score(format:POINT_10)}}"
         const val SAVE = "mutation(\$m:Int,\$s:MediaListStatus,\$p:Int){SaveMediaListEntry(mediaId:\$m,status:\$s,progress:\$p)" +
                 "{id status progress updatedAt}}"
         const val DELETE = "mutation(\$id:Int){DeleteMediaListEntry(id:\$id){deleted}}"

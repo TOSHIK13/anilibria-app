@@ -58,7 +58,7 @@ class AniListUserList @Inject constructor(
             externalId = o.optLong("id"),
             status = o.optString("status"),
             progress = o.optInt("progress"),
-            score = null,
+            score = o.optInt("score").takeIf { it > 0 }?.toDouble(),
             updatedAt = o.optLong("updatedAt") * 1000,
             mediaId = mediaId,
             title = media.optJSONObject("title")?.optString("romaji")?.takeIf { it.isNotEmpty() && it != "null" },
@@ -69,6 +69,6 @@ class AniListUserList @Inject constructor(
 
     private companion object {
         const val QUERY = "query(\$u:Int,\$c:Int){MediaListCollection(userId:\$u,type:ANIME,chunk:\$c,perChunk:500)" +
-                "{hasNextChunk lists{entries{id status progress updatedAt media{id idMal episodes format title{romaji}}}}}}"
+                "{hasNextChunk lists{entries{id status progress updatedAt score(format:POINT_10) media{id idMal episodes format title{romaji}}}}}}"
     }
 }
