@@ -14,6 +14,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import ru.radiationx.data.entity.domain.types.ReleaseId
+import ru.radiationx.data.external.ExternalLink
+import ru.radiationx.data.external.ExternalServiceRegistry
+import ru.radiationx.data.external.IdResolver
+import ru.radiationx.data.external.SimilarPage
+import ru.radiationx.data.external.SimilarProvider
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
 import javax.inject.Inject
@@ -24,14 +29,14 @@ import javax.inject.Inject
  * - сразу отдаёт кеш (даже устаревший), в фоне обновляет, если он старше [TTL_MS];
  * - Shikimori: один запрос — весь список; AniList: только первая страница (50, rating ≥ 1),
  *   следующие — [loadMore], когда фокус подходит к концу ряда;
- * - MAL id → release id по [CatalogMalIndex]; пока индекса нет, показываются ранее
+ * - MAL id → release id по [IdResolver]; пока индекса нет, показываются ранее
  *   сопоставленные ряды, после построения индекса ряды пересобираются из сырых списков;
  * - ошибки сети молча: остаётся кеш, либо ряда нет.
  */
 class LiveSimilarReleasesSource @Inject constructor(
     private val storage: SimilarCacheStorage,
-    private val catalogIndex: CatalogMalIndex,
-    private val api: SimilarServicesApi,
+    private val idResolver: IdResolver,
+    private val registry: ExternalServiceRegistry,
 ) : SimilarReleasesSource {
 
     private companion object {
@@ -51,7 +56,7 @@ class LiveSimilarReleasesSource @Inject constructor(
     }
 
     override fun observe(releaseId: ReleaseId, malId: Int): Flow<SimilarData> = channelFlow {
-        catalogIndex.ensure()
+        idResolver.ensure()
         val entry = entry(releaseId.id, malId)
         launch {
             entry.mutex.withLock { loadDisk(entry) }
@@ -59,7 +64,7 @@ class LiveSimilarReleasesSource @Inject constructor(
         }
         // Индекс появился / обновился — пересобрать ряды из сырых списков.
         launch {
-            catalogIndex.index.filterNotNull().collect { index ->
+            idResolver.index.filterNotNull().collect { index ->
                 entry.mutex.withLock {
                     loadDisk(entry)
                     val item = entry.state.value ?: return@withLock
@@ -82,12 +87,12 @@ class LiveSimilarReleasesSource @Inject constructor(
         return entry.mutex.withLock {
             val item = entry.state.value ?: return@withLock false
             val page = item.alNextPage.takeIf { it > 0 } ?: return@withLock false
-            coRunCatching { api.getAniListRecommendations(entry.malId, page) }
+            coRunCatching { fetch(SimilarSource.ANILIST, entry.malId, page) }
                 .onFailure { Timber.w(it, "similar: anilist page $page for ${entry.malId}") }
                 .map { result ->
                     val old = item.raw[SimilarSource.ANILIST].orEmpty()
                     val known = old.mapTo(HashSet()) { it.id }
-                    val merged = old + result.items.filter { known.add(it.id) }
+                    val merged = old + result.links.map { SimilarItem(it.malId, it.weight) }.filter { known.add(it.id) }
                     save(
                         entry, remap(
                             entry, item.copy(
@@ -115,7 +120,7 @@ class LiveSimilarReleasesSource @Inject constructor(
         val item = storage.read(entry.releaseId)
             ?.takeIf { it.malId == null || it.malId == entry.malId }
             ?: return
-        val index = catalogIndex.index.value
+        val index = idResolver.index.value
         entry.state.value = if (index != null && item.indexBuiltAt != index.builtAt && item.raw.isNotEmpty()) {
             remap(entry, item).also { storage.write(entry.releaseId, it) }
         } else {
@@ -128,8 +133,8 @@ class LiveSimilarReleasesSource @Inject constructor(
         val now = System.currentTimeMillis()
         if (old != null && now - old.fetchedAt < TTL_MS) return@withLock
         val (shikimori, aniList) = coroutineScope {
-            val sh = async { coRunCatching { api.getShikimoriSimilar(entry.malId) } }
-            val al = async { coRunCatching { api.getAniListRecommendations(entry.malId, 1) } }
+            val sh = async { coRunCatching { fetch(SimilarSource.SHIKIMORI, entry.malId, 1) } }
+            val al = async { coRunCatching { fetch(SimilarSource.ANILIST, entry.malId, 1) } }
             sh.await() to al.await()
         }
         shikimori.exceptionOrNull()?.also { Timber.w(it, "similar: shikimori ${entry.malId}") }
@@ -141,11 +146,11 @@ class LiveSimilarReleasesSource @Inject constructor(
         val raw = HashMap(old?.raw.orEmpty())
         val totals = HashMap(old?.totals.orEmpty())
         sh?.also {
-            raw[SimilarSource.SHIKIMORI] = it
-            totals[SimilarSource.SHIKIMORI] = it.size
+            raw[SimilarSource.SHIKIMORI] = it.links.map { l -> SimilarItem(l.malId, l.weight) }
+            totals[SimilarSource.SHIKIMORI] = it.count
         }
         al?.also {
-            raw[SimilarSource.ANILIST] = it.items
+            raw[SimilarSource.ANILIST] = it.links.map { l -> SimilarItem(l.malId, l.weight) }
             totals[SimilarSource.ANILIST] = it.count
         }
         val item = SimilarCacheItem(
@@ -161,12 +166,19 @@ class LiveSimilarReleasesSource @Inject constructor(
         save(entry, remap(entry, item))
     }
 
+    private suspend fun fetch(source: SimilarSource, malId: Int, page: Int): SimilarPage {
+        val provider = registry.withCapability<SimilarProvider>(source.serviceId.orEmpty())
+            ?: error("no similar provider for $source")
+        return provider.similar(malId, page)
+    }
+
     /** Сопоставить сырые списки с каталогом; без индекса — оставить прежние ряды. */
     private fun remap(entry: Entry, item: SimilarCacheItem): SimilarCacheItem {
-        val index = catalogIndex.index.value ?: return item
+        val index = idResolver.index.value ?: return item
         return item.copy(
             mapped = item.mapped + item.raw.mapValues { (_, list) ->
-                index.map(entry.releaseId, entry.malId, list)
+                index.map(entry.releaseId, entry.malId, list.map { ExternalLink(it.id, weight = it.weight) })
+                    .map { (id, weight) -> SimilarItem(id, weight) }
             },
             indexBuiltAt = index.builtAt,
         )

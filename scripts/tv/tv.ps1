@@ -104,7 +104,10 @@ function Invoke-One([string]$cmd, [string]$arg) {
         'devices' { & $adbExe devices -l }
         'emu' {
             if ((& $adbExe devices) -match 'emulator-\d+\s+device') { 'emulator already running' }
-            else { Start-Process emulator -ArgumentList '-avd', 'Ani_TV_API_36', '-no-snapshot-save', '-no-boot-anim' -WindowStyle Minimized; & $adbExe wait-for-device; 'emulator booting' }
+            else {
+                # stale crash reports make the emulator wait on a hidden "send report?" dialog and never boot
+                Remove-Item (Join-Path $env:TEMP 'AndroidEmulator\emu-crash-*') -Recurse -Force -ErrorAction SilentlyContinue
+                Start-Process emulator -ArgumentList '-avd', 'Ani_TV_API_36', '-no-snapshot-save', '-no-boot-anim' -WindowStyle Minimized; & $adbExe wait-for-device; 'emulator booting' }
         }
         'build' {
             Push-Location $aniRepo

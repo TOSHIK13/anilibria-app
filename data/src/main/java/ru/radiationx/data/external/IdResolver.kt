@@ -1,4 +1,4 @@
-package ru.radiationx.anilibria.similar
+package ru.radiationx.data.external
 
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
@@ -42,14 +42,14 @@ class CatalogIndex(
      * В ряд идут все релизы с этим MAL id (отдельные релизы — части/сборники); сам релиз
      * и релизы с его же MAL id исключаются, дубликаты убираются.
      */
-    fun map(releaseId: Int, malId: Int?, raw: List<SimilarItem>): List<SimilarItem> {
+    fun map(releaseId: Int, malId: Int?, raw: List<ExternalLink>): List<Pair<Int, Int>> {
         val own = malId?.let { releasesOf(it).toSet() }.orEmpty()
         val seen = HashSet<Int>()
-        val result = ArrayList<SimilarItem>()
+        val result = ArrayList<Pair<Int, Int>>()
         raw.forEach { item ->
-            if (item.id == malId) return@forEach
-            releasesOf(item.id).forEach { id ->
-                if (id != releaseId && id !in own && seen.add(id)) result.add(SimilarItem(id, item.weight))
+            if (item.malId == malId) return@forEach
+            releasesOf(item.malId).forEach { id ->
+                if (id != releaseId && id !in own && seen.add(id)) result.add(id to item.weight)
             }
         }
         return result
@@ -57,11 +57,12 @@ class CatalogIndex(
 }
 
 /**
- * Индекс каталога для «Похожих»: `catalog/releases?include=id,shikimori.id,mal.id`
- * (~39 страниц по 50, до 4 параллельно), файл в filesDir, TTL 24 ч.
+ * Сопоставление MAL id ↔ release id AniLiberty по индексу каталога
+ * (`catalog/releases?include=id,shikimori.id,mal.id`
+ * ~39 страниц по 50, до 4 параллельно), файл в filesDir, TTL 24 ч.
  * Строится в фоне при первом открытии деталей; пока его нет, ряды берутся из кеша.
  */
-class CatalogMalIndex @Inject constructor(
+class IdResolver @Inject constructor(
     context: Context,
     @ApiClient private val client: IClient,
     private val apiConfig: ApiConfig,
@@ -85,6 +86,12 @@ class CatalogMalIndex @Inject constructor(
 
     val index: StateFlow<CatalogIndex?> = state
 
+    /** Release id каталога с этим MAL id (пусто, пока индекса нет). */
+    fun releaseIdsByMalId(malId: Int): List<Int> = state.value?.releasesOf(malId).orEmpty()
+
+    /** MAL id релиза по каталогу (null, если нет индекса или у релиза нет MAL). */
+    fun malIdByReleaseId(releaseId: Int): Int? = state.value?.releaseToMal?.get(releaseId)
+
     /** Поднять индекс с диска и, если он устарел или его нет, перестроить в фоне. */
     fun ensure() {
         if (!running.compareAndSet(false, true)) return
@@ -105,7 +112,7 @@ class CatalogMalIndex @Inject constructor(
                         }
                         .onFailure {
                             lastError = System.currentTimeMillis()
-                            Timber.w(it, "similar: catalog index build failed")
+                            Timber.w(it, "idresolver: catalog index build failed")
                         }
                 }
             } finally {
@@ -126,7 +133,7 @@ class CatalogMalIndex @Inject constructor(
         }
         pages.forEach { parse(it, result) }
         val index = CatalogIndex(System.currentTimeMillis(), result)
-        Timber.d("similar: catalog index %d releases, %d pages, %d ms",
+        Timber.d("idresolver: catalog index %d releases, %d pages, %d ms",
             index.size, totalPages, System.currentTimeMillis() - start)
         return index
     }
@@ -166,7 +173,7 @@ class CatalogMalIndex @Inject constructor(
             CatalogIndex(json.getLong("built_at"), map)
         }
     } catch (e: Exception) {
-        Timber.w(e, "similar: bad catalog index file")
+        Timber.w(e, "idresolver: bad catalog index file")
         null
     }
 
@@ -182,7 +189,7 @@ class CatalogMalIndex @Inject constructor(
                 tmp.renameTo(file)
             }
         } catch (e: Exception) {
-            Timber.w(e, "similar: write catalog index")
+            Timber.w(e, "idresolver: write catalog index")
         }
     }
 }

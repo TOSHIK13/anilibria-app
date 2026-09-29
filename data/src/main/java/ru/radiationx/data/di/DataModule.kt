@@ -108,6 +108,10 @@ import ru.radiationx.data.di.providers.MainNetworkClient
 import ru.radiationx.data.di.providers.MainOkHttpProvider
 import ru.radiationx.data.di.providers.PlayerOkHttpProvider
 import ru.radiationx.data.di.providers.SimpleClientWrapper
+import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.ExternalServiceRegistry
+import ru.radiationx.data.external.IdResolver
+import ru.radiationx.data.external.ShikimoriService
 import ru.radiationx.data.di.providers.SimpleNetworkClient
 import ru.radiationx.data.di.providers.SimpleOkHttpProvider
 import ru.radiationx.data.downloader.RemoteFileHolder
@@ -262,6 +266,12 @@ class DataModule(context: Context) : QuillModule() {
         single<WatchProgressRepository>()
         single<ReleaseCardRepository>()
         single<AnimeTrackerRegistry>()
+
+        /* Внешние сервисы (AniList, Shikimori) */
+        single<AniListService>()
+        single<ShikimoriService>()
+        single<ExternalServiceRegistry>()
+        single<IdResolver>()
 
         single<ReleaseUpdateMiddleware>()
 

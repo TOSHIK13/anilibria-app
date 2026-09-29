@@ -47,3 +47,19 @@ id совпадают (Shikimori использует id MAL). Маппятся 
 Настройки → «Аккаунты и сервисы»: после карточки AniLiberty — привязанные сервисы из
 `observeLinked()`; строка «Подключить сервис» — только если `availableToLink` не пуст.
 Пока сервисов нет, блок «Сервисы статистики» не показывается.
+
+## Модуль внешних сервисов (`data/.../external/`)
+
+Общая инфраструктура под AniList/Shikimori (трекеры — отдельно, см. выше).
+
+- SPI: `ExternalService(id, title)`; возможности — `SimilarProvider.similar(malId, page): SimilarPage`,
+  `UserListSource.fetchUserList(): List<RemoteListEntry>` (интерфейс, реализация позже).
+  `ExternalServiceRegistry` — `services`, `byId`, `withCapability<T>()`.
+- `ExternalHttpClient` — по экземпляру на сервис: интервал между запросами (AniList 2100 мс,
+  Shikimori 700 мс), 429 → ждать `Retry-After` (до 30 с, 2 повтора; дольше — `ExternalRateLimitException`),
+  User-Agent, опциональный Bearer (`tokenProvider`), дедупликация одинаковых запросов в полёте.
+  Каждый реальный запрос — Timber `external[<сервис>]: METHOD url` (для проверки «нет дублей»).
+  `AniListGraphQl.query(query, variables)` — обёртка для `https://graphql.anilist.co`.
+- `ExternalDiskCache(namespace, maxItems, ttlMs?)` — JSON-файлы filesDir/<namespace>/<key>.json, LRU.
+  «Похожие» (`SimilarCacheStorage`) лежат в прежнем `similar/items`.
+- `IdResolver` — MAL id ↔ release id по каталогу (`releaseIdsByMalId`, `malIdByReleaseId`, TTL 24 ч).
