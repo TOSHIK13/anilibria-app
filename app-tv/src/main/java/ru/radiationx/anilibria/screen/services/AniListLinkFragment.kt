@@ -69,7 +69,9 @@ class AniListLinkFragment : Fragment(R.layout.fragment_anilist_link) {
             binding.linkStep2.setText(R.string.anilist_link_lan_step2)
             binding.linkStep3.setText(R.string.anilist_link_lan_step3)
             binding.linkFieldLabel.setText(R.string.anilist_link_lan_fallback_label)
+            binding.linkVpnHint.isVisible = isVpnActive(requireContext())
         } else {
+            binding.linkVpnHint.isVisible = false
             binding.linkStep1.setText(R.string.anilist_link_step1)
             binding.linkStep2.setText(R.string.anilist_link_step2)
             binding.linkStep3.setText(R.string.anilist_link_step3)

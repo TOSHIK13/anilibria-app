@@ -91,6 +91,17 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/linkVpnHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="3dp"
+                android:text="@string/anilist_link_vpn_hint"
+                android:textColor="#F2C14E"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"

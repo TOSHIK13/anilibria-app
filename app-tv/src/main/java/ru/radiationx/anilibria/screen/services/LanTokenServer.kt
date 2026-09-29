@@ -226,6 +226,19 @@ fun findLocalIpv4(context: Context): String? {
     }
 }
 
+/**
+ * Включён ли VPN, под который попадает приложение. Тогда Android отправляет ответы сервера в туннель,
+ * и телефон из домашней сети страницу не откроет — показываем подсказку на экране входа.
+ */
+fun isVpnActive(context: Context): Boolean = try {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    cm.activeNetwork
+        ?.let { cm.getNetworkCapabilities(it) }
+        ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+} catch (e: Exception) {
+    false
+}
+
 /** Запасной путь: адрес на интерфейсах wlan или eth, если ConnectivityManager не отдал подходящую сеть. */
 private fun findLanInterfaceIpv4(): String? = java.net.NetworkInterface.getNetworkInterfaces()
     ?.toList()
