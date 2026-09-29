@@ -66,9 +66,8 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
             },
         )
         syncNowRow = arrowRow(inflater, R.string.anilist_service_sync_now) { onSyncNow() }
-        // TODO 3b: экран журнала синхронизации; пока показываем заглушку
         journalRow = arrowRow(inflater, R.string.anilist_service_journal) {
-            Toast.makeText(requireContext(), R.string.anilist_service_journal_stub, Toast.LENGTH_SHORT).show()
+            viewModel.openJournal()
         }
         refreshRow = arrowRow(inflater, R.string.anilist_service_refresh_login) { viewModel.refreshLogin() }
         arrowRow(inflater, R.string.anilist_service_disconnect) { confirmDisconnect() }

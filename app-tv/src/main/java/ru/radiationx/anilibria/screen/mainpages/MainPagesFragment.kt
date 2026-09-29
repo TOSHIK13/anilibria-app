@@ -26,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
+import ru.radiationx.anilibria.common.showCornerNotice
 import ru.radiationx.anilibria.ui.widget.MainHeroView
 import ru.radiationx.anilibria.ui.widget.TopTabsView
 import ru.radiationx.quill.viewModel
@@ -131,38 +132,6 @@ class MainPagesFragment : BrowseSupportFragment() {
         return super.onCreateView(inflater, container, savedInstanceState)
     }
 
-    private fun showTimedNotice(root: View, text: String) {
-        val group = root as? ViewGroup ?: return
-        val density = resources.displayMetrics.density
-        val notice = TextView(requireContext()).apply {
-            this.text = text
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 14f
-            maxWidth = (520 * density).toInt()
-            setPadding((18 * density).toInt(), (12 * density).toInt(), (18 * density).toInt(), (12 * density).toInt())
-            background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = 12 * density
-                setColor(0xF0282828.toInt())
-                setStroke((1 * density).toInt(), 0x33FFFFFF)
-            }
-            isFocusable = false
-            elevation = 8 * density
-        }
-        val margin = (40 * density).toInt()
-        group.addView(
-            notice,
-            android.widget.FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                android.view.Gravity.BOTTOM or android.view.Gravity.END
-            ).apply { setMargins(margin, margin, margin, margin) }
-        )
-        viewLifecycleOwner.lifecycleScope.launch {
-            delay(6_000)
-            group.removeView(notice)
-        }
-    }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -205,7 +174,7 @@ class MainPagesFragment : BrowseSupportFragment() {
         // Разовое уведомление: вход в AniList истёк (самоскрывается через 6 с).
         subscribeTo(viewModel.expiredNotice) {
             if (it) {
-                showTimedNotice(view, getString(R.string.anilist_expired_notice))
+                requireActivity().showCornerNotice(getString(R.string.anilist_expired_notice), durationMs = 6_000)
                 viewModel.onExpiredNoticeShown()
             }
         }

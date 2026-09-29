@@ -26,3 +26,8 @@ fun daysText(days: Int): String {
     }
     return "$days $word"
 }
+
+/** Экран сервиса → «Журнал синхронизации». */
+class AniListJournalScreen : FragmentScreen {
+    override fun createFragment(factory: FragmentFactory): Fragment = AniListJournalFragment()
+}

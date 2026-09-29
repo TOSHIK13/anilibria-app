@@ -19,6 +19,9 @@ import ru.radiationx.anilibria.common.LibriaDetails
 import ru.radiationx.anilibria.common.LibriaDetailsRow
 import ru.radiationx.anilibria.databinding.RowDetailReleaseBinding
 import ru.radiationx.shared_app.imageloader.showImageUrl
+import ru.radiationx.anilibria.common.iconRes
+import ru.radiationx.anilibria.ui.widget.CollectionSyncTooltip
+import ru.radiationx.anilibria.ui.widget.SyncBadgeDrawable
 
 class ReleaseDetailsPresenter(
     private val continueClickListener: () -> Unit,
@@ -79,6 +82,8 @@ class LibriaReleaseViewHolder(
 
     private val density = itemView.resources.displayMetrics.density
 
+    private val collectionTooltip = CollectionSyncTooltip(binding.rowReleaseActionCollection)
+
     private var lastState: DetailsState? = null
     private var lastDetails: LibriaDetails? = null
 
@@ -117,6 +122,7 @@ class LibriaReleaseViewHolder(
         binding.rowReleaseActionContinue.setOnClickListener { continueClickListener.invoke() }
         binding.rowReleaseActionPlay.setOnClickListener { playClickListener.invoke() }
         binding.rowReleaseActionCollection.setOnClickListener { collectionClickListener.invoke() }
+        binding.rowReleaseActionCollection.setOnFocusChangeListener { _, focused -> collectionTooltip.onFocusChanged(focused) }
         binding.rowReleaseActionRatings.setOnClickListener { ratingsClickListener.invoke() }
         binding.rowReleaseActionOther.setOnClickListener { otherClickListener.invoke() }
         binding.rowReleaseActionFavorite.setOnClickListener { favoriteClickListener.invoke() }
@@ -130,6 +136,7 @@ class LibriaReleaseViewHolder(
 
             override fun onViewDetachedFromWindow(v: View) {
                 v.viewTreeObserver.removeOnGlobalFocusChangeListener(focusListener)
+                collectionTooltip.cancel()
             }
         })
     }
@@ -231,6 +238,26 @@ class LibriaReleaseViewHolder(
         }
     }
 
+    /**
+     * Кнопка коллекции: иконка текущей коллекции слева (цвет как у текста кнопки), справа значок
+     * синхронизации с AniList (если сервис подключён и есть запись), подсказка при удержании фокуса.
+     */
+    private fun bindCollectionButton(details: LibriaDetails) {
+        val button = binding.rowReleaseActionCollection
+        button.text = "${details.collectionName ?: "В коллекцию"} ▾"
+        val icon = details.collectionType?.let {
+            androidx.core.content.ContextCompat.getDrawable(button.context, it.iconRes())?.mutate()?.apply {
+                setTintList(button.context.getColorStateList(R.color.detail_pill_text))
+                setBounds(0, 0, dp(18), dp(18))
+            }
+        }
+        val badge = details.collectionSync?.let { SyncBadgeDrawable(button.context, it.kind) }
+        badge?.setBounds(0, 0, badge.intrinsicWidth, badge.intrinsicHeight)
+        button.compoundDrawablePadding = dp(8)
+        button.setCompoundDrawablesRelative(icon, null, badge, null)
+        collectionTooltip.setInfo(details.collectionSync)
+    }
+
     private fun bindActions(details: LibriaDetails) {
         val progress = details.progress
         val continueButton = binding.rowReleaseActionContinue
@@ -255,7 +282,7 @@ class LibriaReleaseViewHolder(
         } else {
             "☆ В избранное"
         }
-        binding.rowReleaseActionCollection.text = "${details.collectionName ?: "В коллекцию"} ▾"
+        bindCollectionButton(details)
         binding.rowReleaseActionRatings.isVisible = details.ratings != null
 
         fitPills(progress?.takeIf { !it.isRewatch }?.episodeLabel)

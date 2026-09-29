@@ -43,6 +43,7 @@ class DetailDataConverter @Inject constructor() {
         accesses: List<EpisodeAccess>,
         collection: CollectionType?,
         scheduleInfo: ReleaseScheduleInfo?,
+        collectionSync: DetailCollectionSync? = null,
     ): LibriaDetails = releaseItem.run {
         val total = series?.trim()?.toIntOrNull()?.takeIf { it > 0 }
         val released = episodesAvailable ?: episodes.size.takeIf { it > 0 }
@@ -66,6 +67,8 @@ class DetailDataConverter @Inject constructor() {
             collectionName = collection?.let { type ->
                 DetailCollectionGuidedFragment.COLLECTION_ITEMS.firstOrNull { it.first == type }?.second
             },
+            collectionType = collection,
+            collectionSync = collectionSync,
             // Частичный (кэшированный) релиз несёт только «в избранном» — ждём полный.
             ratings = if (isFull) ratings() else null,
         )

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Строка журнала; кнопки «Повторить сейчас»/«Пропустить» видны, пока фокус в строке с ошибкой. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingTop="9dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="9dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/journalTime"
+            android:layout_width="48dp"
+            android:layout_height="wrap_content"
+            android:includeFontPadding="false"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/journalDirection"
+            android:layout_width="30dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id="@+id/journalBadge"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:layout_marginStart="6dp"
+            android:layout_marginEnd="10dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:text="AL"
+            android:textColor="#0B1622"
+            android:textSize="10sp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/journalText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/journalDetail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/journalResult"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/journalActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical|end"
+        android:orientation="horizontal"
+        android:paddingStart="94dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/journalRetry"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/anilist_journal_retry"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/journalSkip"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/anilist_journal_skip"
+            android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

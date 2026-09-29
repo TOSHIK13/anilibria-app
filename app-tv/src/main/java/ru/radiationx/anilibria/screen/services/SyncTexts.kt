@@ -49,3 +49,41 @@ fun overviewStatus(o: SyncOverview): Pair<String, Boolean>? = when {
     o.queued > 0 -> "В очереди ${changesText(o.queued)}" to false
     else -> null
 }
+
+/** Статус записи AniList по-русски (PLANNING/CURRENT/… → «Запланировано»/«Смотрю»/…). */
+fun remoteStatusText(status: String?): String = when (status) {
+    "PLANNING" -> "Запланировано"
+    "CURRENT", "REPEATING" -> "Смотрю"
+    "COMPLETED" -> "Просмотрено"
+    "PAUSED" -> "Отложено"
+    "DROPPED" -> "Брошено"
+    null -> "Не в списке"
+    else -> status
+}
+
+/** «5/11», у фильма — «Фильм», без данных о числе серий — «5». */
+fun progressText(progress: Int, total: Int?, isMovie: Boolean): String = when {
+    isMovie -> "Фильм"
+    total != null && total > 0 -> "$progress/$total"
+    else -> progress.toString()
+}
+
+/** «Отмечено в AniList · 5/11» / «… · Фильм». */
+fun sentNoticeText(e: ru.radiationx.data.external.SyncSentEvent): String =
+    "Отмечено в AniList · " + progressText(e.progress, e.totalEpisodes, e.isMovie)
+
+/** Заголовок группы журнала: «Сегодня», «Вчера», «12 сентября». */
+fun dayHeaderText(atMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    fun dayOf(ms: Long) = Calendar.getInstance().apply {
+        timeInMillis = ms
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val diffDays = Math.round((dayOf(nowMs) - dayOf(atMs)) / 86_400_000.0)
+    return when (diffDays) {
+        0L -> "Сегодня"
+        1L -> "Вчера"
+        else -> SimpleDateFormat("d MMMM", RU).format(Date(atMs))
+    }
+}
+
+fun timeText(atMs: Long): String = SimpleDateFormat("HH:mm", RU).format(Date(atMs))

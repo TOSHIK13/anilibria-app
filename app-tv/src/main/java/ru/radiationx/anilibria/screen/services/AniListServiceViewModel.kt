@@ -44,6 +44,8 @@ class AniListServiceViewModel @Inject constructor(
 
     fun refreshLogin() = router.navigateTo(AniListLinkScreen())
 
+    fun openJournal() = router.navigateTo(AniListJournalScreen())
+
     fun disconnect() = auth.unlink()
 
     fun close() = router.exit()

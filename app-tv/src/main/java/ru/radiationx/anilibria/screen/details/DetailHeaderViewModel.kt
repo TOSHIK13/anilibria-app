@@ -33,6 +33,16 @@ import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ScheduleRepository
 import ru.radiationx.data.repository.FavoriteRepository
+import ru.radiationx.data.external.AniListMediaLookup
+import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.AniListTokens
+import ru.radiationx.data.external.ExternalSyncState
+import ru.radiationx.data.external.ExternalTokenStore
+import ru.radiationx.data.tracker.TrackerState
+import ru.radiationx.anilibria.common.DetailCollectionSync
+import ru.radiationx.anilibria.common.SyncKind
+import ru.radiationx.anilibria.screen.services.progressText
+import ru.radiationx.anilibria.screen.services.remoteStatusText
 import ru.radiationx.shared.ktx.EventFlow
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -49,6 +59,9 @@ class DetailHeaderViewModel @Inject constructor(
     private val playerController: PlayerController,
     private val collectionRepository: CollectionRepository,
     private val scheduleRepository: ScheduleRepository,
+    private val syncState: ExternalSyncState,
+    private val tokenStore: ExternalTokenStore,
+    private val mediaLookup: AniListMediaLookup,
 ) : LifecycleViewModel() {
 
     private val releaseId = argExtra.id
@@ -65,6 +78,7 @@ class DetailHeaderViewModel @Inject constructor(
     private var currentRelease: Release? = null
     private var currentAccesses: List<EpisodeAccess> = emptyList()
     private var currentCollection: CollectionType? = null
+    private var collectionSync: DetailCollectionSync? = null
     private var scheduleInfo: ReleaseScheduleInfo? = null
     private var scheduleRequested = false
     private var isFullLoaded = false
@@ -98,6 +112,38 @@ class DetailHeaderViewModel @Inject constructor(
             .distinctUntilChanged()
             .onEach {
                 currentCollection = it
+                rebuildDetails()
+            }
+            .launchIn(viewModelScope)
+
+        // значок и подсказка синхронизации коллекции с AniList (только при подключённом сервисе)
+        combine(
+            tokenStore.observe(AniListService.ID),
+            syncState.observeRelease(AniListService.ID, releaseId.id),
+        ) { token, sync ->
+            val linked = AniListTokens.state(token, System.currentTimeMillis()) !is TrackerState.NotLinked
+            if (!linked || sync == null) return@combine null
+            val kind = when {
+                sync.error != null -> SyncKind.ERROR
+                sync.pending -> SyncKind.PENDING
+                sync.syncedAt > 0 -> SyncKind.SYNCED
+                else -> return@combine null
+            }
+            val media = mediaLookup.cached(sync.malId)
+            DetailCollectionSync(
+                kind = kind,
+                statusText = remoteStatusText(sync.remoteStatus),
+                progressText = progressText(
+                    sync.remoteProgress,
+                    media?.episodes ?: currentRelease?.series?.trim()?.toIntOrNull()?.takeIf { it > 0 },
+                    media?.isMovie == true,
+                ),
+                syncedAt = sync.syncedAt,
+            )
+        }
+            .distinctUntilChanged()
+            .onEach {
+                collectionSync = it
                 rebuildDetails()
             }
             .launchIn(viewModelScope)
@@ -218,7 +264,8 @@ class DetailHeaderViewModel @Inject constructor(
             isFullLoaded,
             currentAccesses,
             currentCollection,
-            scheduleInfo
+            scheduleInfo,
+            collectionSync
         )
     }
 

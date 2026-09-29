@@ -7,6 +7,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
@@ -31,6 +34,18 @@ data class SyncOverview(
     val weekErrors: Int,
 )
 
+/** Событие «изменение отправлено» (для уведомления после серии). [totalEpisodes]/[isMovie] — из AniList. */
+data class SyncSentEvent(
+    val serviceId: String,
+    val malId: Int,
+    val releaseId: Int?,
+    val title: String,
+    val source: OutboxSource,
+    val progress: Int,
+    val totalEpisodes: Int?,
+    val isMovie: Boolean,
+)
+
 /**
  * Обработчик очереди отправки в AniList: один корутинный цикл в собственном scope. Просыпается по
  * новому элементу, старту приложения, появлению сети, «Синхронизировать сейчас», новому входу и
@@ -49,6 +64,10 @@ class ExternalSyncEngine @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val kicks = Channel<Unit>(Channel.CONFLATED)
     private var started = false
+    private val sent = MutableSharedFlow<SyncSentEvent>(extraBufferCapacity = 8)
+
+    /** Успешно отправленные (DONE) изменения; без повтора для опоздавших подписчиков. */
+    val sentEvents: SharedFlow<SyncSentEvent> = sent.asSharedFlow()
 
     fun observeOverview(): Flow<SyncOverview> = combine(
         outbox.observe(serviceId),
@@ -181,6 +200,14 @@ class ExternalSyncEngine @Inject constructor(
             serviceId, JournalDirection.OUT, item.malId, item.releaseId, item.title, text, result,
             detail = detail ?: (plan as? SyncPlan.UpToDate)?.reason?.takeIf { it != "уже актуально" }, itemId = item.id,
         )
+        if (plan is SyncPlan.Save) {
+            sent.tryEmit(
+                SyncSentEvent(
+                    serviceId, item.malId, item.releaseId, item.title, item.source,
+                    progress, found.media.episodes, found.media.isMovie,
+                )
+            )
+        }
     }
 
     private fun describe(item: OutboxItem, plan: SyncPlan?, media: MediaInfo? = lookup.cached(item.malId)): String =
