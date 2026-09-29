@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import dev.androidbroadcast.vbpd.viewBinding
 import ru.radiationx.anilibria.R
@@ -34,6 +35,8 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
     private var linkedValue: TextView? = null
     private var journalRow: View? = null
     private var syncNowRow: View? = null
+    private var firstSyncRow: View? = null
+    private var firstSyncRunning = false
     private var switchRows: List<Pair<View, (ExternalServiceOptions) -> Boolean>> = emptyList()
     private var refreshRow: View? = null
 
@@ -66,6 +69,7 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
                 viewModel.update { o -> o.copy(notifyAfterEpisode = !o.notifyAfterEpisode) }
             },
         )
+        firstSyncRow = arrowRow(inflater, R.string.first_sync_row_title) { viewModel.openFirstSync(firstSyncRunning) }.also { it.visibility = View.GONE }
         syncNowRow = arrowRow(inflater, R.string.anilist_service_sync_now) { onSyncNow() }
         journalRow = arrowRow(inflater, R.string.anilist_service_journal) {
             viewModel.openJournal()
@@ -84,6 +88,7 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
         linkedValue = null
         journalRow = null
         syncNowRow = null
+        firstSyncRow = null
         refreshRow = null
         switchRows = emptyList()
         super.onDestroyView()
@@ -172,6 +177,11 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
             visibility = if (ui.overview.weekErrors > 0) View.VISIBLE else View.GONE
         }
         this.expired = state is TrackerState.Expired
+        firstSyncRunning = ui.firstSync == FirstSyncEntry.RUNNING
+        firstSyncRow?.apply {
+            isVisible = ui.firstSync != FirstSyncEntry.HIDDEN
+            findViewById<TextView>(R.id.settingsRowTitle).setText(if (firstSyncRunning) R.string.first_sync_row_running else R.string.first_sync_row_title)
+        }
         expiresValue?.text = expiresAtMs
             ?.let { SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(it)) }
             ?: "—"

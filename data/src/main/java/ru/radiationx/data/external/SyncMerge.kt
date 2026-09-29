@@ -184,6 +184,9 @@ data class FirstSyncItem(
     val local: SyncSnapshot?,
     /** Состояние в AniList (null — записи нет). */
     val remote: SyncSnapshot?,
+    /** Число серий по данным AniList (null — неизвестно). */
+    val episodes: Int? = null,
+    val isMovie: Boolean = false,
 )
 
 /**

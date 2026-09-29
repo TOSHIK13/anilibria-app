@@ -9,6 +9,9 @@ import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.data.external.AniListAuth
 import ru.radiationx.data.external.AniListValidation
+import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.ExternalServiceSettings
+import ru.radiationx.data.external.ExternalTokenStore
 import javax.inject.Inject
 
 /** Состояние проверки вставленного токена. */
@@ -22,6 +25,9 @@ sealed class TokenCheck {
 
 class AniListLinkViewModel @Inject constructor(
     private val auth: AniListAuth,
+    private val store: ExternalTokenStore,
+    private val settings: ExternalServiceSettings,
+    private val session: FirstSyncSession,
     private val router: Router,
 ) : LifecycleViewModel() {
 
@@ -54,8 +60,16 @@ class AniListLinkViewModel @Inject constructor(
     /** Кнопка «Подключить»: подключает проверенный токен, иначе проверяет сейчас. */
     fun connect(text: String) {
         valid?.also {
+            val hadAccount = store.get(AniListService.ID) != null
             auth.save(it)
-            router.exit()
+            if (!hadAccount && !settings.isFirstSyncDone(AniListService.ID)) {
+                // новый аккаунт: сразу мастер первой синхронизации (по «Позже» — экран сервиса)
+                session.begin()
+                router.replaceScreen(AniListServiceScreen())
+                router.navigateTo(FirstSyncScreen())
+            } else {
+                router.exit()
+            }
             return
         }
         job?.cancel()

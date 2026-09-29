@@ -194,12 +194,20 @@ class ExternalPullSync @Inject constructor(
             val entry = g.remote[malId]
             val remote = entry?.let { SyncSnapshot.ofRemote(it.status, it.progress) }
             if (g.index.releasesOf(malId).isEmpty()) {
-                if (entry != null) notInCatalog += FirstSyncItem(malId, null, entry.title ?: "MAL $malId", null, remote)
+                if (entry != null) {
+                    notInCatalog += FirstSyncItem(
+                        malId, null, entry.title ?: "MAL $malId", null, remote,
+                        episodes = entry.episodes, isMovie = entry.format == "MOVIE" || entry.episodes == 1,
+                    )
+                }
                 continue
             }
             val rid = localRelease(malId, g)
             val snap = localSnapshot(rid, g).takeIf { it.status != null }
-            val item = FirstSyncItem(malId, rid?.id, entry?.title ?: rid?.let { "Релиз ${it.id}" } ?: "MAL $malId", snap, remote)
+            val item = FirstSyncItem(
+                malId, rid?.id, entry?.title ?: rid?.let { "Релиз ${it.id}" } ?: "MAL $malId", snap, remote,
+                episodes = entry?.episodes, isMovie = entry?.let { it.format == "MOVIE" || it.episodes == 1 } ?: false,
+            )
             when (FirstSyncCompare.group(snap, remote)) {
                 FirstSyncCompare.Group.MATCHING -> matching += item
                 FirstSyncCompare.Group.DIFFERING -> differing += item
@@ -266,7 +274,7 @@ class ExternalPullSync @Inject constructor(
             var title = p.entry?.title ?: "MAL ${p.malId}"
             if (r.changesLocal) {
                 try {
-                    title = withContext(RemoteOrigin) { applyLocal(p, g) } ?: title
+                    title = applyLocal(p) ?: title
                 } catch (e: IOException) {
                     Timber.w(e, "external pull: apply failed for mal %d", p.malId)
                     journal.record(
@@ -340,16 +348,23 @@ class ExternalPullSync @Inject constructor(
     }
 
     /** Применяет входящее изменение к AniLiberty (под [RemoteOrigin]); возвращает название релиза, если загружено. */
-    private suspend fun applyLocal(p: Planned, g: Gathered): String? {
-        val r = p.result
-        val rid = p.rid
-        val status = r.setStatus
+    private suspend fun applyLocal(p: Planned): String? =
+        applyLocalChange(p.rid, p.result.setStatus, p.result.raiseProgressTo)
+
+    /**
+     * Меняет коллекцию/прогресс релиза AniLiberty под меткой [RemoteOrigin] (в очередь отправки не
+     * попадает). [setStatus]: null — не менять, [DesiredStatus.REMOVE] — убрать; [raiseProgressTo] —
+     * отметить серии 1..N. Для мастера первой синхронизации. Возвращает название релиза, если загружено.
+     */
+    suspend fun applyLocalChange(rid: ReleaseId, setStatus: DesiredStatus?, raiseProgressTo: Int?): String? =
+        withContext(RemoteOrigin) { applyLocalInner(rid, setStatus, raiseProgressTo) }
+
+    private suspend fun applyLocalInner(rid: ReleaseId, status: DesiredStatus?, raise: Int?): String? {
         if (status == DesiredStatus.REMOVE) {
             collections.setReleaseCollection(rid, null)
             return null
         }
         if (status != null) collections.setReleaseCollection(rid, collectionOf(status))
-        val raise = r.raiseProgressTo
         val becomesCompleted = status == DesiredStatus.COMPLETED
         if (raise == null && !becomesCompleted) return null
         val release = releases.getRelease(rid)

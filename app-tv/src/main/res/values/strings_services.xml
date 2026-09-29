@@ -48,4 +48,34 @@
 
     <!-- Разовое уведомление на главной -->
     <string name="anilist_expired_notice">Вход в AniList истёк — отметки копятся локально. Настройки → Аккаунты и сервисы</string>
+
+    <!-- Первая синхронизация -->
+    <string name="first_sync_title">Первая синхронизация с AniList</string>
+    <string name="first_sync_subtitle">Сравнили коллекции AniLiberty и список AniList. Ничего ещё не изменено.</string>
+    <string name="first_sync_comparing">Сравниваем…</string>
+    <string name="first_sync_error">Не удалось сравнить списки: %1$s</string>
+    <string name="first_sync_retry">Повторить</string>
+    <string name="first_sync_tile_matching">Совпадает</string>
+    <string name="first_sync_tile_differing">Расходится статус или прогресс</string>
+    <string name="first_sync_tile_remote">Есть только в AniList</string>
+    <string name="first_sync_tile_local">Есть только в AniLiberty</string>
+    <string name="first_sync_tile_missing">Нет в каталоге AniLiberty</string>
+    <string name="first_sync_policy_section">КАК ОБЪЕДИНИТЬ</string>
+    <string name="first_sync_policy_merge">Объединить (рекомендуется)</string>
+    <string name="first_sync_policy_merge_desc">Прогресс — больший из двух, статус — более свежий. Недостающее добавляется в обе стороны.</string>
+    <string name="first_sync_policy_aniliberty">AniLiberty главнее</string>
+    <string name="first_sync_policy_aniliberty_desc">AniList перезаписывается нашими данными. Записи только из AniList остаются как есть.</string>
+    <string name="first_sync_policy_anilist">AniList главнее</string>
+    <string name="first_sync_policy_anilist_desc">Коллекции AniLiberty подстраиваются под AniList.</string>
+    <string name="first_sync_start">Начать синхронизацию</string>
+    <string name="first_sync_diff">Посмотреть расхождения</string>
+    <string name="first_sync_later">Позже</string>
+    <string name="first_sync_diff_title">Расхождения · AniLiberty и AniList</string>
+    <string name="first_sync_col_title">Тайтл</string>
+    <string name="first_sync_diff_empty">В этой группе ничего нет</string>
+    <string name="first_sync_choice_label">Изменены почти одновременно — оставить:</string>
+    <string name="first_sync_legend">→ отправится в AniList · ← изменится в AniLiberty · прогресс считается по числу досмотренных серий · у фильмов вместо «1/1» — «Фильм»</string>
+    <string name="first_sync_rate_note">AniList ограничивает частоту запросов (~30 в минуту) — отправляем порциями</string>
+    <string name="first_sync_row_title">Первая синхронизация</string>
+    <string name="first_sync_row_running">Первая синхронизация · идёт…</string>
 </resources>

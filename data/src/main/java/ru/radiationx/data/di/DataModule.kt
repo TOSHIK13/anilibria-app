@@ -116,6 +116,7 @@ import ru.radiationx.data.external.ExternalPullSync
 import ru.radiationx.data.external.ExternalOutbox
 import ru.radiationx.data.external.ExternalServiceSettings
 import ru.radiationx.data.external.ExternalSyncEngine
+import ru.radiationx.data.external.FirstSyncRunner
 import ru.radiationx.data.external.ExternalSyncJournal
 import ru.radiationx.data.external.ExternalSyncState
 import ru.radiationx.data.external.ExternalTokenStore
@@ -291,6 +292,7 @@ class DataModule(context: Context) : QuillModule() {
         single<AniListUserList>()
         single<ExternalPullSync>()
         single<ExternalSyncEngine>()
+        single<FirstSyncRunner>()
         single<ShikimoriService>()
         single<ExternalServiceRegistry>()
         single<IdResolver>()

@@ -15,10 +15,14 @@ import ru.radiationx.data.external.ExternalTokenStore
 import ru.radiationx.data.tracker.TrackerState
 import javax.inject.Inject
 
+/** Кнопка «Первая синхронизация» на экране сервиса. */
+enum class FirstSyncEntry { HIDDEN, NEEDED, RUNNING }
+
 data class ServiceUi(
     val state: TrackerState,
     val options: ExternalServiceOptions,
     val overview: SyncOverview,
+    val firstSync: FirstSyncEntry = FirstSyncEntry.HIDDEN,
 )
 
 class AniListServiceViewModel @Inject constructor(
@@ -26,6 +30,7 @@ class AniListServiceViewModel @Inject constructor(
     private val settings: ExternalServiceSettings,
     private val auth: AniListAuth,
     private val engine: ExternalSyncEngine,
+    private val session: FirstSyncSession,
     private val router: Router,
 ) : LifecycleViewModel() {
 
@@ -33,8 +38,15 @@ class AniListServiceViewModel @Inject constructor(
         store.observe(AniListService.ID),
         settings.observe(AniListService.ID),
         engine.observeOverview(),
-    ) { token, options, overview ->
-        ServiceUi(AniListTokens.state(token, System.currentTimeMillis()), options, overview)
+        settings.observeFirstSyncDone(AniListService.ID),
+        session.progress,
+    ) { token, options, overview, firstSyncDone, progress ->
+        val entry = when {
+            progress.running -> FirstSyncEntry.RUNNING
+            !firstSyncDone -> FirstSyncEntry.NEEDED
+            else -> FirstSyncEntry.HIDDEN
+        }
+        ServiceUi(AniListTokens.state(token, System.currentTimeMillis()), options, overview, entry)
     }
 
     fun syncNow() = engine.syncNow()
@@ -45,6 +57,15 @@ class AniListServiceViewModel @Inject constructor(
     fun refreshLogin() = router.navigateTo(AniListLinkScreen())
 
     fun openJournal() = router.navigateTo(AniListJournalScreen())
+
+    fun openFirstSync(running: Boolean) {
+        if (running) {
+            router.navigateTo(FirstSyncProgressScreen())
+        } else {
+            session.begin()
+            router.navigateTo(FirstSyncScreen())
+        }
+    }
 
     fun disconnect() = auth.unlink()
 

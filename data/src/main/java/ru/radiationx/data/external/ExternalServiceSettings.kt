@@ -49,11 +49,19 @@ class ExternalServiceSettings @Inject constructor(
      * Первая синхронизация выполнена (мастер этапа 5 ставит флаг). Пока нет — чтение списка сервиса
      * только сравнивает списки и ничего не применяет и не отправляет.
      */
-    fun isFirstSyncDone(id: String): Boolean = prefs.getBoolean(key(id, "first_sync_done"), false)
+    fun isFirstSyncDone(id: String): Boolean = firstSyncState(id).value
+
+    fun observeFirstSyncDone(id: String): Flow<Boolean> = firstSyncState(id).asStateFlow()
 
     fun setFirstSyncDone(id: String, done: Boolean) {
         prefs.edit { putBoolean(key(id, "first_sync_done"), done) }
+        firstSyncState(id).value = done
     }
+
+    private val firstSync = ConcurrentHashMap<String, MutableStateFlow<Boolean>>()
+
+    private fun firstSyncState(id: String) =
+        firstSync.getOrPut(id) { MutableStateFlow(prefs.getBoolean(key(id, "first_sync_done"), false)) }
 
     private fun load(id: String) = ExternalServiceOptions(
         sendWatched = prefs.getBoolean(key(id, "send_watched"), true),

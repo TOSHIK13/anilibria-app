@@ -53,6 +53,7 @@ class AppModule(context: Context) : QuillModule() {
         single<SimilarCacheStorage>()
         singleImpl<SimilarReleasesSource, LiveSimilarReleasesSource>()
         single<SimilarReleasesRepository>()
+        single<ru.radiationx.anilibria.screen.services.FirstSyncSession>()
 
         instance {
             MintPermissions.controller

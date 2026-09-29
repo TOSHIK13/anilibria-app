@@ -31,3 +31,18 @@ fun daysText(days: Int): String {
 class AniListJournalScreen : FragmentScreen {
     override fun createFragment(factory: FragmentFactory): Fragment = AniListJournalFragment()
 }
+
+/** Мастер первой синхронизации с AniList: сравнение, политика, кнопки. */
+class FirstSyncScreen : FragmentScreen {
+    override fun createFragment(factory: FragmentFactory): Fragment = FirstSyncFragment()
+}
+
+/** Мастер → «Посмотреть расхождения». */
+class FirstSyncDiffScreen : FragmentScreen {
+    override fun createFragment(factory: FragmentFactory): Fragment = FirstSyncDiffFragment()
+}
+
+/** Мастер → «Начать синхронизацию»: ход выполнения. */
+class FirstSyncProgressScreen : FragmentScreen {
+    override fun createFragment(factory: FragmentFactory): Fragment = FirstSyncProgressFragment()
+}
