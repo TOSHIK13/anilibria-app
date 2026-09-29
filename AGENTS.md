@@ -46,6 +46,7 @@
 «No connected devices!» — не ошибка кода: проверить `tv.ps1 devices`, честно сообщить, если устройства нет.
 
 **Реальный ТВ (`-Device tv`, `192.168.1.151:5555`) — без прямого разрешения пользователя в текущем чате его не трогать вообще**: ни `install`/`uninstall`, ни `pm clear`, ни `keys`/`text` (эмуляция ввода), ни `shot` (скриншоты), ни `stop`/`restart`. По умолчанию все проверки — на эмуляторе (`-Device emu`, дефолт). Release-пакет (`ru.radiationx.anilibria.app.tv.mod`) никогда не удалять и не чистить (`pm clear`) — ни на эмуляторе, ни тем более на реальном ТВ.
+**На реальный ТВ ставить только beta-сборку** из исходников: `scripts/build-tv-app-release.ps1 -Beta` → `tv.ps1 -Device tv install <AniLiberty_TV_Beta_*.apk>` (пакет `ru.radiationx.anilibria.app.tv.mod.beta`, в названии «Beta», ставится рядом с release). Release на ТВ обновляет сам пользователь из релизов GitHub — release APK на ТВ не ставить, даже если он собран. Debug-пакет — для эмулятора.
 
 ## 4. Проверка UI на устройстве (дёшево по токенам)
 
