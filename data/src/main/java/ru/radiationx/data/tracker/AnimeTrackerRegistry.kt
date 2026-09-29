@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import ru.radiationx.data.external.RemoteOrigin
 import ru.radiationx.data.repository.ReleaseRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -60,7 +61,8 @@ class AnimeTrackerRegistry @Inject constructor(
         entries.filter { it.state !is TrackerState.NotLinked }
     }
 
-    fun dispatchEpisodeWatched(event: TrackerEpisodeWatchedEvent) {
+    suspend fun dispatchEpisodeWatched(event: TrackerEpisodeWatchedEvent) {
+        if (RemoteOrigin.isActive()) return // изменение пришло из внешнего сервиса: обратно не отправляем
         if (trackers.isEmpty()) return
         scope.launch {
             val linked = linkedTrackers()
@@ -73,7 +75,8 @@ class AnimeTrackerRegistry @Inject constructor(
         }
     }
 
-    fun dispatchCollectionChanged(event: TrackerCollectionChangedEvent) {
+    suspend fun dispatchCollectionChanged(event: TrackerCollectionChangedEvent) {
+        if (RemoteOrigin.isActive()) return
         if (trackers.isEmpty()) return
         scope.launch {
             val linked = linkedTrackers()

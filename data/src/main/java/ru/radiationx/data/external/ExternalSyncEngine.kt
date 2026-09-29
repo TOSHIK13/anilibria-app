@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -32,6 +34,10 @@ data class SyncOverview(
     val lastSyncAt: Long,
     /** Ошибок в журнале за неделю. */
     val weekErrors: Int,
+    /** Записей сервиса с найденным релизом AniLiberty; -1 — список ещё не читали. */
+    val linkedTitles: Int = -1,
+    /** Всего записей в списке сервиса. */
+    val totalTitles: Int = 0,
 )
 
 /** Событие «изменение отправлено» (для уведомления после серии). [totalEpisodes]/[isMovie] — из AniList. */
@@ -58,6 +64,8 @@ class ExternalSyncEngine @Inject constructor(
     private val syncState: ExternalSyncState,
     private val store: ExternalTokenStore,
     private val lookup: AniListMediaLookup,
+    private val pull: ExternalPullSync,
+    private val settings: ExternalServiceSettings,
 ) {
 
     private val serviceId = AniListService.ID
@@ -65,6 +73,7 @@ class ExternalSyncEngine @Inject constructor(
     private val kicks = Channel<Unit>(Channel.CONFLATED)
     private var started = false
     private val sent = MutableSharedFlow<SyncSentEvent>(extraBufferCapacity = 8)
+    private val pullKicks = Channel<Unit>(Channel.CONFLATED)
 
     /** Успешно отправленные (DONE) изменения; без повтора для опоздавших подписчиков. */
     val sentEvents: SharedFlow<SyncSentEvent> = sent.asSharedFlow()
@@ -73,14 +82,53 @@ class ExternalSyncEngine @Inject constructor(
         outbox.observe(serviceId),
         syncState.observeLastSyncAt(serviceId),
         journal.observeWeekErrors(serviceId),
-    ) { items, last, weekErrors ->
-        SyncOverview(items.size, items.count { it.state == OutboxState.ERROR }, last, weekErrors)
+        syncState.observePullStats(serviceId),
+    ) { items, last, weekErrors, stats ->
+        SyncOverview(
+            items.size, items.count { it.state == OutboxState.ERROR }, last, weekErrors,
+            linkedTitles = stats?.linked ?: -1, totalTitles = stats?.total ?: 0,
+        )
     }
 
-    /** «Синхронизировать сейчас»: запускает очередь немедленно, в т.ч. ошибочные элементы. */
+    /** «Синхронизировать сейчас»: сначала уходит очередь (в т.ч. ошибочные элементы), затем читается список AniList. */
     fun syncNow() {
         outbox.retryAll(serviceId)
         kicks.trySend(Unit)
+        scope.launch {
+            // ждём, пока очередь не опустеет (или не упрётся в паузу повтора), и читаем список
+            withTimeoutOrNull(SEND_WAIT_MS) {
+                while (outbox.items.value.any { it.serviceId == serviceId && it.state == OutboxState.PENDING && it.nextAttemptAt <= System.currentTimeMillis() }) {
+                    kotlinx.coroutines.delay(500)
+                }
+            }
+            runPull(force = true, manual = true)
+        }
+    }
+
+    private suspend fun runPull(force: Boolean, manual: Boolean): PullOutcome =
+        runCatching { pull.pull(force, manual) }
+            .onFailure { Timber.w(it, "external sync: pull failed") }
+            .getOrDefault(PullOutcome.Failed)
+
+    /**
+     * Чтение списка AniList: при старте (не чаще раза в 30 мин) и каждые 6 ч, пока жив процесс;
+     * повторная попытка через короткую паузу, если мешала очередь отправки или ещё не готов каталог.
+     */
+    private fun startPullTimer() {
+        scope.launch {
+            while (true) {
+                val outcome = runPull(force = false, manual = false)
+                val wait = when {
+                    outcome is PullOutcome.Skipped && (outcome.reason == PullSkip.OUTBOX_BUSY || outcome.reason == PullSkip.BUSY) -> PULL_RETRY_MS
+                    outcome is PullOutcome.Skipped && outcome.reason == PullSkip.NOT_READY -> PULL_NOT_READY_MS
+                    outcome is PullOutcome.Skipped && outcome.reason == PullSkip.TOO_SOON ->
+                        (ExternalPullSync.MIN_INTERVAL_MS - (System.currentTimeMillis() - syncState.lastPullAt(serviceId))).coerceAtLeast(PULL_RETRY_MS)
+                    outcome == PullOutcome.Failed -> PULL_RETRY_LONG_MS
+                    else -> PULL_PERIOD_MS
+                }
+                withTimeoutOrNull(wait) { pullKicks.receive() }
+            }
+        }
     }
 
     @Synchronized
@@ -93,7 +141,13 @@ class ExternalSyncEngine @Inject constructor(
         store.observe(serviceId).drop(1).onEach {
             outbox.expedite(serviceId)
             kicks.trySend(Unit)
+            pullKicks.trySend(Unit)
         }.launchIn(scope)
+        // включили «Получать изменения» — читаем список без ожидания таймера
+        settings.observe(serviceId).map { it.receiveChanges }.distinctUntilChanged().drop(1).onEach {
+            if (it) pullKicks.trySend(Unit)
+        }.launchIn(scope)
+        startPullTimer()
         registerNetworkCallback()
         outbox.expedite(serviceId)
         scope.launch {
@@ -245,5 +299,10 @@ class ExternalSyncEngine @Inject constructor(
 
     private companion object {
         const val DEFAULT_WAIT_MS = 60_000L
+        const val SEND_WAIT_MS = 120_000L
+        const val PULL_PERIOD_MS = 6L * 3600 * 1000
+        const val PULL_RETRY_MS = 2L * 60 * 1000
+        const val PULL_NOT_READY_MS = 5L * 60 * 1000
+        const val PULL_RETRY_LONG_MS = 30L * 60 * 1000
     }
 }

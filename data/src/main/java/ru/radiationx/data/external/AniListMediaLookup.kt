@@ -33,6 +33,14 @@ class AniListMediaLookup @Inject constructor(
         )
     }
 
+    /** Запоминает данные тайтла, полученные из списка пользователя (без отдельного запроса). */
+    fun remember(malId: Int, info: MediaInfo) {
+        cache.write(
+            malId.toString(),
+            JSONObject().put("id", info.id).put("episodes", info.episodes ?: 0).put("format", info.format.orEmpty())
+        )
+    }
+
     suspend fun lookup(malId: Int): MediaLookupResult {
         val response = service.graphQl.query(LOOKUP, JSONObject().put("m", malId)) ?: return MediaLookupResult.NotFound
         val media = data(response)?.optJSONObject("Media") ?: return MediaLookupResult.NotFound

@@ -31,6 +31,7 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
     private var expiresValue: TextView? = null
     private var lastSyncValue: TextView? = null
     private var queueValue: TextView? = null
+    private var linkedValue: TextView? = null
     private var journalRow: View? = null
     private var syncNowRow: View? = null
     private var switchRows: List<Pair<View, (ExternalServiceOptions) -> Boolean>> = emptyList()
@@ -48,7 +49,7 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
         val inflater = LayoutInflater.from(requireContext())
         lastSyncValue = addTile(inflater, binding.serviceTilesTop, R.string.anilist_service_tile_last_sync)
         queueValue = addTile(inflater, binding.serviceTilesTop, R.string.anilist_service_tile_queue)
-        addTile(inflater, binding.serviceTilesBottom, R.string.anilist_service_tile_linked).text = "—"
+        linkedValue = addTile(inflater, binding.serviceTilesBottom, R.string.anilist_service_tile_linked).also { it.text = "—" }
         expiresValue = addTile(inflater, binding.serviceTilesBottom, R.string.anilist_service_tile_expires)
 
         switchRows = listOf(
@@ -80,6 +81,7 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
         expiresValue = null
         lastSyncValue = null
         queueValue = null
+        linkedValue = null
         journalRow = null
         syncNowRow = null
         refreshRow = null
@@ -164,6 +166,7 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
         binding.serviceStatus.setTextColor(statusColor)
         lastSyncValue?.text = lastSyncText(ui.overview.lastSyncAt)
         queueValue?.text = ui.overview.queued.toString()
+        linkedValue?.text = if (ui.overview.linkedTitles >= 0) "${ui.overview.linkedTitles} из ${ui.overview.totalTitles}" else "—"
         journalRow?.findViewById<TextView>(R.id.settingsRowSubtitle)?.apply {
             text = if (ui.overview.weekErrors > 0) "${errorsText(ui.overview.weekErrors)} за неделю" else ""
             visibility = if (ui.overview.weekErrors > 0) View.VISIBLE else View.GONE

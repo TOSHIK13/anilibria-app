@@ -94,6 +94,7 @@ class AniListAuth @Inject constructor(
     private val outbox: ExternalOutbox,
     private val journal: ExternalSyncJournal,
     private val syncState: ExternalSyncState,
+    private val settings: ExternalServiceSettings,
 ) {
 
     val authorizeUrl: String =
@@ -150,6 +151,9 @@ class AniListAuth @Inject constructor(
     /** Стирает токен и очищает очередь неотправленных изменений (с записью в журнал). */
     fun unlink() {
         store.clear(AniListService.ID)
+        // базы слияния принадлежат аккаунту: при новом входе список сравнивается заново (первая синхронизация)
+        syncState.clearService(AniListService.ID)
+        settings.setFirstSyncDone(AniListService.ID, false)
         val dropped = outbox.clear(AniListService.ID)
         if (dropped.isNotEmpty()) {
             syncState.clearAllPending(AniListService.ID)

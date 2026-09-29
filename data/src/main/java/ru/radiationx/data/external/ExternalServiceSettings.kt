@@ -45,6 +45,16 @@ class ExternalServiceSettings @Inject constructor(
         state(id).value = value
     }
 
+    /**
+     * Первая синхронизация выполнена (мастер этапа 5 ставит флаг). Пока нет — чтение списка сервиса
+     * только сравнивает списки и ничего не применяет и не отправляет.
+     */
+    fun isFirstSyncDone(id: String): Boolean = prefs.getBoolean(key(id, "first_sync_done"), false)
+
+    fun setFirstSyncDone(id: String, done: Boolean) {
+        prefs.edit { putBoolean(key(id, "first_sync_done"), done) }
+    }
+
     private fun load(id: String) = ExternalServiceOptions(
         sendWatched = prefs.getBoolean(key(id, "send_watched"), true),
         sendCollection = prefs.getBoolean(key(id, "send_collection"), true),
