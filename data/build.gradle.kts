@@ -11,6 +11,11 @@ android {
 
     defaultConfig {
         minSdk = libs.versions.tv.min.sdk.version.get().toInt()
+        // Публичный client_id приложения AniList (implicit grant, не секрет); client secret не используется.
+        buildConfigField("String", "ANILIST_CLIENT_ID", "\"52291\"")
+    }
+    buildFeatures {
+        buildConfig = true
     }
     lint {
         targetSdk = libs.versions.app.target.sdk.version.get().toInt()

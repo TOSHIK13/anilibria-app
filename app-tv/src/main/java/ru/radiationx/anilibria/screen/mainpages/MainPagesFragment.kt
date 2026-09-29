@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.core.widget.ImageViewCompat
 import androidx.fragment.app.commitNow
@@ -25,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import ru.radiationx.anilibria.R
+import ru.radiationx.anilibria.common.showCornerNotice
 import ru.radiationx.anilibria.ui.widget.MainHeroView
 import ru.radiationx.anilibria.ui.widget.TopTabsView
 import ru.radiationx.quill.viewModel
@@ -167,6 +169,14 @@ class MainPagesFragment : BrowseSupportFragment() {
         subscribeTo(viewModel.hasUpdatesData) {
             val alert = if (it) "Обновление" else null
             topTabs?.setAlert(alert) { viewModel.onAppUpdateClick() }
+        }
+
+        // Разовое уведомление: вход в AniList истёк (самоскрывается через 6 с).
+        subscribeTo(viewModel.expiredNotice) {
+            if (it) {
+                requireActivity().showCornerNotice(getString(R.string.anilist_expired_notice), durationMs = 6_000)
+                viewModel.onExpiredNoticeShown()
+            }
         }
 
         // Меню Leanback скрыто навсегда: убираем его панель, иначе слева остаётся тёмная полоса.

@@ -1,6 +1,7 @@
 package ru.radiationx.anilibria.common
 
 import androidx.leanback.widget.Row
+import ru.radiationx.data.entity.domain.collection.CollectionType
 import ru.radiationx.data.entity.domain.types.ReleaseId
 
 data class LibriaDetails(
@@ -29,6 +30,10 @@ data class LibriaDetails(
     val nextEpisode: DetailNextEpisode?,
     /** Название коллекции пользователя, null — релиз не в коллекции. */
     val collectionName: String?,
+    /** Тип коллекции пользователя (для иконки на кнопке), null — не в коллекции. */
+    val collectionType: CollectionType? = null,
+    /** Состояние синхронизации коллекции с AniList; null — сервис не подключён или записи нет. */
+    val collectionSync: DetailCollectionSync? = null,
     /** Оценки и статистика для кнопки «★ Оценки»; null — данных нет, кнопка скрыта. */
     val ratings: DetailRatings? = null,
 ) {
@@ -86,3 +91,13 @@ class LibriaDetailsRow(
     var details: LibriaDetails? = null,
     var state: DetailsState? = null
 ) : Row(id, null)
+
+enum class SyncKind { SYNCED, PENDING, ERROR }
+
+/** Значок и подсказка на кнопке коллекции: «AL · Смотрю · 5/11 · синхр. 14:02». */
+data class DetailCollectionSync(
+    val kind: SyncKind,
+    val statusText: String,
+    val progressText: String,
+    val syncedAt: Long,
+)

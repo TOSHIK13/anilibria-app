@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import ru.radiationx.data.external.RemoteOrigin
 import ru.radiationx.data.repository.ReleaseRepository
 import ru.radiationx.shared.ktx.coRunCatching
 import timber.log.Timber
@@ -23,7 +24,8 @@ data class TrackerEntry(
 /**
  * Реестр внешних сервисов статистики ([AnimeTracker]) и диспетчер событий просмотра/коллекций.
  *
- * Пока реализаций нет ([trackers] пуст): все `dispatch*` сразу возвращаются, в настройках нет
+ * Сейчас единственный сервис — AniList. Пока он не привязан (или вход истёк, очередь — этап 3),
+ * `dispatch*` ничего не загружают и не отправляют; без сервисов ([trackers] пуст) возвращаются сразу, в настройках нет
  * строк сервисов. Чтобы подключить сервис — добавить его в [trackers] (через конструктор).
  *
  * События рассылаются асинхронно в собственном scope: вызывающий код (плеер, коллекции) не
@@ -31,12 +33,13 @@ data class TrackerEntry(
  */
 class AnimeTrackerRegistry @Inject constructor(
     private val releaseRepository: ReleaseRepository,
+    aniListTracker: AniListTracker,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Все известные приложению сервисы (привязанные и нет). */
-    val trackers: List<AnimeTracker> = emptyList()
+    val trackers: List<AnimeTracker> = listOf(aniListTracker)
 
     /** Сервисы, которые можно подключить сейчас (не привязаны). */
     val availableToLink: Flow<List<AnimeTracker>>
@@ -58,7 +61,8 @@ class AnimeTrackerRegistry @Inject constructor(
         entries.filter { it.state !is TrackerState.NotLinked }
     }
 
-    fun dispatchEpisodeWatched(event: TrackerEpisodeWatchedEvent) {
+    suspend fun dispatchEpisodeWatched(event: TrackerEpisodeWatchedEvent) {
+        if (RemoteOrigin.isActive()) return // изменение пришло из внешнего сервиса: обратно не отправляем
         if (trackers.isEmpty()) return
         scope.launch {
             val linked = linkedTrackers()
@@ -71,7 +75,8 @@ class AnimeTrackerRegistry @Inject constructor(
         }
     }
 
-    fun dispatchCollectionChanged(event: TrackerCollectionChangedEvent) {
+    suspend fun dispatchCollectionChanged(event: TrackerCollectionChangedEvent) {
+        if (RemoteOrigin.isActive()) return
         if (trackers.isEmpty()) return
         scope.launch {
             val linked = linkedTrackers()
@@ -85,16 +90,16 @@ class AnimeTrackerRegistry @Inject constructor(
     }
 
     private suspend fun linkedTrackers(): List<AnimeTracker> = trackers.filter { tracker ->
-        coRunCatching { tracker.observeState().first() is TrackerState.Linked }
+        coRunCatching { tracker.observeState().first().let { it is TrackerState.Linked || it is TrackerState.Expiring || it is TrackerState.Expired } }
             .onFailure { Timber.w(it, "tracker ${tracker.id}: state unavailable") }
             .getOrDefault(false)
     }
 
-    /** Дозагружает id Shikimori/MAL, если вызывающий их не знал (плеер знает только серию). */
+    /** Дозагружает id Shikimori/MAL и название, если вызывающий их не знал (плеер знает только серию). */
     private suspend fun resolveIds(ref: TrackerReleaseRef): TrackerReleaseRef {
-        if (ref.hasExternalIds) return ref
+        if (ref.hasExternalIds && ref.title != null) return ref
         return coRunCatching { releaseRepository.getRelease(ref.releaseId) }
-            .map { ref.copy(shikimoriId = it.shikimoriId, malId = it.malId) }
+            .map { ref.copy(shikimoriId = ref.shikimoriId ?: it.shikimoriId, malId = ref.malId ?: it.malId, title = ref.title ?: it.title) }
             .onFailure { Timber.w(it, "tracker: release ${ref.releaseId.id} ids not loaded") }
             .getOrDefault(ref)
     }

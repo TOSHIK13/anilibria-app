@@ -27,7 +27,7 @@ import ru.radiationx.anilibria.R
  * - ряд рисуется ContinueListRowPresenter без тени/скругления Leanback; в фокусе поднимается
  *   вся карточка (рисуется поверх соседей), а её контур — только кадр, поэтому тень только под
  *   кадром, под подписями ничего нет;
- * - масштаб фокуса относительно точки 50% / 40% высоты карточки.
+ * - масштаб фокуса относительно нижнего края кадра (подписи не смещаются).
  */
 class ContinueCardView @JvmOverloads constructor(
     context: Context,
@@ -80,13 +80,27 @@ class ContinueCardView @JvmOverloads constructor(
         container.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             overlayDrawable.setBounds(0, 0, v.width, v.height)
             invalidateOutline()
+            updatePivotY()
         }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         pivotX = w / 2f
-        pivotY = h * PIVOT_Y
+        updatePivotY()
+    }
+
+    /**
+     * Зум вокруг нижнего края кадра: кадр растёт вверх и в стороны, а подписи остаются на
+     * одной базовой линии с подписями соседних карточек.
+     */
+    private fun updatePivotY() {
+        val image = imageContainer
+        pivotY = if (image != null && image.bottom > 0) {
+            image.bottom + ringWidth
+        } else {
+            height * 0.4f
+        }
     }
 
     override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
@@ -122,9 +136,5 @@ class ContinueCardView @JvmOverloads constructor(
         container.foreground = foreground
         val dim = (foreground as? ColorDrawable)?.let { Color.alpha(it.color) / 255f } ?: 0f
         labels.forEach { it.alpha = 1f - dim }
-    }
-
-    private companion object {
-        const val PIVOT_Y = 0.4f
     }
 }

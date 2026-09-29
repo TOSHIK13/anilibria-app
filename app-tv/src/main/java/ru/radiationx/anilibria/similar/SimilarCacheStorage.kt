@@ -3,8 +3,8 @@ package ru.radiationx.anilibria.similar
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import ru.radiationx.data.external.ExternalDiskCache
 import timber.log.Timber
-import java.io.File
 import javax.inject.Inject
 
 /**
@@ -42,62 +42,30 @@ data class SimilarCacheItem(
     )
 }
 
-/** Кеш по releaseId: файл на релиз в filesDir, LRU по времени доступа, не больше [MAX_ITEMS]. */
+/** Кеш «Похожих» по releaseId поверх [ExternalDiskCache] (filesDir/similar/items, LRU 500). */
 class SimilarCacheStorage @Inject constructor(
     context: Context,
 ) {
 
-    private companion object {
-        const val MAX_ITEMS = 500
-        const val DIR = "similar/items"
-    }
+    private val cache = ExternalDiskCache(context, "similar/items", maxItems = 500)
 
-    private val dir = File(context.filesDir, DIR)
-    private val lock = Any()
-
-    fun read(releaseId: Int): SimilarCacheItem? = synchronized(lock) {
-        val file = File(dir, "$releaseId.json")
-        if (!file.exists()) return null
-        try {
-            val item = decode(JSONObject(file.readText()))
-            file.setLastModified(System.currentTimeMillis())
-            item
+    fun read(releaseId: Int): SimilarCacheItem? {
+        val json = cache.read(releaseId.toString()) ?: return null
+        return try {
+            decode(json)
         } catch (e: Exception) {
             Timber.w(e, "similar cache: bad file $releaseId")
-            file.delete()
+            cache.delete(releaseId.toString())
             null
         }
     }
 
-    fun write(releaseId: Int, item: SimilarCacheItem) = synchronized(lock) {
-        try {
-            dir.mkdirs()
-            val tmp = File(dir, "$releaseId.json.tmp")
-            tmp.writeText(encode(item).toString())
-            val file = File(dir, "$releaseId.json")
-            if (!tmp.renameTo(file)) {
-                file.delete()
-                tmp.renameTo(file)
-            }
-            prune()
-        } catch (e: Exception) {
-            Timber.w(e, "similar cache: write $releaseId")
-        }
+    fun write(releaseId: Int, item: SimilarCacheItem) {
+        cache.write(releaseId.toString(), encode(item))
     }
 
     /** Размер кеша на диске (для отладки/отчёта): файлов, байт. */
-    fun stats(): Pair<Int, Long> = synchronized(lock) {
-        val files = dir.listFiles().orEmpty()
-        files.size to files.sumOf { it.length() }
-    }
-
-    private fun prune() {
-        val files = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
-        if (files.size <= MAX_ITEMS) return
-        files.sortedBy { it.lastModified() }
-            .take(files.size - MAX_ITEMS)
-            .forEach { it.delete() }
-    }
+    fun stats(): Pair<Int, Long> = cache.stats()
 
     private fun encode(item: SimilarCacheItem): JSONObject = JSONObject().apply {
         SimilarSource.values().forEach { source ->

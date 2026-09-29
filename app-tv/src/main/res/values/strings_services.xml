@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Вход в AniList вставкой токена -->
+    <string name="anilist_link_title">Подключение AniList · вставка токена</string>
+    <string name="anilist_link_step1">1. Откройте ссылку с QR-кода на телефоне и войдите в AniList.</string>
+    <string name="anilist_link_step2">2. AniList покажет страницу с токеном — скопируйте его целиком.</string>
+    <string name="anilist_link_step3">3. Выберите поле ниже и вставьте токен клавиатурой приложения Google TV на телефоне.</string>
+    <string name="anilist_link_lan_step1">1. Отсканируйте QR телефоном в той же сети Wi-Fi.</string>
+    <string name="anilist_link_lan_step2">2. Нажмите «Войти в AniList» и скопируйте токен.</string>
+    <string name="anilist_link_lan_step3">3. Вставьте его на открывшейся странице и нажмите «Отправить на ТВ».</string>
+    <string name="anilist_link_vpn_hint">На приставке включён VPN — страница на телефоне может не открыться. Выключите VPN на время входа или добавьте приложение в исключения VPN.</string>
+    <string name="anilist_link_lan_fallback_label">Или вставьте токен в поле ниже</string>
+    <string name="anilist_link_from_phone">Получили токен с телефона, проверяем…</string>
+    <string name="anilist_link_note">Токен действует 1 год, потом вход нужно повторить. Он хранится только на этом устройстве.</string>
+    <string name="anilist_link_field_label">Токен доступа</string>
+    <string name="anilist_link_field_hint">Вставьте токен сюда</string>
+    <string name="anilist_link_checking">Проверяем…</string>
+    <string name="anilist_link_ok">Токен распознан · аккаунт %1$s, действует до %2$s</string>
+    <string name="anilist_link_invalid">Токен не подошёл: %1$s</string>
+    <string name="anilist_link_network">Не удалось проверить: %1$s</string>
+    <string name="anilist_link_connect">Подключить</string>
+    <string name="anilist_link_check">Проверить</string>
+    <string name="anilist_link_cancel">Отмена</string>
+    <string name="anilist_link_qr_failed">Не удалось построить QR-код, откройте ссылку вручную</string>
+
+    <!-- Экран сервиса -->
+    <string name="anilist_service_title">Сервис AniList</string>
+    <string name="anilist_service_status_linked">Подключено</string>
+    <string name="anilist_service_status_expiring">Вход истекает через %1$s · синхронизация работает</string>
+    <string name="anilist_service_status_expired">Вход истёк · изменения ждут отправки</string>
+    <string name="anilist_service_tile_last_sync">Последняя синхронизация</string>
+    <string name="anilist_service_tile_queue">В очереди</string>
+    <string name="anilist_service_tile_linked">Тайтлов связано</string>
+    <string name="anilist_service_tile_expires">Вход действует до</string>
+    <string name="anilist_service_section">Что синхронизировать</string>
+    <string name="anilist_service_opt_watched">Отправлять просмотренные серии</string>
+    <string name="anilist_service_opt_collection">Отправлять смену коллекции</string>
+    <string name="anilist_service_opt_receive">Получать изменения из AniList</string>
+    <string name="anilist_service_opt_notify">Уведомление после серии</string>
+    <string name="anilist_service_status_synced">Всё синхронизировано</string>
+    <string name="anilist_service_sync_now">Синхронизировать сейчас</string>
+    <string name="anilist_service_journal">Журнал синхронизации</string>
+    <string name="anilist_service_refresh_login">Обновить вход</string>
+    <string name="anilist_service_relogin">Войти заново</string>
+    <string name="anilist_service_disconnect">Отключить AniList</string>
+    <string name="anilist_service_disconnect_title">Отключить AniList?</string>
+    <string name="anilist_service_disconnect_message">Токен будет удалён с этого устройства, неотправленные изменения из очереди пропадут. Список на AniList не изменится.</string>
+    <string name="anilist_service_disconnect_confirm">Отключить</string>
+
+    <!-- Журнал синхронизации -->
+    <string name="anilist_journal_empty">Пока ничего не отправлялось</string>
+    <string name="anilist_journal_retry">Повторить сейчас</string>
+    <string name="anilist_journal_skip">Пропустить</string>
+
+    <!-- Разовое уведомление на главной -->
+    <string name="anilist_expired_notice">Вход в AniList истёк — отметки копятся локально. Настройки → Аккаунты и сервисы</string>
+
+    <!-- Первая синхронизация -->
+    <string name="first_sync_title">Первая синхронизация с AniList</string>
+    <string name="first_sync_subtitle">Сравнили коллекции AniLiberty и список AniList. Ничего ещё не изменено.</string>
+    <string name="first_sync_comparing">Сравниваем…</string>
+    <string name="first_sync_error">Не удалось сравнить списки: %1$s</string>
+    <string name="first_sync_retry">Повторить</string>
+    <string name="first_sync_tile_matching">Совпадает</string>
+    <string name="first_sync_tile_differing">Расходится статус или прогресс</string>
+    <string name="first_sync_tile_remote">Есть только в AniList</string>
+    <string name="first_sync_tile_local">Есть только в AniLiberty</string>
+    <string name="first_sync_tile_missing">Нет в каталоге AniLiberty</string>
+    <string name="first_sync_policy_section">КАК ОБЪЕДИНИТЬ</string>
+    <string name="first_sync_policy_merge">Объединить (рекомендуется)</string>
+    <string name="first_sync_policy_merge_desc">Прогресс — больший из двух, статус — более свежий. Недостающее добавляется в обе стороны.</string>
+    <string name="first_sync_policy_aniliberty">AniLiberty главнее</string>
+    <string name="first_sync_policy_aniliberty_desc">AniList перезаписывается нашими данными. Записи только из AniList остаются как есть.</string>
+    <string name="first_sync_policy_anilist">AniList главнее</string>
+    <string name="first_sync_policy_anilist_desc">Коллекции AniLiberty подстраиваются под AniList.</string>
+    <string name="first_sync_start">Начать синхронизацию</string>
+    <string name="first_sync_diff">Посмотреть расхождения</string>
+    <string name="first_sync_later">Позже</string>
+    <string name="first_sync_diff_title">Расхождения · AniLiberty и AniList</string>
+    <string name="first_sync_col_title">Тайтл</string>
+    <string name="first_sync_diff_empty">В этой группе ничего нет</string>
+    <string name="first_sync_choice_label">Изменены почти одновременно — оставить:</string>
+    <string name="first_sync_legend">→ отправится в AniList · ← изменится в AniLiberty · прогресс считается по числу досмотренных серий · у фильмов вместо «1/1» — «Фильм»</string>
+    <string name="first_sync_rate_note">AniList ограничивает частоту запросов (~30 в минуту) — отправляем порциями</string>
+    <string name="first_sync_row_title">Первая синхронизация</string>
+    <string name="first_sync_row_running">Первая синхронизация · идёт…</string>
+</resources>

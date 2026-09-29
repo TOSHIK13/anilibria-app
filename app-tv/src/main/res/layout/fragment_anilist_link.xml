@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Вход в AniList: QR со ссылкой, шаги, поле токена, статус проверки, кнопки. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_windowBackground"
+    android:theme="@style/AppTheme.Material">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:paddingStart="56dp"
+        android:paddingTop="48dp"
+        android:paddingEnd="56dp">
+
+        <LinearLayout
+            android:layout_width="220dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/linkQr"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:contentDescription="@null"
+                android:focusable="false" />
+
+            <TextView
+                android:id="@+id/linkQrFallback"
+                android:layout_width="200dp"
+                android:layout_height="wrap_content"
+                android:text="@string/anilist_link_qr_failed"
+                android:textColor="#99FFFFFF"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/linkUrl"
+                android:layout_width="200dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="#99FFFFFF"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="32dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:includeFontPadding="false"
+                android:text="@string/anilist_link_title"
+                android:textColor="#FFFFFFFF"
+                android:textSize="22sp" />
+
+            <TextView
+                android:id="@+id/linkStep1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:lineSpacingExtra="4dp"
+                android:text="@string/anilist_link_step1"
+                android:textColor="#EBFFFFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/linkStep2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:lineSpacingExtra="4dp"
+                android:text="@string/anilist_link_step2"
+                android:textColor="#EBFFFFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/linkStep3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:lineSpacingExtra="4dp"
+                android:text="@string/anilist_link_step3"
+                android:textColor="#EBFFFFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/linkVpnHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="3dp"
+                android:text="@string/anilist_link_vpn_hint"
+                android:textColor="#F2C14E"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/anilist_link_note"
+                android:textColor="#99FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/linkFieldLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/anilist_link_field_label"
+                android:textColor="#99FFFFFF"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/linkToken"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_settings_input"
+                android:ellipsize="end"
+                android:hint="@string/anilist_link_field_hint"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="textNoSuggestions|textMultiLine"
+                android:maxLines="1"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:singleLine="true"
+                android:textColor="#FFFFFFFF"
+                android:textColorHint="#66FFFFFF"
+                android:textSize="14sp"
+                android:typeface="monospace" />
+
+            <TextView
+                android:id="@+id/linkStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:minHeight="20dp"
+                android:textColor="#99FFFFFF"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/linkConnect"
+                    style="@style/SettingsPill"
+                    android:text="@string/anilist_link_connect" />
+
+                <TextView
+                    android:id="@+id/linkCancel"
+                    style="@style/SettingsPill"
+                    android:layout_marginStart="12dp"
+                    android:text="@string/anilist_link_cancel" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

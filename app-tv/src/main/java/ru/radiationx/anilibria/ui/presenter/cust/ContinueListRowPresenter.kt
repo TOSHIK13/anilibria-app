@@ -3,6 +3,7 @@ package ru.radiationx.anilibria.ui.presenter.cust
 import android.view.View
 import android.view.ViewGroup
 import androidx.leanback.widget.ClassPresenterSelector
+import androidx.leanback.widget.FocusHighlight
 import androidx.leanback.widget.HeaderItem
 import androidx.leanback.widget.ListRow
 import androidx.leanback.widget.ListRowPresenter
@@ -18,9 +19,9 @@ class ContinueListRow(id: Long, header: HeaderItem, adapter: ObjectAdapter) : Li
  * карточку вместе с подписями — карточка рисует тень и кольцо фокуса вокруг кадра сама)
  * и без обрезки детей по цепочке grid → ListRowView → контейнер ряда. Кольцо фокуса карточка
  * рисует в своём поле 3dp вокруг кадра, поэтому промежуток ряда уменьшен на 2×3dp.
- * Зум и затемнение — как у остальных рядов.
+ * Зум ×1,05 (не ×1,1 как у остальных рядов): широкий кадр иначе налезает на соседей.
  */
-open class ContinueListRowPresenter : CustomListRowPresenter() {
+open class ContinueListRowPresenter : CustomListRowPresenter(FocusHighlight.ZOOM_FACTOR_SMALL) {
 
     init {
         shadowEnabled = false

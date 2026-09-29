@@ -163,7 +163,7 @@ class EpisodeProgressRepository @Inject constructor(
         )
         trackerRegistry.dispatchEpisodeWatched(
             TrackerEpisodeWatchedEvent(
-                release = TrackerReleaseRef(release.id, release.shikimoriId, release.malId),
+                release = TrackerReleaseRef(release.id, release.shikimoriId, release.malId, release.title),
                 episodeOrdinal = null,
                 episodesWatched = release.episodes.size,
                 episodesTotal = release.series?.toIntOrNull() ?: release.episodes.size,
@@ -219,7 +219,7 @@ class EpisodeProgressRepository @Inject constructor(
     }
 
     /** Внешним сервисам статистики (без привязанных сервисов — ничего не делает). */
-    private fun dispatchEpisodeWatched(episodeId: EpisodeId) {
+    private suspend fun dispatchEpisodeWatched(episodeId: EpisodeId) {
         val progress = watchProgressRepository.currentProgress(episodeId.releaseId)
         trackerRegistry.dispatchEpisodeWatched(
             TrackerEpisodeWatchedEvent(

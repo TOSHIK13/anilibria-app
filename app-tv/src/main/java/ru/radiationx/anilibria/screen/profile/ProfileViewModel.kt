@@ -22,7 +22,14 @@ import ru.radiationx.data.entity.domain.other.ProfileItem
 import ru.radiationx.data.repository.AuthRepository
 import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.data.repository.WatchProgressRepository
-import ru.radiationx.data.tracker.AnimeTracker
+import ru.radiationx.anilibria.screen.services.AniListLinkScreen
+import ru.radiationx.anilibria.screen.services.AniListServiceScreen
+import ru.radiationx.anilibria.screen.services.daysText
+import ru.radiationx.anilibria.screen.services.agoText
+import ru.radiationx.anilibria.screen.services.changesText
+import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.ExternalSyncEngine
+import ru.radiationx.data.external.SyncOverview
 import ru.radiationx.data.tracker.AnimeTrackerRegistry
 import ru.radiationx.data.tracker.TrackerEntry
 import ru.radiationx.data.tracker.TrackerState
@@ -39,6 +46,7 @@ class ProfileViewModel @Inject constructor(
     private val checkerRepository: CheckerRepository,
     private val apiConfig: ApiConfig,
     private val trackerRegistry: AnimeTrackerRegistry,
+    private val syncEngine: ExternalSyncEngine,
 ) : LifecycleViewModel() {
 
     /** Строки каждого раздела; фрагмент рисует выбранный. */
@@ -49,16 +57,16 @@ class ProfileViewModel @Inject constructor(
 
     private val prefs = MutableStateFlow(PlayerPrefs())
     private val profile = MutableStateFlow<ProfileItem?>(null)
-    private val linkedTrackers = MutableStateFlow<List<TrackerEntry>>(emptyList())
-    private val trackersToLink = MutableStateFlow<List<AnimeTracker>>(emptyList())
+    private val trackerEntries = MutableStateFlow<List<TrackerEntry>>(emptyList())
+    private val syncOverview = MutableStateFlow<SyncOverview?>(null)
     private val historyStatus = MutableStateFlow(TaskStatus.IDLE)
     private val updateStatus = MutableStateFlow(TaskStatus.IDLE)
     private val serverHost = MutableStateFlow(currentHost())
 
     init {
         authRepository.observeUser().onEach { profile.value = it }.launchIn(viewModelScope)
-        trackerRegistry.observeLinked().onEach { linkedTrackers.value = it }.launchIn(viewModelScope)
-        trackerRegistry.availableToLink.onEach { trackersToLink.value = it }.launchIn(viewModelScope)
+        trackerRegistry.observeEntries().onEach { trackerEntries.value = it }.launchIn(viewModelScope)
+        syncEngine.observeOverview().onEach { syncOverview.value = it }.launchIn(viewModelScope)
 
         combine<Any, PlayerPrefs>(
             preferencesHolder.playerSkips,
@@ -91,7 +99,7 @@ class ProfileViewModel @Inject constructor(
         combine(
             prefs,
             profile,
-            combine(linkedTrackers, trackersToLink) { linked, toLink -> linked to toLink },
+            combine(trackerEntries, syncOverview) { entries, overview -> entries to overview },
             combine(historyStatus, updateStatus, serverHost) { history, update, host ->
                 Triple(history, update, host)
             },
@@ -118,7 +126,7 @@ class ProfileViewModel @Inject constructor(
         when (action) {
             SettingsAction.SIGN_IN -> guidedRouter.open(AuthGuidedScreen())
             SettingsAction.SIGN_OUT -> guidedRouter.open(SettingsSignOutGuidedScreen())
-            SettingsAction.CONNECT_SERVICE -> messages.value = "Подключение сервисов пока недоступно"
+            SettingsAction.OPEN_ANILIST -> openAniList()
             SettingsAction.REFRESH_HISTORY -> refreshHistory()
 
             SettingsAction.SKIPS -> toggle(preferencesHolder.playerSkips.value) {
@@ -190,8 +198,8 @@ class ProfileViewModel @Inject constructor(
 
     private fun accountItems(
         profile: ProfileItem?,
-        linked: List<TrackerEntry>,
-        toLink: List<AnimeTracker>,
+        trackers: List<TrackerEntry>,
+        overview: SyncOverview?,
         history: TaskStatus,
     ): List<SettingsItem> = buildList {
         add(
@@ -230,41 +238,70 @@ class ProfileViewModel @Inject constructor(
                 )
             )
         }
-        // Блок сервисов статистики — только если есть что показать (сейчас реализаций нет).
-        if (linked.isNotEmpty() || toLink.isNotEmpty()) {
+        if (trackers.isNotEmpty()) {
             add(SettingsItem.Header(key = "trackers_header", title = "Сервисы статистики"))
         }
-        linked.forEach { entry ->
-            val state = entry.state
-            val account = when (state) {
-                is TrackerState.Linked -> state.account
-                is TrackerState.Error -> state.account
-                TrackerState.NotLinked -> null
+        trackers.forEach { entry -> add(serviceItem(entry, overview)) }
+    }
+
+    private fun serviceItem(entry: TrackerEntry, overview: SyncOverview?): SettingsItem.Service {
+        val tracker = entry.tracker
+        val state = entry.state
+        var error = false
+        var warning = false
+        val (subtitle, value) = when (state) {
+            TrackerState.NotLinked -> "Отправка просмотров и коллекций" to "Подключить"
+            is TrackerState.Linked -> {
+                val status = syncStatusText(overview)
+                error = status?.second == true
+                warning = status?.third == true
+                (status?.first ?: "Подключено") to "Открыть"
             }
-            add(
-                SettingsItem.Account(
-                    key = "tracker_${entry.tracker.id}",
-                    nick = account?.nick ?: entry.tracker.title,
-                    avatarUrl = account?.avatarUrl,
-                    subtitle = if (state is TrackerState.Error) {
-                        "${entry.tracker.title} · ${state.message}"
-                    } else {
-                        entry.tracker.title
-                    },
-                    actionTitle = "",
-                    action = null,
-                )
-            )
+            is TrackerState.Expiring -> "Вход истекает через ${daysText(state.daysLeft)} · синхронизация работает" to "Обновить вход"
+            is TrackerState.Expired -> {
+                error = true
+                (if (overview != null && overview.queued > 0) "Вход истёк · в очереди ${changesText(overview.queued)}" else "Вход истёк · изменения ждут отправки") to "Войти заново"
+            }
+            is TrackerState.Error -> {
+                error = true
+                state.message to "Открыть"
+            }
         }
-        if (toLink.isNotEmpty()) {
-            add(
-                SettingsItem.Row(
-                    action = SettingsAction.CONNECT_SERVICE,
-                    title = "Подключить сервис",
-                    subtitle = toLink.joinToString { it.title },
-                    value = "",
-                )
-            )
+        val title = when (state) {
+            TrackerState.NotLinked -> "Подключить ${tracker.title}"
+            is TrackerState.Linked -> tracker.title + " · " + state.account.nick
+            is TrackerState.Expiring -> tracker.title + " · " + state.account.nick
+            is TrackerState.Expired -> tracker.title + " · " + state.account.nick
+            is TrackerState.Error -> tracker.title
+        }
+        return SettingsItem.Service(
+            key = "tracker_${tracker.id}",
+            action = SettingsAction.OPEN_ANILIST,
+            title = title,
+            iconText = "AL",
+            iconColor = tracker.brandColor ?: 0xFF02A9FF.toInt(),
+            subtitle = subtitle,
+            subtitleError = error,
+            subtitleWarning = warning,
+            value = value,
+        )
+    }
+
+    /** Подпись строки AniList: «Синхронизировано · N мин назад» / «В очереди…» (жёлтая) / ошибки (красная). */
+    private fun syncStatusText(o: SyncOverview?): Triple<String, Boolean, Boolean>? = when {
+        o == null -> null
+        o.errors > 0 -> Triple("Ошибка отправки · нужен повтор: ${changesText(o.errors)}", true, false)
+        o.queued > 0 -> Triple("В очереди ${changesText(o.queued)} · отправим при появлении сети", false, true)
+        o.lastSyncAt > 0 -> Triple("Синхронизировано · ${agoText(o.lastSyncAt)}", false, false)
+        else -> null
+    }
+
+    private fun openAniList() {
+        val entry = trackerEntries.value.firstOrNull { it.tracker.id == AniListService.ID } ?: return
+        if (entry.state is TrackerState.NotLinked) {
+            router.navigateTo(AniListLinkScreen())
+        } else {
+            router.navigateTo(AniListServiceScreen())
         }
     }
 

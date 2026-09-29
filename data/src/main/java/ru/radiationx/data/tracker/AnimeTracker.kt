@@ -77,12 +77,29 @@ sealed class TrackerLinkMethod {
         val verificationUrl: String,
         val userCode: String?,
     ) : TrackerLinkMethod()
+
+    /**
+     * Вход по токену, вставленному пользователем (AniList, implicit grant): ТВ показывает
+     * [authorizeUrl] (ссылка/QR), пользователь копирует токен со страницы pin и вводит его на ТВ
+     * → [AnimeTracker.link] с токеном в `code`.
+     */
+    data class TokenPaste(val authorizeUrl: String) : TrackerLinkMethod()
 }
 
 sealed class TrackerState {
     object NotLinked : TrackerState()
 
-    data class Linked(val account: TrackerAccount) : TrackerState()
+    data class Linked(val account: TrackerAccount, val expiresAtMs: Long? = null) : TrackerState()
+
+    /** Вход скоро истечёт (≤ 14 дней): синхронизация ещё работает. */
+    data class Expiring(
+        val account: TrackerAccount,
+        val daysLeft: Int,
+        val expiresAtMs: Long,
+    ) : TrackerState()
+
+    /** Срок входа вышел или токен отозван (401): изменения копятся в очереди до нового входа. */
+    data class Expired(val account: TrackerAccount) : TrackerState()
 
     /** Аккаунт был привязан, но сервис недоступен или токен отозван. */
     data class Error(val message: String, val account: TrackerAccount? = null) : TrackerState()
@@ -101,6 +118,8 @@ data class TrackerReleaseRef(
     val releaseId: ReleaseId,
     val shikimoriId: Int? = null,
     val malId: Int? = null,
+    /** Название релиза (для журнала синхронизации); null — реестр дозагрузит. */
+    val title: String? = null,
 ) {
     val hasExternalIds: Boolean
         get() = shikimoriId != null || malId != null

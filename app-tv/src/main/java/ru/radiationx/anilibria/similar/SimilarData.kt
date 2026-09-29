@@ -4,9 +4,9 @@ import kotlinx.coroutines.flow.Flow
 import ru.radiationx.data.entity.domain.types.ReleaseId
 
 /** Сервис-источник «Похожих»: ключ в кеше / similar.json и подпись ряда. */
-enum class SimilarSource(val key: String, val title: String) {
-    ANILIST("al", "AniList"),
-    SHIKIMORI("sh", "Shikimori"),
+enum class SimilarSource(val key: String, val title: String, val serviceId: String? = null) {
+    ANILIST("al", "AniList", "anilist"),
+    SHIKIMORI("sh", "Shikimori", "shikimori"),
 
     /** Заготовка: нужен X-MAL-CLIENT-ID, живой источник MAL пока не опрашивает. */
     MAL("mal", "MAL"),

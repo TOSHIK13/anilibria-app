@@ -32,6 +32,13 @@ import com.github.terrakok.cicerone.NavigatorHolder
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import ru.radiationx.anilibria.common.showCornerNotice
+import ru.radiationx.anilibria.screen.services.changesText
+import ru.radiationx.anilibria.screen.services.sentNoticeText
+import ru.radiationx.data.external.ExternalServiceSettings
+import ru.radiationx.data.external.ExternalSyncEngine
+import ru.radiationx.data.external.FirstSyncRunner
+import ru.radiationx.data.external.OutboxSource
 
 class MainActivity : FragmentActivity() {
     companion object {
@@ -49,6 +56,9 @@ class MainActivity : FragmentActivity() {
     }
 
     private val navigatorHolder by inject<NavigatorHolder>()
+    private val syncEngine by inject<ExternalSyncEngine>()
+    private val firstSyncRunner by inject<FirstSyncRunner>()
+    private val serviceSettings by inject<ExternalServiceSettings>()
     private var idleDimOverlay: View? = null
     private var idleDimJob: Job? = null
 
@@ -72,6 +82,22 @@ class MainActivity : FragmentActivity() {
         markFirstDraw()
         idleDimOverlay = findViewById(R.id.idleDimOverlay)
         lifecycle.addObserver(viewModel)
+
+        // «Отмечено в AniList · 5/11» после отправки серии — поверх любого экрана, без фокуса
+        lifecycleScope.launch {
+            syncEngine.sentEvents.collect { event ->
+                if (event.source == OutboxSource.EPISODE && serviceSettings.get(event.serviceId).notifyAfterEpisode) {
+                    showCornerNotice(sentNoticeText(event), badge = "AL", check = true, durationMs = 4_000)
+                }
+            }
+        }
+
+        // «Продолжить в фоне» в мастере первой синхронизации: итог поверх любого экрана
+        lifecycleScope.launch {
+            firstSyncRunner.finishedEvents.collect { changes ->
+                showCornerNotice("Синхронизация с AniList завершена · ${changesText(changes)}", badge = "AL", check = true, durationMs = 5_000)
+            }
+        }
 
         // быстрый старт: главная открывается по окончании вступительной анимации
         supportFragmentManager.setFragmentResultListener(

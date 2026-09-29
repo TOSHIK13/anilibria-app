@@ -48,7 +48,7 @@
 - `A/ui/presenter/` — Leanback presenters (карточки, строки, детали).
 - `A/ui/widget/` — кастомные view: `MainHeroView`, `ContinueCardView`, `CatalogChipView`, `FranchiseCardView`, `BrowseTitleView` и др.
 - `A/extension/` — `RowsFragment`, `GradientBackgroundManager`.
-- `A/similar/` — строки «Похожее» (AniList / Shikimori): `SimilarReleasesRepository`, `SimilarServicesApi`, `SimilarCacheStorage`.
+- `A/similar/` — строки «Похожее»: `SimilarReleasesRepository`, `LiveSimilarReleasesSource`, `SimilarCacheStorage`; сервисы, HTTP, кеш и MAL↔release id — `data/.../external/` (`AniListService`, `ShikimoriService`, `ExternalServiceRegistry`, `ExternalHttpClient`, `ExternalDiskCache`, `IdResolver`).
 - `A/watchnext/` — канал «Продолжить» на главном экране Android TV.
 - `A/screen/player/HlsRollingPrefetcher.kt` — HLS-префетч.
 - Ресурсы: `app-tv/src/main/res/` — `values/strings.xml`, `styles.xml`, `detail_styles.xml`, `guided_styles.xml`, `colors.xml`, `dimens.xml`.
