@@ -91,6 +91,9 @@ object AniListTokens {
 class AniListAuth @Inject constructor(
     private val service: AniListService,
     private val store: ExternalTokenStore,
+    private val outbox: ExternalOutbox,
+    private val journal: ExternalSyncJournal,
+    private val syncState: ExternalSyncState,
 ) {
 
     val authorizeUrl: String =
@@ -144,8 +147,19 @@ class AniListAuth @Inject constructor(
         )
     }
 
-    /** Стирает токен. Очередь неотправленных изменений (этап 3) не трогает. */
-    fun unlink() = store.clear(AniListService.ID)
+    /** Стирает токен и очищает очередь неотправленных изменений (с записью в журнал). */
+    fun unlink() {
+        store.clear(AniListService.ID)
+        val dropped = outbox.clear(AniListService.ID)
+        if (dropped.isNotEmpty()) {
+            syncState.clearAllPending(AniListService.ID)
+            journal.record(
+                AniListService.ID, JournalDirection.OUT, null, null, "AniList",
+                "аккаунт отключён · очередь очищена", JournalResult.SKIPPED,
+                detail = "не отправлено изменений: ${dropped.size}",
+            )
+        }
+    }
 
     private companion object {
         const val VIEWER_QUERY = "query { Viewer { id name avatar { medium } } }"

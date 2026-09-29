@@ -163,7 +163,7 @@ class EpisodeProgressRepository @Inject constructor(
         )
         trackerRegistry.dispatchEpisodeWatched(
             TrackerEpisodeWatchedEvent(
-                release = TrackerReleaseRef(release.id, release.shikimoriId, release.malId),
+                release = TrackerReleaseRef(release.id, release.shikimoriId, release.malId, release.title),
                 episodeOrdinal = null,
                 episodesWatched = release.episodes.size,
                 episodesTotal = release.series?.toIntOrNull() ?: release.episodes.size,

@@ -10,6 +10,7 @@ import ru.mintrocket.lib.mintpermissions.ext.initMintPermissions
 import ru.mintrocket.lib.mintpermissions.flows.ext.initMintPermissionsFlow
 import ru.radiationx.anilibria.di.AppModule
 import ru.radiationx.data.di.DataModule
+import ru.radiationx.data.external.ExternalSyncEngine
 import ru.radiationx.data.system.LoadTiming
 import ru.radiationx.quill.Quill
 import timber.log.Timber
@@ -80,6 +81,8 @@ class App : Application() {
 
     private fun initDependencies() {
         Quill.getRootScope().installModules(AppModule(this), DataModule(this))
+        // очередь отправки во внешние сервисы (AniList): цикл, сеть, старт
+        Quill.getRootScope().get(ExternalSyncEngine::class).start()
     }
 
 

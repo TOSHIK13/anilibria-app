@@ -55,6 +55,8 @@ sealed class SettingsItem {
         val subtitle: String,
         /** Подстрока красным (вход истёк). */
         val subtitleError: Boolean,
+        /** Подстрока жёлтым (изменения ждут отправки). */
+        val subtitleWarning: Boolean = false,
         val value: String,
     ) : SettingsItem()
 

@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import dev.androidbroadcast.vbpd.viewBinding
 import ru.radiationx.anilibria.R
@@ -28,6 +29,10 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
     private val viewModel by viewModel<AniListServiceViewModel>()
 
     private var expiresValue: TextView? = null
+    private var lastSyncValue: TextView? = null
+    private var queueValue: TextView? = null
+    private var journalRow: View? = null
+    private var syncNowRow: View? = null
     private var switchRows: List<Pair<View, (ExternalServiceOptions) -> Boolean>> = emptyList()
     private var refreshRow: View? = null
 
@@ -41,9 +46,8 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
         }
 
         val inflater = LayoutInflater.from(requireContext())
-        // «Синхронизировать сейчас» и «Журнал синхронизации» появятся на этапах 3–4.
-        addTile(inflater, binding.serviceTilesTop, R.string.anilist_service_tile_last_sync).text = "—"
-        addTile(inflater, binding.serviceTilesTop, R.string.anilist_service_tile_queue).text = "0"
+        lastSyncValue = addTile(inflater, binding.serviceTilesTop, R.string.anilist_service_tile_last_sync)
+        queueValue = addTile(inflater, binding.serviceTilesTop, R.string.anilist_service_tile_queue)
         addTile(inflater, binding.serviceTilesBottom, R.string.anilist_service_tile_linked).text = "—"
         expiresValue = addTile(inflater, binding.serviceTilesBottom, R.string.anilist_service_tile_expires)
 
@@ -61,6 +65,11 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
                 viewModel.update { o -> o.copy(notifyAfterEpisode = !o.notifyAfterEpisode) }
             },
         )
+        syncNowRow = arrowRow(inflater, R.string.anilist_service_sync_now) { onSyncNow() }
+        // TODO 3b: экран журнала синхронизации; пока показываем заглушку
+        journalRow = arrowRow(inflater, R.string.anilist_service_journal) {
+            Toast.makeText(requireContext(), R.string.anilist_service_journal_stub, Toast.LENGTH_SHORT).show()
+        }
         refreshRow = arrowRow(inflater, R.string.anilist_service_refresh_login) { viewModel.refreshLogin() }
         arrowRow(inflater, R.string.anilist_service_disconnect) { confirmDisconnect() }
 
@@ -70,6 +79,10 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
 
     override fun onDestroyView() {
         expiresValue = null
+        lastSyncValue = null
+        queueValue = null
+        journalRow = null
+        syncNowRow = null
         refreshRow = null
         switchRows = emptyList()
         super.onDestroyView()
@@ -133,8 +146,9 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
             else -> null
         }
         var statusColor = 0x99FFFFFF.toInt()
+        val overviewStatus = overviewStatus(ui.overview)
         binding.serviceStatus.text = when (state) {
-            is TrackerState.Linked -> getString(R.string.anilist_service_status_linked)
+            is TrackerState.Linked -> overviewStatus?.first ?: getString(R.string.anilist_service_status_synced)
             is TrackerState.Expiring -> getString(
                 R.string.anilist_service_status_expiring,
                 daysText(state.daysLeft)
@@ -147,7 +161,15 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
 
             else -> ""
         }
+        if (state is TrackerState.Linked && overviewStatus?.second == true) statusColor = 0xFFFE3635.toInt()
         binding.serviceStatus.setTextColor(statusColor)
+        lastSyncValue?.text = lastSyncText(ui.overview.lastSyncAt)
+        queueValue?.text = ui.overview.queued.toString()
+        journalRow?.findViewById<TextView>(R.id.settingsRowSubtitle)?.apply {
+            text = if (ui.overview.weekErrors > 0) "${errorsText(ui.overview.weekErrors)} за неделю" else ""
+            visibility = if (ui.overview.weekErrors > 0) View.VISIBLE else View.GONE
+        }
+        this.expired = state is TrackerState.Expired
         expiresValue?.text = expiresAtMs
             ?.let { SimpleDateFormat("dd.MM.yyyy", Locale("ru")).format(Date(it)) }
             ?: "—"
@@ -157,6 +179,13 @@ class AniListServiceFragment : Fragment(R.layout.fragment_anilist_service) {
         switchRows.forEach { (row, get) ->
             row.findViewById<SettingsSwitchView>(R.id.settingsRowSwitch).isOn = get(ui.options)
         }
+    }
+
+    private var expired = false
+
+    private fun onSyncNow() {
+        // при истёкшем входе очередь на паузе: сначала нужен новый вход
+        if (expired) viewModel.refreshLogin() else viewModel.syncNow()
     }
 
     private fun confirmDisconnect() {

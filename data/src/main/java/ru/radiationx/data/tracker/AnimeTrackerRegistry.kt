@@ -87,16 +87,16 @@ class AnimeTrackerRegistry @Inject constructor(
     }
 
     private suspend fun linkedTrackers(): List<AnimeTracker> = trackers.filter { tracker ->
-        coRunCatching { tracker.observeState().first().let { it is TrackerState.Linked || it is TrackerState.Expiring } }
+        coRunCatching { tracker.observeState().first().let { it is TrackerState.Linked || it is TrackerState.Expiring || it is TrackerState.Expired } }
             .onFailure { Timber.w(it, "tracker ${tracker.id}: state unavailable") }
             .getOrDefault(false)
     }
 
-    /** Дозагружает id Shikimori/MAL, если вызывающий их не знал (плеер знает только серию). */
+    /** Дозагружает id Shikimori/MAL и название, если вызывающий их не знал (плеер знает только серию). */
     private suspend fun resolveIds(ref: TrackerReleaseRef): TrackerReleaseRef {
-        if (ref.hasExternalIds) return ref
+        if (ref.hasExternalIds && ref.title != null) return ref
         return coRunCatching { releaseRepository.getRelease(ref.releaseId) }
-            .map { ref.copy(shikimoriId = it.shikimoriId, malId = it.malId) }
+            .map { ref.copy(shikimoriId = ref.shikimoriId ?: it.shikimoriId, malId = ref.malId ?: it.malId, title = ref.title ?: it.title) }
             .onFailure { Timber.w(it, "tracker: release ${ref.releaseId.id} ids not loaded") }
             .getOrDefault(ref)
     }

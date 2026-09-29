@@ -31,11 +31,15 @@
     <string name="anilist_service_opt_collection">Отправлять смену коллекции</string>
     <string name="anilist_service_opt_receive">Получать изменения из AniList</string>
     <string name="anilist_service_opt_notify">Уведомление после серии</string>
+    <string name="anilist_service_status_synced">Всё синхронизировано</string>
+    <string name="anilist_service_sync_now">Синхронизировать сейчас</string>
+    <string name="anilist_service_journal">Журнал синхронизации</string>
+    <string name="anilist_service_journal_stub">Журнал синхронизации появится в следующем обновлении</string>
     <string name="anilist_service_refresh_login">Обновить вход</string>
     <string name="anilist_service_relogin">Войти заново</string>
     <string name="anilist_service_disconnect">Отключить AniList</string>
     <string name="anilist_service_disconnect_title">Отключить AniList?</string>
-    <string name="anilist_service_disconnect_message">Токен будет удалён с этого устройства. Список на AniList не изменится.</string>
+    <string name="anilist_service_disconnect_message">Токен будет удалён с этого устройства, неотправленные изменения из очереди пропадут. Список на AniList не изменится.</string>
     <string name="anilist_service_disconnect_confirm">Отключить</string>
 
     <!-- Разовое уведомление на главной -->

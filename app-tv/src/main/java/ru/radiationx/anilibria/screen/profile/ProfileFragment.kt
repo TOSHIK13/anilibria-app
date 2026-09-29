@@ -249,7 +249,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
         view.findViewById<TextView>(R.id.settingsServiceTitle).text = item.title
         view.findViewById<TextView>(R.id.settingsServiceSubtitle).apply {
             text = item.subtitle
-            if (item.subtitleError) setTextColor(0xFFFE3635.toInt()) else setTextColor(resources.getColorStateList(R.color.settings_row_subtitle, null))
+            if (item.subtitleError) setTextColor(0xFFFE3635.toInt()) else if (item.subtitleWarning) setTextColor(0xFFF5B942.toInt()) else setTextColor(resources.getColorStateList(R.color.settings_row_subtitle, null))
         }
         view.findViewById<TextView>(R.id.settingsServiceValue).text = "${item.value} ›"
         view.setOnClickListener { onRowClick(item.key, item.action) }

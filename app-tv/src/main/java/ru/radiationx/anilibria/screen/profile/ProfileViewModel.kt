@@ -25,7 +25,11 @@ import ru.radiationx.data.repository.WatchProgressRepository
 import ru.radiationx.anilibria.screen.services.AniListLinkScreen
 import ru.radiationx.anilibria.screen.services.AniListServiceScreen
 import ru.radiationx.anilibria.screen.services.daysText
+import ru.radiationx.anilibria.screen.services.agoText
+import ru.radiationx.anilibria.screen.services.changesText
 import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.ExternalSyncEngine
+import ru.radiationx.data.external.SyncOverview
 import ru.radiationx.data.tracker.AnimeTrackerRegistry
 import ru.radiationx.data.tracker.TrackerEntry
 import ru.radiationx.data.tracker.TrackerState
@@ -42,6 +46,7 @@ class ProfileViewModel @Inject constructor(
     private val checkerRepository: CheckerRepository,
     private val apiConfig: ApiConfig,
     private val trackerRegistry: AnimeTrackerRegistry,
+    private val syncEngine: ExternalSyncEngine,
 ) : LifecycleViewModel() {
 
     /** Строки каждого раздела; фрагмент рисует выбранный. */
@@ -53,6 +58,7 @@ class ProfileViewModel @Inject constructor(
     private val prefs = MutableStateFlow(PlayerPrefs())
     private val profile = MutableStateFlow<ProfileItem?>(null)
     private val trackerEntries = MutableStateFlow<List<TrackerEntry>>(emptyList())
+    private val syncOverview = MutableStateFlow<SyncOverview?>(null)
     private val historyStatus = MutableStateFlow(TaskStatus.IDLE)
     private val updateStatus = MutableStateFlow(TaskStatus.IDLE)
     private val serverHost = MutableStateFlow(currentHost())
@@ -60,6 +66,7 @@ class ProfileViewModel @Inject constructor(
     init {
         authRepository.observeUser().onEach { profile.value = it }.launchIn(viewModelScope)
         trackerRegistry.observeEntries().onEach { trackerEntries.value = it }.launchIn(viewModelScope)
+        syncEngine.observeOverview().onEach { syncOverview.value = it }.launchIn(viewModelScope)
 
         combine<Any, PlayerPrefs>(
             preferencesHolder.playerSkips,
@@ -92,13 +99,13 @@ class ProfileViewModel @Inject constructor(
         combine(
             prefs,
             profile,
-            trackerEntries,
+            combine(trackerEntries, syncOverview) { entries, overview -> entries to overview },
             combine(historyStatus, updateStatus, serverHost) { history, update, host ->
                 Triple(history, update, host)
             },
         ) { prefs, profile, trackers, statuses ->
             mapOf(
-                SettingsSection.ACCOUNTS to accountItems(profile, trackers, statuses.first),
+                SettingsSection.ACCOUNTS to accountItems(profile, trackers.first, trackers.second, statuses.first),
                 SettingsSection.PLAYER to playerItems(prefs),
                 SettingsSection.APP to appItems(statuses.second, statuses.third),
             )
@@ -192,6 +199,7 @@ class ProfileViewModel @Inject constructor(
     private fun accountItems(
         profile: ProfileItem?,
         trackers: List<TrackerEntry>,
+        overview: SyncOverview?,
         history: TaskStatus,
     ): List<SettingsItem> = buildList {
         add(
@@ -233,20 +241,26 @@ class ProfileViewModel @Inject constructor(
         if (trackers.isNotEmpty()) {
             add(SettingsItem.Header(key = "trackers_header", title = "Сервисы статистики"))
         }
-        trackers.forEach { entry -> add(serviceItem(entry)) }
+        trackers.forEach { entry -> add(serviceItem(entry, overview)) }
     }
 
-    private fun serviceItem(entry: TrackerEntry): SettingsItem.Service {
+    private fun serviceItem(entry: TrackerEntry, overview: SyncOverview?): SettingsItem.Service {
         val tracker = entry.tracker
         val state = entry.state
         var error = false
+        var warning = false
         val (subtitle, value) = when (state) {
             TrackerState.NotLinked -> "Отправка просмотров и коллекций" to "Подключить"
-            is TrackerState.Linked -> "${tracker.title} · ${state.account.nick}" to "Открыть"
+            is TrackerState.Linked -> {
+                val status = syncStatusText(overview)
+                error = status?.second == true
+                warning = status?.third == true
+                (status?.first ?: "Подключено") to "Открыть"
+            }
             is TrackerState.Expiring -> "Вход истекает через ${daysText(state.daysLeft)} · синхронизация работает" to "Обновить вход"
             is TrackerState.Expired -> {
                 error = true
-                "Вход истёк · изменения ждут отправки" to "Войти заново"
+                (if (overview != null && overview.queued > 0) "Вход истёк · в очереди ${changesText(overview.queued)}" else "Вход истёк · изменения ждут отправки") to "Войти заново"
             }
             is TrackerState.Error -> {
                 error = true
@@ -266,10 +280,20 @@ class ProfileViewModel @Inject constructor(
             title = title,
             iconText = "AL",
             iconColor = tracker.brandColor ?: 0xFF02A9FF.toInt(),
-            subtitle = if (state is TrackerState.Linked) "Подключено" else subtitle,
+            subtitle = subtitle,
             subtitleError = error,
+            subtitleWarning = warning,
             value = value,
         )
+    }
+
+    /** Подпись строки AniList: «Синхронизировано · N мин назад» / «В очереди…» (жёлтая) / ошибки (красная). */
+    private fun syncStatusText(o: SyncOverview?): Triple<String, Boolean, Boolean>? = when {
+        o == null -> null
+        o.errors > 0 -> Triple("Ошибка отправки · нужен повтор: ${changesText(o.errors)}", true, false)
+        o.queued > 0 -> Triple("В очереди ${changesText(o.queued)} · отправим при появлении сети", false, true)
+        o.lastSyncAt > 0 -> Triple("Синхронизировано · ${agoText(o.lastSyncAt)}", false, false)
+        else -> null
     }
 
     private fun openAniList() {

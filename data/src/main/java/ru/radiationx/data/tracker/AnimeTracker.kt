@@ -118,6 +118,8 @@ data class TrackerReleaseRef(
     val releaseId: ReleaseId,
     val shikimoriId: Int? = null,
     val malId: Int? = null,
+    /** Название релиза (для журнала синхронизации); null — реестр дозагрузит. */
+    val title: String? = null,
 ) {
     val hasExternalIds: Boolean
         get() = shikimoriId != null || malId != null

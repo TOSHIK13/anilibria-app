@@ -110,7 +110,12 @@ import ru.radiationx.data.di.providers.PlayerOkHttpProvider
 import ru.radiationx.data.di.providers.SimpleClientWrapper
 import ru.radiationx.data.external.AniListAuth
 import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.AniListMediaLookup
+import ru.radiationx.data.external.ExternalOutbox
 import ru.radiationx.data.external.ExternalServiceSettings
+import ru.radiationx.data.external.ExternalSyncEngine
+import ru.radiationx.data.external.ExternalSyncJournal
+import ru.radiationx.data.external.ExternalSyncState
 import ru.radiationx.data.external.ExternalTokenStore
 import ru.radiationx.data.external.ExternalServiceRegistry
 import ru.radiationx.data.external.IdResolver
@@ -277,6 +282,11 @@ class DataModule(context: Context) : QuillModule() {
         single<ExternalServiceSettings>()
         single<AniListService>()
         single<AniListAuth>()
+        single<ExternalOutbox>()
+        single<ExternalSyncState>()
+        single<ExternalSyncJournal>()
+        single<AniListMediaLookup>()
+        single<ExternalSyncEngine>()
         single<ShikimoriService>()
         single<ExternalServiceRegistry>()
         single<IdResolver>()
