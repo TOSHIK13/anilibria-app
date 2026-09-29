@@ -9,6 +9,7 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.core.widget.ImageViewCompat
 import androidx.fragment.app.commitNow
@@ -130,6 +131,38 @@ class MainPagesFragment : BrowseSupportFragment() {
         return super.onCreateView(inflater, container, savedInstanceState)
     }
 
+    private fun showTimedNotice(root: View, text: String) {
+        val group = root as? ViewGroup ?: return
+        val density = resources.displayMetrics.density
+        val notice = TextView(requireContext()).apply {
+            this.text = text
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 14f
+            maxWidth = (520 * density).toInt()
+            setPadding((18 * density).toInt(), (12 * density).toInt(), (18 * density).toInt(), (12 * density).toInt())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 12 * density
+                setColor(0xF0282828.toInt())
+                setStroke((1 * density).toInt(), 0x33FFFFFF)
+            }
+            isFocusable = false
+            elevation = 8 * density
+        }
+        val margin = (40 * density).toInt()
+        group.addView(
+            notice,
+            android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.BOTTOM or android.view.Gravity.END
+            ).apply { setMargins(margin, margin, margin, margin) }
+        )
+        viewLifecycleOwner.lifecycleScope.launch {
+            delay(6_000)
+            group.removeView(notice)
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
@@ -167,6 +200,14 @@ class MainPagesFragment : BrowseSupportFragment() {
         subscribeTo(viewModel.hasUpdatesData) {
             val alert = if (it) "Обновление" else null
             topTabs?.setAlert(alert) { viewModel.onAppUpdateClick() }
+        }
+
+        // Разовое уведомление: вход в AniList истёк (самоскрывается через 6 с).
+        subscribeTo(viewModel.expiredNotice) {
+            if (it) {
+                showTimedNotice(view, getString(R.string.anilist_expired_notice))
+                viewModel.onExpiredNoticeShown()
+            }
         }
 
         // Меню Leanback скрыто навсегда: убираем его панель, иначе слева остаётся тёмная полоса.

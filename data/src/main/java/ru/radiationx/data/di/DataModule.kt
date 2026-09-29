@@ -108,7 +108,10 @@ import ru.radiationx.data.di.providers.MainNetworkClient
 import ru.radiationx.data.di.providers.MainOkHttpProvider
 import ru.radiationx.data.di.providers.PlayerOkHttpProvider
 import ru.radiationx.data.di.providers.SimpleClientWrapper
+import ru.radiationx.data.external.AniListAuth
 import ru.radiationx.data.external.AniListService
+import ru.radiationx.data.external.ExternalServiceSettings
+import ru.radiationx.data.external.ExternalTokenStore
 import ru.radiationx.data.external.ExternalServiceRegistry
 import ru.radiationx.data.external.IdResolver
 import ru.radiationx.data.external.ShikimoriService
@@ -129,6 +132,7 @@ import ru.radiationx.data.repository.CheckerRepository
 import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ReleaseCardRepository
 import ru.radiationx.data.repository.WatchProgressRepository
+import ru.radiationx.data.tracker.AniListTracker
 import ru.radiationx.data.tracker.AnimeTrackerRegistry
 import ru.radiationx.data.repository.ConfigurationRepository
 import ru.radiationx.data.repository.DonationRepository
@@ -265,10 +269,14 @@ class DataModule(context: Context) : QuillModule() {
         single<EpisodeProgressRepository>()
         single<WatchProgressRepository>()
         single<ReleaseCardRepository>()
+        single<AniListTracker>()
         single<AnimeTrackerRegistry>()
 
         /* Внешние сервисы (AniList, Shikimori) */
+        single<ExternalTokenStore>()
+        single<ExternalServiceSettings>()
         single<AniListService>()
+        single<AniListAuth>()
         single<ShikimoriService>()
         single<ExternalServiceRegistry>()
         single<IdResolver>()

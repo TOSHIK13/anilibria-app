@@ -23,7 +23,8 @@ data class TrackerEntry(
 /**
  * Реестр внешних сервисов статистики ([AnimeTracker]) и диспетчер событий просмотра/коллекций.
  *
- * Пока реализаций нет ([trackers] пуст): все `dispatch*` сразу возвращаются, в настройках нет
+ * Сейчас единственный сервис — AniList. Пока он не привязан (или вход истёк, очередь — этап 3),
+ * `dispatch*` ничего не загружают и не отправляют; без сервисов ([trackers] пуст) возвращаются сразу, в настройках нет
  * строк сервисов. Чтобы подключить сервис — добавить его в [trackers] (через конструктор).
  *
  * События рассылаются асинхронно в собственном scope: вызывающий код (плеер, коллекции) не
@@ -31,12 +32,13 @@ data class TrackerEntry(
  */
 class AnimeTrackerRegistry @Inject constructor(
     private val releaseRepository: ReleaseRepository,
+    aniListTracker: AniListTracker,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Все известные приложению сервисы (привязанные и нет). */
-    val trackers: List<AnimeTracker> = emptyList()
+    val trackers: List<AnimeTracker> = listOf(aniListTracker)
 
     /** Сервисы, которые можно подключить сейчас (не привязаны). */
     val availableToLink: Flow<List<AnimeTracker>>
@@ -85,7 +87,7 @@ class AnimeTrackerRegistry @Inject constructor(
     }
 
     private suspend fun linkedTrackers(): List<AnimeTracker> = trackers.filter { tracker ->
-        coRunCatching { tracker.observeState().first() is TrackerState.Linked }
+        coRunCatching { tracker.observeState().first().let { it is TrackerState.Linked || it is TrackerState.Expiring } }
             .onFailure { Timber.w(it, "tracker ${tracker.id}: state unavailable") }
             .getOrDefault(false)
     }

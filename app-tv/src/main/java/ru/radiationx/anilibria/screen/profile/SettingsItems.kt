@@ -11,7 +11,7 @@ enum class SettingsSection(val title: String) {
 enum class SettingsAction {
     SIGN_IN,
     SIGN_OUT,
-    CONNECT_SERVICE,
+    OPEN_ANILIST,
     REFRESH_HISTORY,
 
     SKIPS,
@@ -43,6 +43,19 @@ sealed class SettingsItem {
         val subtitle: String,
         val actionTitle: String,
         val action: SettingsAction?,
+    ) : SettingsItem()
+
+    /** Строка сервиса статистики (AniList): значок, название, состояние, действие справа. */
+    data class Service(
+        override val key: String,
+        val action: SettingsAction,
+        val title: String,
+        val iconText: String,
+        val iconColor: Int,
+        val subtitle: String,
+        /** Подстрока красным (вход истёк). */
+        val subtitleError: Boolean,
+        val value: String,
     ) : SettingsItem()
 
     data class Header(

@@ -10,9 +10,9 @@ import javax.inject.Inject
 class AniListGraphQl(private val http: ExternalHttpClient) {
 
     /** Ответ целиком (с `data`) или null, если AniList ответил 404 (нет Media). */
-    suspend fun query(query: String, variables: JSONObject): JSONObject? {
+    suspend fun query(query: String, variables: JSONObject, token: String? = null): JSONObject? {
         val payload = JSONObject().put("query", query).put("variables", variables)
-        return http.postJson(URL, payload.toString(), allow404 = true)?.let { JSONObject(it) }
+        return http.postJson(URL, payload.toString(), allow404 = true, token = token)?.let { JSONObject(it) }
     }
 
     private companion object {
@@ -23,21 +23,24 @@ class AniListGraphQl(private val http: ExternalHttpClient) {
 class AniListService @Inject constructor(
     clientWrapper: SimpleClientWrapper,
     buildConfig: SharedBuildConfig,
+    private val tokenStore: ExternalTokenStore,
 ) : SimilarProvider {
 
-    private companion object {
+    companion object {
+        const val ID = "anilist"
+
         /** Вложенные recommendations у Media отдают максимум 25 за страницу. */
-        const val NESTED_PER_PAGE = 25
+        private const val NESTED_PER_PAGE = 25
 
         /** «Страница» = 2 вложенные страницы (50 рекомендаций) одним запросом через алиасы. */
-        const val PAGE_SIZE = 50
-        const val PARTS = PAGE_SIZE / NESTED_PER_PAGE
+        private const val PAGE_SIZE = 50
+        private const val PARTS = PAGE_SIZE / NESTED_PER_PAGE
 
         /** AniList: ~30 запросов/мин на IP. */
-        const val INTERVAL_MS = 2_100L
+        private const val INTERVAL_MS = 2_100L
     }
 
-    override val id = "anilist"
+    override val id = ID
     override val title = "AniList"
 
     val http = ExternalHttpClient(
@@ -52,7 +55,8 @@ class AniListService @Inject constructor(
         },
         minIntervalMs = INTERVAL_MS,
         userAgent = "AniLibertyTV/${buildConfig.versionName}",
-        tokenProvider = null,
+        tokenProvider = { tokenStore.activeToken(ID) },
+        onUnauthorized = { tokenStore.markRevoked(ID) },
     )
 
     val graphQl = AniListGraphQl(http)

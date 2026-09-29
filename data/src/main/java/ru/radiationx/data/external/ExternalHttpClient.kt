@@ -18,6 +18,9 @@ import java.io.IOException
 /** Сервис просит подождать (HTTP 429) надолго; до [untilMs] запросы к нему не делаются. */
 class ExternalRateLimitException(val untilMs: Long) : IOException("rate limited")
 
+/** Сервис ответил не-2xx; [code] — HTTP-статус. */
+class ExternalHttpException(val code: Int, message: String) : IOException(message)
+
 /**
  * HTTP-клиент одного внешнего сервиса: пауза между запросами, повтор после 429 (Retry-After),
  * User-Agent (без него Cloudflare AniList отвечает 403), опциональный Bearer-токен и
@@ -29,6 +32,8 @@ class ExternalHttpClient(
     private val minIntervalMs: Long,
     private val userAgent: String,
     private val tokenProvider: (() -> String?)? = null,
+    /** Вызывается, если сервис отклонил токен, взятый из [tokenProvider] (401 / «Invalid token»). */
+    private val onUnauthorized: (() -> Unit)? = null,
 ) {
 
     private companion object {
@@ -46,14 +51,15 @@ class ExternalHttpClient(
 
     private val client: OkHttpClient by lazy { clientProvider() }
 
-    suspend fun get(url: String, allow404: Boolean = false): String? =
-        call("GET", url, null, allow404)
+    suspend fun get(url: String, allow404: Boolean = false, token: String? = null): String? =
+        call("GET", url, null, allow404, token)
 
-    suspend fun postJson(url: String, body: String, allow404: Boolean = false): String? =
-        call("POST", url, body, allow404)
+    /** [token] — явный Bearer вместо [tokenProvider] (проверка ещё не сохранённого токена). */
+    suspend fun postJson(url: String, body: String, allow404: Boolean = false, token: String? = null): String? =
+        call("POST", url, body, allow404, token)
 
-    private suspend fun call(method: String, url: String, body: String?, allow404: Boolean): String? {
-        val key = "$method $url ${body.orEmpty()}"
+    private suspend fun call(method: String, url: String, body: String?, allow404: Boolean, token: String?): String? {
+        val key = "$method $url ${body.orEmpty()} ${token.orEmpty()}"
         val (deferred, owner) = synchronized(inFlight) {
             val existing = inFlight[key]
             if (existing != null) existing to false
@@ -61,7 +67,7 @@ class ExternalHttpClient(
         }
         if (owner) {
             scope.launch {
-                val result = runCatching { throttled { execute(method, url, body, allow404) } }
+                val result = runCatching { throttled { execute(method, url, body, allow404, token) } }
                 synchronized(inFlight) { inFlight.remove(key) }
                 deferred.complete(result)
             }
@@ -79,7 +85,16 @@ class ExternalHttpClient(
         }
     }
 
-    private suspend fun execute(method: String, url: String, body: String?, allow404: Boolean): String? {
+    /** 401, либо 400 с «Invalid token» (так AniList отвечает на отозванный/испорченный токен). */
+    private fun isRejectedToken(response: okhttp3.Response): Boolean = when (response.code) {
+        401 -> true
+        400 -> runCatching { response.peekBody(2048).string() }.getOrNull()
+            ?.contains("Invalid token", ignoreCase = true) == true
+
+        else -> false
+    }
+
+    private suspend fun execute(method: String, url: String, body: String?, allow404: Boolean, explicitToken: String?): String? {
         var attempt = 0
         while (true) {
             val wait = lastAt + minIntervalMs - System.currentTimeMillis()
@@ -88,7 +103,8 @@ class ExternalHttpClient(
                 .url(url)
                 .header("User-Agent", userAgent)
                 .header("Accept", "application/json")
-            tokenProvider?.invoke()?.also { builder.header("Authorization", "Bearer $it") }
+            val sentToken = explicitToken ?: tokenProvider?.invoke()
+            sentToken?.also { builder.header("Authorization", "Bearer $it") }
             if (body != null) builder.post(body.toRequestBody(JSON))
             val request = builder.build()
             Timber.d("external[%s]: %s %s (attempt %d)", tag, method, url, attempt + 1)
@@ -97,7 +113,12 @@ class ExternalHttpClient(
                 client.newCall(request).execute().use { response ->
                     if (response.code != 429) {
                         if (response.code == 404 && allow404) return null
-                        if (!response.isSuccessful) throw IOException("HTTP ${response.code} ${request.url.host}")
+                        if (!response.isSuccessful) {
+                            if (sentToken != null && explicitToken == null && isRejectedToken(response)) {
+                                onUnauthorized?.invoke()
+                            }
+                            throw ExternalHttpException(response.code, "HTTP ${response.code} ${request.url.host}")
+                        }
                         return response.body?.string()
                     }
                     retryAfter = response.header("Retry-After")?.toLongOrNull() ?: DEFAULT_RETRY_AFTER_S

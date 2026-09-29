@@ -190,6 +190,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
                 is SettingsItem.Account -> R.layout.item_settings_account
                 is SettingsItem.Header -> R.layout.item_settings_header
                 is SettingsItem.Row -> R.layout.item_settings_row
+                is SettingsItem.Service -> R.layout.item_settings_service
             }
             val view = inflater.inflate(layout, container, false)
             bind(view, item)
@@ -216,6 +217,7 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
             is SettingsItem.Header -> (view as TextView).text = item.title
             is SettingsItem.Row -> bindRow(view, item)
             is SettingsItem.Account -> bindAccount(view, item)
+            is SettingsItem.Service -> bindService(view, item)
         }
     }
 
@@ -233,6 +235,23 @@ class ProfileFragment : Fragment(R.layout.fragment_profile),
             isVisible = item.switch != null
             isOn = item.switch == true
         }
+        view.setOnClickListener { onRowClick(item.key, item.action) }
+    }
+
+    private fun bindService(view: View, item: SettingsItem.Service) {
+        view.findViewById<TextView>(R.id.settingsServiceIcon).apply {
+            text = item.iconText
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 10 * resources.displayMetrics.density
+                setColor(item.iconColor)
+            }
+        }
+        view.findViewById<TextView>(R.id.settingsServiceTitle).text = item.title
+        view.findViewById<TextView>(R.id.settingsServiceSubtitle).apply {
+            text = item.subtitle
+            if (item.subtitleError) setTextColor(0xFFFE3635.toInt()) else setTextColor(resources.getColorStateList(R.color.settings_row_subtitle, null))
+        }
+        view.findViewById<TextView>(R.id.settingsServiceValue).text = "${item.value} ›"
         view.setOnClickListener { onRowClick(item.key, item.action) }
     }
 
