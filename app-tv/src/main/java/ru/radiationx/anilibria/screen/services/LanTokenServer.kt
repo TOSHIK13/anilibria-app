@@ -200,26 +200,39 @@ class LanTokenServer(
     }
 }
 
-/** Первый site-local IPv4 активной сети (Wi-Fi/Ethernet) или null. */
+/**
+ * Site-local IPv4 приставки в домашней сети (Wi-Fi/Ethernet) или null.
+ * VPN пропускаем: при включённом VPN активной сетью считается tun-интерфейс (напр. 172.19.0.1),
+ * а телефон в той же Wi-Fi до него не достучится.
+ */
+@Suppress("DEPRECATION")
 fun findLocalIpv4(context: Context): String? {
     return try {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return null
-        val caps = cm.getNetworkCapabilities(network)
-        if (caps != null &&
-            !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) &&
-            !caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-        ) {
-            return null
-        }
-        cm.getLinkProperties(network)?.linkAddresses
-            ?.map { it.address }
-            ?.firstOrNull { it is Inet4Address && it.isSiteLocalAddress }
-            ?.hostAddress
+        val networks = listOfNotNull(cm.activeNetwork) + cm.allNetworks
+        networks.distinct().firstNotNullOfOrNull { network ->
+            val caps = cm.getNetworkCapabilities(network) ?: return@firstNotNullOfOrNull null
+            val isLan = !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET))
+            if (!isLan) return@firstNotNullOfOrNull null
+            cm.getLinkProperties(network)?.linkAddresses
+                ?.map { it.address }
+                ?.firstOrNull { it is Inet4Address && it.isSiteLocalAddress }
+                ?.hostAddress
+        } ?: findLanInterfaceIpv4()
     } catch (e: Exception) {
         null
     }
 }
+
+/** Запасной путь: адрес на интерфейсах wlan или eth, если ConnectivityManager не отдал подходящую сеть. */
+private fun findLanInterfaceIpv4(): String? = java.net.NetworkInterface.getNetworkInterfaces()
+    ?.toList()
+    ?.filter { it.isUp && (it.name.startsWith("wlan") || it.name.startsWith("eth")) }
+    ?.flatMap { it.inetAddresses.toList() }
+    ?.firstOrNull { it is Inet4Address && it.isSiteLocalAddress }
+    ?.hostAddress
 
 private const val PAGE = """<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
