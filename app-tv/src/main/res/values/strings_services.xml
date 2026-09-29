@@ -5,6 +5,11 @@
     <string name="anilist_link_step1">1. Откройте ссылку с QR-кода на телефоне и войдите в AniList.</string>
     <string name="anilist_link_step2">2. AniList покажет страницу с токеном — скопируйте его целиком.</string>
     <string name="anilist_link_step3">3. Выберите поле ниже и вставьте токен клавиатурой приложения Google TV на телефоне.</string>
+    <string name="anilist_link_lan_step1">1. Отсканируйте QR телефоном в той же сети Wi-Fi.</string>
+    <string name="anilist_link_lan_step2">2. Нажмите «Войти в AniList» и скопируйте токен.</string>
+    <string name="anilist_link_lan_step3">3. Вставьте его на открывшейся странице и нажмите «Отправить на ТВ».</string>
+    <string name="anilist_link_lan_fallback_label">Или вставьте токен в поле ниже</string>
+    <string name="anilist_link_from_phone">Получили токен с телефона, проверяем…</string>
     <string name="anilist_link_note">Токен действует 1 год, потом вход нужно повторить. Он хранится только на этом устройстве.</string>
     <string name="anilist_link_field_label">Токен доступа</string>
     <string name="anilist_link_field_hint">Вставьте токен сюда</string>

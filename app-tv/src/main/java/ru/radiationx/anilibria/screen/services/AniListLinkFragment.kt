@@ -29,14 +29,7 @@ class AniListLinkFragment : Fragment(R.layout.fragment_anilist_link) {
         super.onViewCreated(view, savedInstanceState)
         viewLifecycleOwner.lifecycle.addObserver(viewModel)
 
-        binding.linkUrl.text = viewModel.authorizeUrl
-        val qr = QrCode.toBitmap(viewModel.authorizeUrl)
-        if (qr != null) {
-            binding.linkQr.setImageDrawable(BitmapDrawable(resources, qr).apply { paint.isFilterBitmap = false })
-        } else {
-            binding.linkQr.isVisible = false
-            binding.linkQrFallback.isVisible = true
-        }
+        subscribeTo(viewModel.lanUrl) { renderLink(it) }
 
         binding.linkToken.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -58,12 +51,43 @@ class AniListLinkFragment : Fragment(R.layout.fragment_anilist_link) {
         binding.linkToken.requestFocus()
     }
 
+    /** QR и шаги: страница на ТВ в локальной сети, а без неё — прямая ссылка на AniList. */
+    private fun renderLink(lanUrl: String?) {
+        val url = lanUrl ?: viewModel.authorizeUrl
+        binding.linkUrl.text = url
+        val qr = QrCode.toBitmap(url)
+        if (qr != null) {
+            binding.linkQr.isVisible = true
+            binding.linkQrFallback.isVisible = false
+            binding.linkQr.setImageDrawable(BitmapDrawable(resources, qr).apply { paint.isFilterBitmap = false })
+        } else {
+            binding.linkQr.isVisible = false
+            binding.linkQrFallback.isVisible = true
+        }
+        if (lanUrl != null) {
+            binding.linkStep1.setText(R.string.anilist_link_lan_step1)
+            binding.linkStep2.setText(R.string.anilist_link_lan_step2)
+            binding.linkStep3.setText(R.string.anilist_link_lan_step3)
+            binding.linkFieldLabel.setText(R.string.anilist_link_lan_fallback_label)
+        } else {
+            binding.linkStep1.setText(R.string.anilist_link_step1)
+            binding.linkStep2.setText(R.string.anilist_link_step2)
+            binding.linkStep3.setText(R.string.anilist_link_step3)
+            binding.linkFieldLabel.setText(R.string.anilist_link_field_label)
+        }
+    }
+
     private fun render(check: TokenCheck) {
         val status = binding.linkStatus
         val grey = 0x99FFFFFF.toInt()
         when (check) {
             TokenCheck.Idle -> {
                 status.text = ""
+                status.setTextColor(grey)
+            }
+
+            TokenCheck.FromPhone -> {
+                status.setText(R.string.anilist_link_from_phone)
                 status.setTextColor(grey)
             }
 

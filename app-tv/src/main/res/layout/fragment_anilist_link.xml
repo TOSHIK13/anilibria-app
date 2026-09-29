@@ -61,6 +61,7 @@
                 android:textSize="22sp" />
 
             <TextView
+                android:id="@+id/linkStep1"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -70,6 +71,7 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/linkStep2"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
@@ -79,6 +81,7 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/linkStep3"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
@@ -96,6 +99,7 @@
                 android:textSize="12sp" />
 
             <TextView
+                android:id="@+id/linkFieldLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
