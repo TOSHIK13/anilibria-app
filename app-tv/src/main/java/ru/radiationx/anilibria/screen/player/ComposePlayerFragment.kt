@@ -442,6 +442,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 activeSubmenu = null
                 completionActionSelection = if (it.type == PlayerCompletionOverlayType.END_EPISODE) {
                     CompletionOverlayAction.Next
+                } else if (it.rateLabel != null) {
+                    CompletionOverlayAction.Rate
                 } else {
                     CompletionOverlayAction.Close
                 }
@@ -468,6 +470,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
     override fun onStart() {
         super.onStart()
         playerHolder.setMediaSessionActive(requireContext(), active = true)
+        viewModel.refreshRatingOffer()
     }
 
     override fun onStop() {
@@ -789,6 +792,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                 remainingSec = completionRemainingSec,
                 onNextClick = { executeCompletionNext() },
                 onCloseClick = { executeCompletionClose() },
+                onRateClick = { viewModel.rateFromOverlay() },
             )
 
             AnimatedVisibility(
@@ -1108,6 +1112,8 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                     // В конце сезона кнопки «Следующая серия» нет — остаётся только «Закрыть».
                     if (completionOverlay?.type == PlayerCompletionOverlayType.END_EPISODE) {
                         completionActionSelection = CompletionOverlayAction.Next
+                    } else if (completionOverlay?.rateLabel != null) {
+                        completionActionSelection = CompletionOverlayAction.Rate
                     }
                     true
                 }
@@ -1123,6 +1129,7 @@ class ComposePlayerFragment : Fragment(), PlayerMotionHandler {
                     when (completionActionSelection) {
                         CompletionOverlayAction.Next -> executeCompletionNext()
                         CompletionOverlayAction.Close -> executeCompletionClose()
+                        CompletionOverlayAction.Rate -> viewModel.rateFromOverlay()
                     }
                     true
                 }
@@ -2341,6 +2348,7 @@ private enum class SkipOverlayAction {
 private enum class CompletionOverlayAction {
     Next,
     Close,
+    Rate,
 }
 
 private enum class SkipHudType {
@@ -2648,6 +2656,7 @@ private fun CompletionOverlay(
     remainingSec: Int?,
     onNextClick: () -> Unit,
     onCloseClick: () -> Unit,
+    onRateClick: () -> Unit,
 ) {
     AnimatedVisibility(
         visible = overlay != null,
@@ -2709,10 +2718,20 @@ private fun CompletionOverlay(
                             onClick = onNextClick,
                         )
                     }
+                    val hasRate = !hasNext && overlay.rateLabel != null
+                    if (hasRate) {
+                        OverlayTextButton(
+                            label = overlay.rateLabel.orEmpty(),
+                            selected = selectedAction == CompletionOverlayAction.Rate,
+                            modifier = Modifier.focusRequester(primaryFocusRequester),
+                            onClick = onRateClick,
+                        )
+                    }
                     OverlayTextButton(
                         label = overlay.closeLabel,
-                        selected = selectedAction == CompletionOverlayAction.Close,
-                        modifier = if (hasNext) Modifier else Modifier.focusRequester(primaryFocusRequester),
+                        selected = selectedAction == CompletionOverlayAction.Close ||
+                            (selectedAction == CompletionOverlayAction.Rate && !hasRate && !hasNext),
+                        modifier = if (hasNext || hasRate) Modifier else Modifier.focusRequester(primaryFocusRequester),
                         onClick = onCloseClick,
                     )
                 }

@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import ru.radiationx.anilibria.common.DetailDataConverter
 import ru.radiationx.anilibria.common.WatchCollectionSync
+import ru.radiationx.anilibria.common.fragment.GuidedRouter
+import ru.radiationx.anilibria.screen.DetailScoreGuidedScreen
+import ru.radiationx.data.external.AniListRatings
 import ru.radiationx.anilibria.screen.LifecycleViewModel
 import ru.radiationx.anilibria.watchnext.WatchNextPublisher
 import ru.radiationx.data.datasource.holders.PreferencesHolder
@@ -45,6 +48,8 @@ class PlayerViewModel @Inject constructor(
     private val watchCollectionSync: WatchCollectionSync,
     private val watchNextPublisher: WatchNextPublisher,
     private val detailDataConverter: DetailDataConverter,
+    private val aniListRatings: AniListRatings,
+    private val guidedRouter: GuidedRouter,
 ) : LifecycleViewModel() {
 
     val videoData = MutableStateFlow<Video?>(null)
@@ -948,6 +953,43 @@ class PlayerViewModel @Inject constructor(
             closeLabel = "Закрыть",
             autoAdvanceEnabled = false,
         )
+        if (!waitingForEpisodes) {
+            offerRating()
+        }
+    }
+
+    /** Если вошли в AniList и оценки сезона ещё нет — добавляем в оверлей «Оценить сезон». Сбои молча игнорируем. */
+    private fun offerRating() {
+        viewModelScope.launch {
+            val needRate = coRunCatching {
+                if (!aniListRatings.isLinked()) return@coRunCatching false
+                val malId = aniListRatings.malIdOf(argExtra.releaseId.id) ?: return@coRunCatching false
+                aniListRatings.getScore(malId) == null
+            }.getOrDefault(false)
+            val overlay = completionOverlay.value
+            if (needRate && overlay?.type == PlayerCompletionOverlayType.END_SEASON && overlay.rateLabel == null) {
+                completionOverlay.value = overlay.copy(rateLabel = "Оценить сезон")
+            }
+        }
+    }
+
+    fun rateFromOverlay() {
+        guidedRouter.open(DetailScoreGuidedScreen(argExtra.releaseId))
+    }
+
+    fun refreshRatingOffer() {
+        // Вернулись из выбора оценки: если оценка выставлена — убираем кнопку.
+        val overlay = completionOverlay.value
+        if (overlay?.type == PlayerCompletionOverlayType.END_SEASON && overlay.rateLabel != null) {
+            viewModelScope.launch {
+                val malId = aniListRatings.malIdOf(argExtra.releaseId.id) ?: return@launch
+                val score = coRunCatching { aniListRatings.getScore(malId) }.getOrNull()
+                val current = completionOverlay.value
+                if (score != null && current?.type == PlayerCompletionOverlayType.END_SEASON) {
+                    completionOverlay.value = current.copy(rateLabel = null)
+                }
+            }
+        }
     }
 
     private fun refreshComposeMenuState() {
@@ -1112,4 +1154,6 @@ data class PlayerCompletionOverlay(
     val nextEpisodeLabel: String?,
     val closeLabel: String,
     val autoAdvanceEnabled: Boolean,
+    /** Кнопка «Оценить сезон» (AniList); null — не показывать. */
+    val rateLabel: String? = null,
 )

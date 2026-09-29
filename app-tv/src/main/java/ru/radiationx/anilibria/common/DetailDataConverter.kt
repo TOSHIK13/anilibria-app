@@ -44,6 +44,7 @@ class DetailDataConverter @Inject constructor() {
         collection: CollectionType?,
         scheduleInfo: ReleaseScheduleInfo?,
         collectionSync: DetailCollectionSync? = null,
+        myScore: Int? = null,
     ): LibriaDetails = releaseItem.run {
         val total = series?.trim()?.toIntOrNull()?.takeIf { it > 0 }
         val released = episodesAvailable ?: episodes.size.takeIf { it > 0 }
@@ -51,7 +52,7 @@ class DetailDataConverter @Inject constructor() {
             id = id,
             titleRu = title.orEmpty(),
             titleEn = nameEnglish?.takeIf { !it.equals(title, ignoreCase = true) }.orEmpty(),
-            chips = chips(released, total),
+            chips = chips(released, total, myScore),
             compactMeta = compactMeta(released, total),
             infoLine = infoLine(),
             description = description.orEmpty().parseAsHtml().toString().trim()
@@ -126,7 +127,7 @@ class DetailDataConverter @Inject constructor() {
         it.trim().equals("Фильм", ignoreCase = true) || it.trim().equals("MOVIE", ignoreCase = true)
     }
 
-    private fun Release.chips(released: Int?, total: Int?): List<DetailChip> {
+    private fun Release.chips(released: Int?, total: Int?, myScore: Int? = null): List<DetailChip> {
         val status = DetailChip(
             text = if (isOngoing()) "Онгоинг" else "Релиз завершён",
             isStatus = true
@@ -141,7 +142,8 @@ class DetailDataConverter @Inject constructor() {
         val shikimoriChip = shikimoriRating?.let { "★ ${ratingFormat.format(it)} Shikimori" }
         // Вторая оценка рядом с первой — та же карточка API, доп. запросов не нужно.
         val malChip = malRating?.let { "★ ${ratingFormat.format(it)} MyAnimeList" }
-        return listOf(status) + listOfNotNull(type, yearSeason, episodesText, age, shikimoriChip, malChip)
+        val myScoreChip = myScore?.takeIf { it > 0 }?.let { "Моя оценка ★ $it" }
+        return listOf(status) + listOfNotNull(type, yearSeason, episodesText, age, myScoreChip, shikimoriChip, malChip)
             .map { DetailChip(it) }
     }
 

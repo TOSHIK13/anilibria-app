@@ -34,6 +34,7 @@ import ru.radiationx.data.repository.CollectionRepository
 import ru.radiationx.data.repository.ScheduleRepository
 import ru.radiationx.data.repository.FavoriteRepository
 import ru.radiationx.data.external.AniListMediaLookup
+import ru.radiationx.data.external.AniListRatings
 import ru.radiationx.data.external.AniListService
 import ru.radiationx.data.external.AniListTokens
 import ru.radiationx.data.external.ExternalSyncState
@@ -62,6 +63,7 @@ class DetailHeaderViewModel @Inject constructor(
     private val syncState: ExternalSyncState,
     private val tokenStore: ExternalTokenStore,
     private val mediaLookup: AniListMediaLookup,
+    private val aniListRatings: AniListRatings,
 ) : LifecycleViewModel() {
 
     private val releaseId = argExtra.id
@@ -82,6 +84,7 @@ class DetailHeaderViewModel @Inject constructor(
     private var scheduleInfo: ReleaseScheduleInfo? = null
     private var scheduleRequested = false
     private var isFullLoaded = false
+    private var myScore: Int? = null
 
     private var selectEpisodeJob: Job? = null
     private var favoriteDisposable: Job? = null
@@ -151,6 +154,7 @@ class DetailHeaderViewModel @Inject constructor(
 
     override fun onResume() {
         super.onResume()
+        loadMyScore()
 
         selectEpisodeJob?.cancel()
         selectEpisodeJob = playerController
@@ -265,8 +269,24 @@ class DetailHeaderViewModel @Inject constructor(
             currentAccesses,
             currentCollection,
             scheduleInfo,
-            collectionSync
+            collectionSync,
+            myScore
         )
+    }
+
+    /** Моя оценка AniList: из кэша (после выставления оценки кэш уже свежий), сбой — молча без чипа. */
+    private fun loadMyScore() {
+        viewModelScope.launch {
+            val score = coRunCatching {
+                if (!aniListRatings.isLinked()) return@coRunCatching null
+                val malId = aniListRatings.malIdOf(releaseId.id) ?: return@coRunCatching null
+                aniListRatings.getScore(malId)
+            }.getOrNull()
+            if (score != myScore) {
+                myScore = score
+                rebuildDetails()
+            }
+        }
     }
 
     /** Расписание нужно только онгоингам; грузится один раз (кэш в репозитории), ошибка — без плашки. */

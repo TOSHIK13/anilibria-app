@@ -14,13 +14,13 @@ class LibriaCardRouter @Inject constructor(
     fun navigate(libriaCard: LibriaCard) {
         when (val type = libriaCard.type) {
             is LibriaCard.Type.Release -> {
-                // «Продолжить просмотр»: сразу плеер на сохранённой серии, позицию он берёт
-                // из таймкода серии (как «Продолжить» в деталях).
+                // «Продолжить просмотр»: плеер на сохранённой серии, позицию он берёт из таймкода
+                // серии (как «Продолжить» в деталях). Карточка релиза кладётся под плеер, чтобы
+                // после выхода из плеера пользователь оказался в ней, а не на главной.
                 val episodeId = libriaCard.continueInfo?.episodeId
+                router.navigateTo(DetailsScreen(type.releaseId))
                 if (episodeId != null) {
                     router.navigateTo(PlayerScreen(type.releaseId, episodeId))
-                } else {
-                    router.navigateTo(DetailsScreen(type.releaseId))
                 }
             }
 
